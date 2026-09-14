@@ -1,0 +1,33 @@
+# Virtual environments
+.venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+wheels/
+
+# Environment files (secrets)
+.env
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests (not needed in prod image)
+tests/
+
+# Git
+.git/
+.gitignore
+
+# OS
+Thumbs.db
+.DS_Store
