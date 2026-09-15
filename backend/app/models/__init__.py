@@ -15,6 +15,11 @@ from app.models.attribute import Attribute, AttributeValue
 from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.brand import Brand
 from app.models.category import Category
+from app.models.inventory import (
+    Inventory,
+    InventoryMovement,
+    InventoryMovementType,
+)
 from app.models.product import (
     Product,
     ProductType,
@@ -22,7 +27,9 @@ from app.models.product import (
     Unit,
     VariantAttributeValue,
 )
+from app.models.purchase import Purchase, PurchaseItem
 from app.models.shop import Shop
+from app.models.supplier import Supplier
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -31,10 +38,16 @@ __all__ = [
     "Base",
     "Brand",
     "Category",
+    "Inventory",
+    "InventoryMovement",
+    "InventoryMovementType",
     "Product",
     "ProductType",
     "ProductVariant",
+    "Purchase",
+    "PurchaseItem",
     "Shop",
+    "Supplier",
     "TimestampMixin",
     "UUIDMixin",
     "Unit",

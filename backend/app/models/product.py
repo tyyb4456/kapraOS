@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from app.models.attribute import Attribute, AttributeValue
     from app.models.brand import Brand
     from app.models.category import Category
+    from app.models.inventory import Inventory
     from app.models.shop import Shop
 
 
@@ -165,6 +166,12 @@ class ProductVariant(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("shop_id", "sku", name="uq_product_variants_shop_sku"),
+        # Referenced by `InventoryMovement`'s composite foreign key
+        # (variant_id, shop_id) - see inventory.py - so an inventory movement
+        # can never point at a variant belonging to a different shop. Postgres
+        # needs an explicit unique constraint on exactly this column pair even
+        # though `id` alone is already the primary key.
+        UniqueConstraint("id", "shop_id", name="uq_product_variants_id_shop_id"),
         # Barcode is optional, but must be unique within a shop whenever it
         # is provided. A plain UniqueConstraint would happily allow many
         # NULLs (that part is fine), but a partial index keeps the intent
@@ -240,6 +247,15 @@ class ProductVariant(Base, UUIDMixin, TimestampMixin):
     attribute_values: Mapped[list["VariantAttributeValue"]] = relationship(
         "VariantAttributeValue",
         back_populates="variant",
+        cascade="all, delete-orphan",
+    )
+
+    # Current stock state for this variant; `uselist=False` because there is
+    # exactly one `Inventory` row per variant (enforced in the database too).
+    inventory: Mapped["Inventory | None"] = relationship(
+        "Inventory",
+        back_populates="variant",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 

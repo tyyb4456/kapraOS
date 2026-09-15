@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from app.models.brand import Brand
     from app.models.category import Category
     from app.models.product import Product
+    from app.models.purchase import Purchase
+    from app.models.supplier import Supplier
     from app.models.user import User
 
 
@@ -75,6 +77,22 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         back_populates="shop",
         cascade="all, delete-orphan",
         overlaps="brand,category,products,shop",
+    )
+
+    suppliers: Mapped[list["Supplier"]] = relationship(
+        "Supplier",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+    )
+
+    # Overlaps with `Supplier.purchases` because both populate
+    # `purchases.shop_id` / `purchases.supplier_id` alongside the composite
+    # foreign key - see the comment on `Purchase.shop`.
+    purchases: Mapped[list["Purchase"]] = relationship(
+        "Purchase",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+        overlaps="purchases,shop,supplier",
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
