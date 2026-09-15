@@ -23,3 +23,11 @@ dependencies = [
 [tool.uv]
 package = false
 
+[tool.mypy]
+python_version = "3.12"
+# The pydantic plugin lets mypy understand that BaseSettings fields are
+# populated from the environment (e.g. `database_url`), instead of flagging
+# them as missing constructor arguments.
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+

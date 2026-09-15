@@ -7,7 +7,6 @@ from a local `.env` file). Nothing here should ever hold a real secret -
 
 from functools import lru_cache
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,9 +25,7 @@ class Settings(BaseSettings):
 
     # Async SQLAlchemy URL, e.g.
     # postgresql+asyncpg://user:password@host:5432/dbname
-    # `Field(...)` marks it required while giving mypy an explicit annotation,
-    # since the value is supplied by the environment (or .env) at runtime.
-    database_url: str = Field(...)
+    database_url: str
 
     # Verbose SQL logging - keep off outside of local debugging.
     db_echo: bool = False

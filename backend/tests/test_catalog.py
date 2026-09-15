@@ -62,6 +62,7 @@ async def test_child_category_links_to_parent(db_session: AsyncSession) -> None:
     await db_session.refresh(women, attribute_names=["children"])
 
     assert open_fabric.parent_id == women.id
+    assert open_fabric.parent is not None
     assert open_fabric.parent.name == "Women"
     assert [c.id for c in women.children] == [open_fabric.id]
 
@@ -122,6 +123,7 @@ async def test_brand_can_be_created_and_attached_to_a_product(
     await db_session.refresh(product, attribute_names=["brand"])
 
     assert product.brand_id == brand.id
+    assert product.brand is not None
     assert product.brand.name == "Sapphire"
 
 
