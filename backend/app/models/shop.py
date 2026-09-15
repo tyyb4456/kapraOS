@@ -14,6 +14,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.attribute import Attribute
+    from app.models.brand import Brand
+    from app.models.category import Category
+    from app.models.product import Product
     from app.models.user import User
 
 
@@ -42,6 +46,35 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         "User",
         back_populates="shop",
         cascade="all, delete-orphan",
+    )
+
+    categories: Mapped[list["Category"]] = relationship(
+        "Category",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+    )
+
+    brands: Mapped[list["Brand"]] = relationship(
+        "Brand",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+    )
+
+    attributes: Mapped[list["Attribute"]] = relationship(
+        "Attribute",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+    )
+
+    # Overlaps with `Category.products` / `Brand.products` (and, from the
+    # other side, `Product.category` / `Product.brand`) - all of them
+    # participate in populating `products.shop_id`, which is intentional:
+    # see the composite foreign keys on `Product` in product.py.
+    products: Mapped[list["Product"]] = relationship(
+        "Product",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+        overlaps="brand,category,products,shop",
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
