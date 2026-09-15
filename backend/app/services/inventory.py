@@ -19,7 +19,7 @@ and constraints are checked before the surrounding transaction ends.
 """
 
 import uuid
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -27,6 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import Inventory, InventoryMovement, InventoryMovementType
 from app.models.product import ProductVariant
+
+# `Inventory.weighted_average_cost` is NUMERIC(14,4): four places keep a
+# running average from compounding rounding error across many receipts.
+_COST_SCALE = Decimal("0.0001")
 
 
 class InventoryError(Exception):
@@ -138,6 +142,53 @@ async def get_or_create_inventory(
     return inventory
 
 
+async def get_weighted_average_cost(
+    session: AsyncSession, *, shop_id: uuid.UUID, variant_id: uuid.UUID
+) -> Decimal:
+    """Return the variant's current weighted-average inventory cost, locked.
+
+    This is the authoritative source for `SaleItem.cost_price`: the sale
+    service snapshots this value at sale time and never recalculates it later
+    (`db_arch.md` sections 18, 29).
+
+    The inventory row is locked `FOR UPDATE` (creating it on demand) before it
+    is read, so the returned cost is the exact value the subsequent
+    `remove_stock()` in the same transaction will operate on - a concurrent
+    purchase cannot slip a new average in between. The lock is held until the
+    caller's transaction ends, which is precisely the sale transaction.
+    """
+
+    await _get_variant(session, shop_id, variant_id)
+    inventory = await _lock_inventory(session, shop_id, variant_id)
+    return inventory.weighted_average_cost
+
+
+def _apply_receipt_cost(
+    inventory: Inventory, quantity: Decimal, unit_cost: Decimal
+) -> None:
+    """Fold a costed receipt into the moving weighted-average cost.
+
+    Standard moving average (`db_arch.md` section 29):
+
+        new_avg = (qty_on_hand * old_avg + received_qty * receipt_cost)
+                  / (qty_on_hand + received_qty)
+
+    Computed entirely in `Decimal`. When nothing is on hand the old average
+    contributes zero, so the average naturally becomes the receipt cost.
+    Callers update `inventory.quantity` afterwards; this helper reads the
+    *old* quantity, so it must run first.
+    """
+
+    old_quantity = inventory.quantity
+    new_quantity = old_quantity + quantity
+    total_value = (
+        old_quantity * inventory.weighted_average_cost + quantity * unit_cost
+    )
+    inventory.weighted_average_cost = (total_value / new_quantity).quantize(
+        _COST_SCALE, rounding=ROUND_HALF_UP
+    )
+
+
 async def add_stock(
     session: AsyncSession,
     *,
@@ -156,6 +207,11 @@ async def add_stock(
     cached quantity is increased, and a signed `+quantity` movement is
     appended - all without committing, so this can participate in a larger
     transaction (e.g. a purchase).
+
+    When `unit_cost` is supplied the moving weighted-average cost is updated
+    first (`_apply_receipt_cost`), so the variant's valuation reflects the
+    receipt even before the quantity write lands. Uncosted receipts (a manual
+    adjustment, an opening balance with no price) leave the average alone.
     """
 
     quantity = Decimal(quantity)
@@ -164,6 +220,9 @@ async def add_stock(
 
     variant = await _get_variant(session, shop_id, variant_id)
     inventory = await _lock_inventory(session, shop_id, variant_id)
+
+    if unit_cost is not None:
+        _apply_receipt_cost(inventory, quantity, Decimal(unit_cost))
 
     inventory.quantity = inventory.quantity + quantity
 

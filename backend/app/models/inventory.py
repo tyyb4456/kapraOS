@@ -82,6 +82,10 @@ class Inventory(Base, UUIDMixin, TimestampMixin):
             "reserved_quantity <= quantity",
             name="ck_inventory_reserved_not_above_quantity",
         ),
+        CheckConstraint(
+            "weighted_average_cost >= 0",
+            name="ck_inventory_weighted_average_cost_non_negative",
+        ),
     )
 
     variant_id: Mapped[uuid.UUID] = mapped_column(
@@ -101,6 +105,19 @@ class Inventory(Base, UUIDMixin, TimestampMixin):
 
     reserved_quantity: Mapped[Decimal] = mapped_column(
         Numeric(14, 3),
+        nullable=False,
+        default=Decimal("0"),
+        server_default=text("0"),
+    )
+
+    # V1 stock valuation: moving weighted-average cost of the stock on hand
+    # (`db_arch.md` sections 29, 34). It is ``0`` until the first costed
+    # receipt, and is updated *only* by `app.services.inventory` whenever
+    # stock enters at a known cost. Kept at four decimal places so repeated
+    # averages don't compound rounding error; sales snapshot it at two places
+    # (`SaleItem.cost_price`) at the moment they happen.
+    weighted_average_cost: Mapped[Decimal] = mapped_column(
+        Numeric(14, 4),
         nullable=False,
         default=Decimal("0"),
         server_default=text("0"),

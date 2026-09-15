@@ -44,6 +44,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.payment import Payment
     from app.models.product import ProductVariant
     from app.models.shop import Shop
     from app.models.supplier import Supplier
@@ -55,6 +56,11 @@ class Purchase(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "purchases"
 
     __table_args__ = (
+        # Supports `Payment`'s composite foreign key (purchase_id, shop_id) -
+        # see payment.py - so a payment can never attach to a purchase from
+        # another shop. Postgres needs an explicit unique constraint on exactly
+        # this column pair even though `id` alone is already the primary key.
+        UniqueConstraint("id", "shop_id", name="uq_purchases_id_shop_id"),
         # Invoice numbers are unique *per shop* only, and only when present:
         # many local suppliers hand over no invoice at all, so NULL is a valid,
         # repeatable value. A partial unique index expresses that exactly
@@ -155,6 +161,13 @@ class Purchase(Base, UUIDMixin, TimestampMixin):
         "PurchaseItem",
         back_populates="purchase",
         cascade="all, delete-orphan",
+    )
+
+    payments: Mapped[list["Payment"]] = relationship(
+        "Payment",
+        back_populates="purchase",
+        cascade="all, delete-orphan",
+        overlaps="customer,payments,purchase,sale,shop,supplier",
     )
 
     @property

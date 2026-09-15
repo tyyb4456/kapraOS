@@ -17,8 +17,11 @@ if TYPE_CHECKING:
     from app.models.attribute import Attribute
     from app.models.brand import Brand
     from app.models.category import Category
+    from app.models.customer import Customer
+    from app.models.payment import Payment
     from app.models.product import Product
     from app.models.purchase import Purchase
+    from app.models.sale import Sale
     from app.models.supplier import Supplier
     from app.models.user import User
 
@@ -83,6 +86,31 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         "Supplier",
         back_populates="shop",
         cascade="all, delete-orphan",
+    )
+
+    customers: Mapped[list["Customer"]] = relationship(
+        "Customer",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+    )
+
+    # Overlaps with `Customer.sales` because both populate
+    # `sales.shop_id` / `sales.customer_id` alongside the composite foreign
+    # key - see the comment on `Sale.shop`.
+    sales: Mapped[list["Sale"]] = relationship(
+        "Sale",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+        overlaps="customer,sales,shop",
+    )
+
+    # Overlaps with every Payment relationship because all of them populate
+    # `payments.shop_id` alongside a composite foreign key.
+    payments: Mapped[list["Payment"]] = relationship(
+        "Payment",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+        overlaps="customer,payments,purchase,sale,shop,supplier",
     )
 
     # Overlaps with `Supplier.purchases` because both populate

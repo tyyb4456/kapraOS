@@ -15,11 +15,13 @@ from app.models.attribute import Attribute, AttributeValue
 from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.brand import Brand
 from app.models.category import Category
+from app.models.customer import Customer
 from app.models.inventory import (
     Inventory,
     InventoryMovement,
     InventoryMovementType,
 )
+from app.models.payment import Payment, PaymentMethod
 from app.models.product import (
     Product,
     ProductType,
@@ -28,6 +30,7 @@ from app.models.product import (
     VariantAttributeValue,
 )
 from app.models.purchase import Purchase, PurchaseItem
+from app.models.sale import Sale, SaleItem, SaleStatus
 from app.models.shop import Shop
 from app.models.supplier import Supplier
 from app.models.user import User, UserRole
@@ -38,14 +41,20 @@ __all__ = [
     "Base",
     "Brand",
     "Category",
+    "Customer",
     "Inventory",
     "InventoryMovement",
     "InventoryMovementType",
+    "Payment",
+    "PaymentMethod",
     "Product",
     "ProductType",
     "ProductVariant",
     "Purchase",
     "PurchaseItem",
+    "Sale",
+    "SaleItem",
+    "SaleStatus",
     "Shop",
     "Supplier",
     "TimestampMixin",
