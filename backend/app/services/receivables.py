@@ -75,6 +75,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.models.customer import Customer
 from app.models.payment import Payment, PaymentMethod
 from app.models.sale import Sale, SaleStatus
+from app.services import accounting as accounting_service
 
 # Money is NUMERIC(14,2) everywhere in the schema; every value this module
 # returns is quantized to that scale so callers can compare exactly.
@@ -726,4 +727,8 @@ async def record_customer_payment(
         )
 
     await session.flush()
+
+    # The ledger representation of the same settlement: Dr Cash/Bank, Cr AR.
+    await accounting_service.post_customer_payment(session, payment=payment)
+
     return payment

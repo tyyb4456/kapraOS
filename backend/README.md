@@ -1,13 +1,91 @@
-# KapraOS - Backend (Step 1: Project Foundation)
+# KapraOS - Backend
 
-Multi-tenant Fabric & Fashion Retail Management SaaS - KapraOS backend foundation.
+Multi-tenant Fabric & Fashion Retail Management SaaS - KapraOS backend.
 
-This step only sets up the project skeleton, async database plumbing, the
-`Shop` and `User` models, the first Alembic migration, and a health
-endpoint. No business logic (products, sales, inventory, accounting) is
-implemented yet - that follows in later steps per the phased plan in the
-architecture docs (Foundation → Inventory → POS → Financials →
-Intelligence).
+Built step by step per the phased plan in the architecture docs
+(Foundation → Catalog → Inventory → Purchases → POS → Customer Khata →
+Supplier Payables → Accounting → Intelligence). Steps 1-8 are implemented:
+project foundation, catalog, inventory, suppliers & purchases, sales/POS,
+customer receivables (Khata), supplier payables (Khata), and the general
+ledger (double-entry accounting).
+
+## Step 8 - General Ledger / Double-Entry Accounting
+
+The accounting layer sits **on top of** the operational transaction system.
+It adds exactly two tables (`db_arch.md` sections 23-24):
+
+```text
+accounts         a shop's chart of accounts
+ledger_entries   one debit or credit line of a posting group
+```
+
+No `account_balances`, `journals`, `journal_lines` or balance columns exist:
+account balances are always **derived** from `ledger_entries`.
+
+### Default chart of accounts (one per shop, `is_system = true`)
+
+```text
+1000  Cash                 ASSET
+1010  Bank                 ASSET
+1100  Accounts Receivable  ASSET
+1200  Inventory            ASSET
+2000  Accounts Payable     LIABILITY
+3000  Owner Equity         EQUITY
+4000  Sales Revenue        REVENUE
+```
+
+`ensure_system_accounts()` provisions them idempotently per shop.
+
+### Posting rules
+
+```text
+Sale               Debit  Cash / Bank            (paid portion)
+                   Debit  Accounts Receivable    (due portion)
+                   Credit Sales Revenue          (total)
+
+Purchase           Debit  Inventory
+                   Credit Accounts Payable
+
+Customer Payment   Debit  Cash / Bank
+                   Credit Accounts Receivable
+
+Supplier Payment   Debit  Accounts Payable
+                   Credit Cash / Bank
+```
+
+Payment-method → asset mapping is deterministic: `cash` → Cash; `card`,
+`bank`, `jazzcash`, `easypaisa` → Bank; `other` → Cash.
+
+### Integrity guarantees
+
+- **Double-entry:** `app.services.accounting` refuses to persist a posting
+  whose `SUM(debits) != SUM(credits)` (`UnbalancedPostingError`).
+- **Database checks:** each ledger line is non-negative, non-zero, and exactly
+  one of debit/credit.
+- **Duplicate protection:** a unique constraint on
+  `(shop_id, reference_type, reference_id, account_id)` makes posting
+  idempotent - re-posting a sale/purchase/payment writes nothing new.
+- **Tenant isolation:** the composite foreign key
+  `(account_id, shop_id) -> accounts(id, shop_id)` makes a cross-tenant ledger
+  entry impossible at the database level.
+- **Transaction safety:** posting runs inside the caller's transaction, so a
+  failure rolls the whole business event back.
+
+### What Step 8 does NOT change
+
+Customer Khata remains `Sales + customer Payments`; Supplier Khata remains
+`Purchases + supplier Payments`. The general ledger is an *additional*
+accounting representation of those same events, never their source of truth.
+No COGS, tax, returns, financial statements, manual journal-entry API or
+auth was added in this step.
+
+### Accounting endpoints (read-only)
+
+```text
+GET /accounts                        chart of accounts
+GET /accounts/{account_id}/balance   derived balance
+GET /accounts/{account_id}/ledger    ledger lines (date filter + pagination)
+```
 
 ## Stack
 

@@ -7,6 +7,7 @@ products, sales, purchases and inventory remain service-layer only.
 
 from fastapi import FastAPI
 
+from app.api.accounting import router as accounting_router
 from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.api.suppliers import router as suppliers_router
@@ -24,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(customers_router)
     app.include_router(suppliers_router)
+    app.include_router(accounting_router)
 
     return app
 

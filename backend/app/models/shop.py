@@ -14,10 +14,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.account import Account
     from app.models.attribute import Attribute
     from app.models.brand import Brand
     from app.models.category import Category
     from app.models.customer import Customer
+    from app.models.ledger_entry import LedgerEntry
     from app.models.payment import Payment
     from app.models.product import Product
     from app.models.purchase import Purchase
@@ -121,6 +123,23 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         back_populates="shop",
         cascade="all, delete-orphan",
         overlaps="purchases,shop,supplier",
+    )
+
+    # Accounting (Step 8). Both collections participate in populating their
+    # rows' `shop_id`, which is also part of a composite foreign key, hence the
+    # explicit `overlaps`.
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+        overlaps="account,accounts,ledger_entries,shop",
+    )
+
+    ledger_entries: Mapped[list["LedgerEntry"]] = relationship(
+        "LedgerEntry",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+        overlaps="account,accounts,ledger_entries,shop",
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only

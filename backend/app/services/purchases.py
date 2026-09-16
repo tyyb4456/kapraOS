@@ -33,6 +33,7 @@ from app.models.inventory import InventoryMovementType
 from app.models.product import ProductVariant
 from app.models.purchase import Purchase, PurchaseItem
 from app.models.supplier import Supplier
+from app.services import accounting as accounting_service
 from app.services import inventory as inventory_service
 
 # Column scales from the models - inputs are normalised to these so the
@@ -299,4 +300,10 @@ async def create_purchase(
         )
 
     await session.flush()
+
+    # 7. Accounting representation: stock in, payable up. The paid portion is
+    # settled by a later supplier payment posting, keeping `Payment` the single
+    # settlement event.
+    await accounting_service.post_purchase(session, purchase=purchase)
+
     return purchase

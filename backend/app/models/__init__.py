@@ -11,6 +11,7 @@ As new modules are added in later steps (products, inventory, sales, ...),
 import them here too.
 """
 
+from app.models.account import Account, AccountType
 from app.models.attribute import Attribute, AttributeValue
 from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.brand import Brand
@@ -21,6 +22,7 @@ from app.models.inventory import (
     InventoryMovement,
     InventoryMovementType,
 )
+from app.models.ledger_entry import LedgerEntry
 from app.models.payment import Payment, PaymentMethod
 from app.models.product import (
     Product,
@@ -36,6 +38,8 @@ from app.models.supplier import Supplier
 from app.models.user import User, UserRole
 
 __all__ = [
+    "Account",
+    "AccountType",
     "Attribute",
     "AttributeValue",
     "Base",
@@ -45,6 +49,7 @@ __all__ = [
     "Inventory",
     "InventoryMovement",
     "InventoryMovementType",
+    "LedgerEntry",
     "Payment",
     "PaymentMethod",
     "Product",

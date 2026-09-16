@@ -40,6 +40,7 @@ from app.models.payment import Payment, PaymentMethod
 from app.models.product import ProductVariant
 from app.models.sale import Sale, SaleItem, SaleStatus
 from app.models.shop import Shop
+from app.services import accounting as accounting_service
 from app.services import inventory as inventory_service
 
 # Column scales from the models - inputs are normalised to these so the
@@ -399,4 +400,10 @@ async def create_sale(
         )
 
     await session.flush()
+
+    # 8. Accounting representation of the same event (Step 8). Posting is part
+    # of the same transaction, so an accounting failure rolls the sale back
+    # with everything else; it is idempotent, so a replay writes nothing new.
+    await accounting_service.post_sale(session, sale=sale)
+
     return sale
