@@ -110,7 +110,18 @@ class Payment(Base, UUIDMixin, TimestampMixin):
             name="fk_payments_sale_same_customer",
             ondelete="CASCADE",
         ),
+        # Supplier Khata integrity (Step 7): when a payment names both a
+        # supplier and a purchase, the purchase must be that supplier's. The
+        # tenant pairs above cannot provide this, since both rows are
+        # legitimately in the same shop.
+        ForeignKeyConstraint(
+            ["purchase_id", "supplier_id"],
+            ["purchases.id", "purchases.supplier_id"],
+            name="fk_payments_purchase_same_supplier",
+            ondelete="CASCADE",
+        ),
         Index("ix_payments_shop_sale_id", "shop_id", "sale_id"),
+        Index("ix_payments_shop_purchase_id", "shop_id", "purchase_id"),
         Index("ix_payments_shop_created_at", "shop_id", "created_at"),
         # The customer Khata read pattern (Step 6): one customer's payments in
         # chronological order.
@@ -118,6 +129,14 @@ class Payment(Base, UUIDMixin, TimestampMixin):
             "ix_payments_shop_customer_created_at",
             "shop_id",
             "customer_id",
+            "created_at",
+        ),
+        # The supplier Khata read pattern (Step 7): one supplier's payments in
+        # chronological order.
+        Index(
+            "ix_payments_shop_supplier_created_at",
+            "shop_id",
+            "supplier_id",
             "created_at",
         ),
 

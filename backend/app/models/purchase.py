@@ -61,6 +61,12 @@ class Purchase(Base, UUIDMixin, TimestampMixin):
         # another shop. Postgres needs an explicit unique constraint on exactly
         # this column pair even though `id` alone is already the primary key.
         UniqueConstraint("id", "shop_id", name="uq_purchases_id_shop_id"),
+        # Supports `Payment`'s composite foreign key (purchase_id, supplier_id),
+        # which stops one supplier's payment being booked against another
+        # supplier's purchase (which would silently move money between two
+        # payables). Same "redundant-looking but required" pattern as the pair
+        # above.
+        UniqueConstraint("id", "supplier_id", name="uq_purchases_id_supplier_id"),
         # Invoice numbers are unique *per shop* only, and only when present:
         # many local suppliers hand over no invoice at all, so NULL is a valid,
         # repeatable value. A partial unique index expresses that exactly
@@ -85,6 +91,14 @@ class Purchase(Base, UUIDMixin, TimestampMixin):
         ),
         Index("ix_purchases_shop_created_at", "shop_id", "created_at"),
         Index("ix_purchases_supplier_id", "supplier_id"),
+        # The supplier Khata read pattern (Step 7): one supplier's purchases
+        # in chronological order.
+        Index(
+            "ix_purchases_shop_supplier_created_at",
+            "shop_id",
+            "supplier_id",
+            "created_at",
+        ),
         CheckConstraint("subtotal >= 0", name="ck_purchases_subtotal_non_negative"),
         CheckConstraint("discount >= 0", name="ck_purchases_discount_non_negative"),
         CheckConstraint("total >= 0", name="ck_purchases_total_non_negative"),
@@ -163,9 +177,19 @@ class Purchase(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
+    # Two foreign key paths now link payments to purchases ((purchase_id,
+    # shop_id) and (purchase_id, supplier_id)), so the join has to be stated
+    # explicitly instead of inferred - exactly as `Sale.payments` does. The
+    # tenant pair is the right one to traverse; it is what `back_populates`
+    # on `Payment.purchase` uses.
     payments: Mapped[list["Payment"]] = relationship(
         "Payment",
         back_populates="purchase",
+        primaryjoin=(
+            "and_(Purchase.id == Payment.purchase_id, "
+            "Purchase.shop_id == Payment.shop_id)"
+        ),
+        foreign_keys="[Payment.purchase_id, Payment.shop_id]",
         cascade="all, delete-orphan",
         overlaps="customer,payments,purchase,sale,shop,supplier",
     )
