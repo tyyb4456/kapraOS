@@ -16,12 +16,15 @@ its items are what pull stock out of the inventory domain. The rules come from
   leave an inconsistent line.
 
 `customer_id` is nullable on purpose (`db_arch.md` section 15): a walk-in sale
-is represented by NULL, never by a synthetic "Walk-in Customer" row.
+is represented by NULL, never by a synthetic "Walk-in Customer" row. That is
+also what keeps walk-in sales out of every customer's Khata - see
+`app.services.receivables`.
 
 `due_amount` is intentionally a derived property (`total - paid_amount`)
 rather than an independently editable column (`db_arch.md` section 28): the
 recorded `Payment` rows are the source of truth, and `paid_amount` is
-maintained from them by `app.services.sales.create_sale`.
+maintained from them by `app.services.sales.create_sale` and, for later
+settlements, `app.services.receivables.record_customer_payment`.
 
 Sales are business transactions, not CRUD rows - nothing here writes stock.
 Creation (and its atomic inventory integration) lives in
@@ -61,7 +64,9 @@ class SaleStatus(str, Enum):
 
     `COMPLETED` means fully paid, `PARTIAL` means a balance is outstanding;
     `CANCELLED` / `RETURNED` exist so the enum is future-proof but their
-    workflows are not implemented in this step.
+    workflows are not implemented in this step. Only COMPLETED and PARTIAL
+    count towards a customer's receivable - see
+    `app.services.receivables.QUALIFYING_SALE_STATUSES`.
     """
 
     COMPLETED = "completed"
@@ -81,6 +86,11 @@ class Sale(Base, UUIDMixin, TimestampMixin):
         # shop. Postgres needs an explicit unique constraint on exactly this
         # column pair even though `id` alone is already the primary key.
         UniqueConstraint("id", "shop_id", name="uq_sales_id_shop_id"),
+        # Supports `Payment`'s composite foreign key (sale_id, customer_id),
+        # which stops one customer's payment being booked against another
+        # customer's invoice (which would silently move money between two
+        # Khatas). Same "redundant-looking but required" pattern as above.
+        UniqueConstraint("id", "customer_id", name="uq_sales_id_customer_id"),
         # Invoice numbers are unique *per shop* only, and only when present:
         # mirrors the `purchases` convention. A plain UniqueConstraint would
         # also let many NULLs through, but a partial index documents the
@@ -103,7 +113,15 @@ class Sale(Base, UUIDMixin, TimestampMixin):
             ondelete="RESTRICT",
         ),
         Index("ix_sales_shop_created_at", "shop_id", "created_at"),
-        Index("ix_sales_shop_customer_id", "shop_id", "customer_id"),
+        # The Khata read pattern: one customer's sales in chronological order.
+        # Wider than the plain (shop_id, customer_id) index it replaced, of
+        # which it is a strict prefix, so nothing lost coverage.
+        Index(
+            "ix_sales_shop_customer_created_at",
+            "shop_id",
+            "customer_id",
+            "created_at",
+        ),
         CheckConstraint("subtotal >= 0", name="ck_sales_subtotal_non_negative"),
         CheckConstraint("discount >= 0", name="ck_sales_discount_non_negative"),
         CheckConstraint("total >= 0", name="ck_sales_total_non_negative"),
@@ -192,11 +210,20 @@ class Sale(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
+    # There are now *two* foreign key paths from `payments` to `sales`
+    # ((sale_id, shop_id) and (sale_id, customer_id)), so the join condition
+    # has to be stated rather than inferred. The tenant pair is the one to
+    # traverse: it is non-nullable on the sale side, whereas customer_id is
+    # NULL for walk-in sales.
     payments: Mapped[list["Payment"]] = relationship(
         "Payment",
         back_populates="sale",
+        primaryjoin=(
+            "and_(Sale.id == Payment.sale_id, Sale.shop_id == Payment.shop_id)"
+        ),
+        foreign_keys="[Payment.sale_id, Payment.shop_id]",
         cascade="all, delete-orphan",
-        overlaps="customer,payments,sale,supplier",
+        overlaps="customer,payments,purchase,sale,shop,supplier",
     )
 
     @property

@@ -36,6 +36,7 @@ from sqlalchemy.pool import NullPool
 
 from alembic import command
 import app.database.session as session_module
+from app.database.session import get_db
 from app.main import app
 
 # Use NullPool during tests so asyncpg connections are not pooled across
@@ -97,3 +98,52 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest_asyncio.fixture
+async def api_session() -> AsyncGenerator[AsyncSession, None]:
+    """A session bound to an outer transaction that is always rolled back.
+
+    Endpoint tests need two things at once: fixture rows the request can see,
+    and isolation even though the route under test calls `session.commit()`.
+    Binding the session to a connection that already has a transaction open
+    (with `join_transaction_mode="create_savepoint"`) gives both - the route's
+    commit only releases a savepoint, and rolling back the outer transaction at
+    the end discards everything the test wrote.
+    """
+
+    async with session_module.engine.connect() as connection:
+        transaction = await connection.begin()
+        session = AsyncSession(
+            bind=connection,
+            join_transaction_mode="create_savepoint",
+            expire_on_commit=False,
+            autoflush=False,
+        )
+        try:
+            yield session
+        finally:
+            await session.close()
+            if transaction.is_active:
+                await transaction.rollback()
+
+
+@pytest_asyncio.fixture
+async def api_client(api_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """An httpx client whose requests run inside `api_session`.
+
+    Overriding `get_db` (rather than letting the app open its own session) is
+    what lets a test create a shop/customer/sale and have the very next HTTP
+    request see them.
+    """
+
+    async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        yield api_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+    finally:
+        app.dependency_overrides.pop(get_db, None)

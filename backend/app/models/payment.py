@@ -1,10 +1,13 @@
 """Payment model - money changing hands, kept separate from sales/purchases
 (`db_arch.md` section 21).
 
-A payment can be a customer settling a `Sale`, a shop paying a `Supplier`
-(future step), or - later - a standalone khata settlement. For this step only
-customer -> sale payments are created, but the shape is deliberately generic so
-the supplier-payment domain can reuse it without a migration rewrite.
+A payment can be a customer settling a `Sale`, a customer settling their Khata
+without naming an invoice (`sale_id IS NULL`), a shop settling a `Purchase`
+with a `Supplier`, a shop settling its overall payable without naming a
+purchase (`purchase_id IS NULL`), or - later - any other party settlement.
+The shape is deliberately generic so a future payables domain can reuse the
+same table without a migration rewrite. For now `app.services.receivables`
+treats these rows as the source of truth for money received from a customer.
 
 Tenant integrity is enforced with composite foreign keys: `(sale_id, shop_id)`,
 `(purchase_id, shop_id)`, `(customer_id, shop_id)` and `(supplier_id, shop_id)`
@@ -12,6 +15,15 @@ each target a supporting `UNIQUE(id, shop_id)` on the referenced table. That
 means a payment belonging to Shop A can never point at Shop B's sale,
 purchase, customer or supplier - the database rejects it, not just the service
 layer.
+
+One further pair guards *within* a shop: `(sale_id, customer_id)` targets
+`sales UNIQUE(id, customer_id)`, so Ahmed's payment can never be booked against
+Bilal's invoice.
+
+MATCH SIMPLE keeps every legitimate NULL case working - an unallocated
+customer/supplier payment has no `sale_id`/`purchase_id`, and a walk-in sale's
+payment has no `customer_id` - while any payment naming both a document and a
+party must agree with the document's own party.
 """
 
 import uuid
@@ -62,7 +74,7 @@ class Payment(Base, UUIDMixin, TimestampMixin):
         # shop_id so a payment can only ever point at same-shop rows; MATCH
         # SIMPLE skips the check whenever the reference is NULL. RESTRICT for
         # parties (a customer/supplier with payment history is not deletable);
-        # CASCADE for documents (deleting a sale takes its payments with it).
+        # CASCADE for documents (deleting a sale/purchase takes its payments).
         ForeignKeyConstraint(
             ["customer_id", "shop_id"],
             ["customers.id", "customers.shop_id"],
@@ -87,8 +99,28 @@ class Payment(Base, UUIDMixin, TimestampMixin):
             name="fk_payments_purchase_same_shop",
             ondelete="CASCADE",
         ),
+        # Customer Khata integrity (Step 6): when a payment names both a
+        # customer and a sale, the sale must be that customer's. Without this,
+        # Shop A could credit Ahmed's Khata with a payment recorded against
+        # Bilal's invoice - a guard the tenant pairs above cannot provide,
+        # since both rows are legitimately in the same shop.
+        ForeignKeyConstraint(
+            ["sale_id", "customer_id"],
+            ["sales.id", "sales.customer_id"],
+            name="fk_payments_sale_same_customer",
+            ondelete="CASCADE",
+        ),
         Index("ix_payments_shop_sale_id", "shop_id", "sale_id"),
         Index("ix_payments_shop_created_at", "shop_id", "created_at"),
+        # The customer Khata read pattern (Step 6): one customer's payments in
+        # chronological order.
+        Index(
+            "ix_payments_shop_customer_created_at",
+            "shop_id",
+            "customer_id",
+            "created_at",
+        ),
+
         # A payment moves a non-zero amount of money (refunds/negative entries
         # belong to the returns domain, not here).
         CheckConstraint("amount > 0", name="ck_payments_amount_positive"),
@@ -111,11 +143,17 @@ class Payment(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
+    # NULL means the payment is not allocated to a particular invoice: a
+    # customer settling their Khata in general. It still reduces their
+    # outstanding balance - see `app.services.receivables`.
     sale_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
+    # NULL means the payment is not allocated to a particular purchase; a
+    # future payables domain will read it the same way receivables reads
+    # unallocated customer payments.
     purchase_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
@@ -154,15 +192,30 @@ class Payment(Base, UUIDMixin, TimestampMixin):
         overlaps="customer,payments,purchase,sale,shop,supplier",
     )
 
+    # Two foreign key paths now link payments to sales ((sale_id, shop_id) and
+    # (sale_id, customer_id)), so the join has to be stated explicitly instead
+    # of inferred. The tenant pair is the right one to traverse - it is
+    # non-nullable on the sale side, while customer_id is NULL for walk-ins.
     sale: Mapped["Sale | None"] = relationship(
         "Sale",
         back_populates="payments",
+        primaryjoin=(
+            "and_(Payment.sale_id == Sale.id, Payment.shop_id == Sale.shop_id)"
+        ),
+        foreign_keys="[Payment.sale_id, Payment.shop_id]",
         overlaps="customer,payments,purchase,sale,shop,supplier",
     )
 
+    # Stated explicitly for the same reason as `sale` above, and so a future
+    # payables relationship can add its own join without ambiguity.
     purchase: Mapped["Purchase | None"] = relationship(
         "Purchase",
         back_populates="payments",
+        primaryjoin=(
+            "and_(Payment.purchase_id == Purchase.id, "
+            "Payment.shop_id == Purchase.shop_id)"
+        ),
+        foreign_keys="[Payment.purchase_id, Payment.shop_id]",
         overlaps="customer,payments,purchase,sale,shop,supplier",
     )
 
