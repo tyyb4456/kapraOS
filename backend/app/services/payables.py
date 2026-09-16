@@ -268,6 +268,38 @@ def _supplier_payments_filter(
     )
 
 
+def _shop_supplier_payments_filter(
+    shop_id: uuid.UUID,
+) -> tuple[ColumnElement[bool], ...]:
+    """Shop-wide counterpart of `_supplier_payments_filter`.
+
+    Identical qualification rules, without pinning one supplier: a payment
+    counts when it belongs to this shop, names a supplier (customer/sale
+    payments are excluded) and, if it references a purchase, that purchase
+    itself qualifies. Reporting uses this so the aggregate payable can never
+    drift from the sum of the per-supplier Khatas.
+    """
+
+    qualifying_purchase = (
+        select(Purchase.id)
+        .where(
+            Purchase.id == Payment.purchase_id,
+            Purchase.shop_id == shop_id,
+            Purchase.supplier_id == Payment.supplier_id,
+        )
+        .correlate(Payment)
+        .exists()
+    )
+
+    return (
+        Payment.shop_id == shop_id,
+        Payment.supplier_id.is_not(None),
+        Payment.customer_id.is_(None),
+        Payment.sale_id.is_(None),
+        or_(Payment.purchase_id.is_(None), qualifying_purchase),
+    )
+
+
 def _apply_date_range(
     statement: Select[tuple[object, ...]],
     column: ColumnElement[datetime],
@@ -386,6 +418,33 @@ async def get_supplier_summary(
         total_paid=balance.total_payments,
         outstanding_balance=balance.outstanding_balance,
     )
+
+
+async def get_total_outstanding(
+    session: AsyncSession, *, shop_id: uuid.UUID
+) -> Decimal:
+    """Shop-wide outstanding payable: the sum of every supplier Khata.
+
+    Derived with the same qualification rules the per-supplier balance uses
+    (`_shop_supplier_payments_filter` and the same purchase set), so reporting
+    can never disagree with Supplier Khata.
+    """
+
+    purchases = (
+        await session.execute(
+            select(func.coalesce(func.sum(Purchase.total), 0)).where(
+                Purchase.shop_id == shop_id,
+            )
+        )
+    ).scalar()
+    payments = (
+        await session.execute(
+            select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                *_shop_supplier_payments_filter(shop_id)
+            )
+        )
+    ).scalar()
+    return _money(purchases) - _money(payments)
 
 
 # --------------------------------------------------------------------------

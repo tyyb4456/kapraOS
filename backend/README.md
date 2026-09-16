@@ -4,10 +4,11 @@ Multi-tenant Fabric & Fashion Retail Management SaaS - KapraOS backend.
 
 Built step by step per the phased plan in the architecture docs
 (Foundation → Catalog → Inventory → Purchases → POS → Customer Khata →
-Supplier Payables → Accounting → Intelligence). Steps 1-8 are implemented:
+Supplier Payables → Accounting → Intelligence). Steps 1-9 are implemented:
 project foundation, catalog, inventory, suppliers & purchases, sales/POS,
-customer receivables (Khata), supplier payables (Khata), and the general
-ledger (double-entry accounting).
+customer receivables (Khata), supplier payables (Khata), the general
+ledger (double-entry accounting), and read-only reporting & financial
+statements.
 
 ## Step 8 - General Ledger / Double-Entry Accounting
 
@@ -85,6 +86,86 @@ auth was added in this step.
 GET /accounts                        chart of accounts
 GET /accounts/{account_id}/balance   derived balance
 GET /accounts/{account_id}/ledger    ledger lines (date filter + pagination)
+```
+
+## Step 9 - Reporting & Financial Statements
+
+Step 9 is a **read-only reporting layer** over the existing operational and
+accounting data. It adds **no tables, no migration and no accounting posting
+rules**: every figure is derived at query time from the source-of-truth rows
+that Steps 1-8 already produce.
+
+```text
+Operational Data + Accounting Ledger + Inventory State
+        ↓
+Reporting Services (app/services/reporting.py)
+        ↓
+Financial Statements + Business Dashboard
+```
+
+### Reports and their sources of truth
+
+| Report | Derived from |
+| --- | --- |
+| Trial Balance | `accounts` + `ledger_entries` |
+| Profit & Loss | Revenue: ledger REVENUE accounts; COGS: historical `SaleItem.cost_price` |
+| Balance Sheet | ASSET / LIABILITY / EQUITY account balances |
+| Dashboard | Sales, Purchases, Payments, Inventory, plus Step 6/7 Khata aggregates |
+
+### Trial balance semantics
+
+Both `start_date` and `end_date` are inclusive. Each row carries the period's
+`debit_total` / `credit_total` / `balance` **and** the `closing_*` figures
+(everything up to `end_date`), so both "period activity" and "closing balance"
+are available without ambiguity. `is_balanced` is the
+`Total Debits == Total Credits` check.
+
+### P&L: the hybrid V1 COGS source
+
+Revenue comes from the ledger, but COGS does **not**: Step 8 posts no COGS
+entry. For V1:
+
+```text
+COGS = SUM(SaleItem.quantity × SaleItem.cost_price)
+```
+
+`SaleItem.cost_price` is the weighted-average cost snapshotted at sale time
+and never rewritten, so historical COGS is correct even after later receipts
+move the current average. Current inventory cost is deliberately not used.
+
+### Expense limitation (V1)
+
+There is **no Expense domain**, so the P&L reports
+`expense_reporting_available = false` and returns `expenses = null`,
+`net_profit = null`. It never presents Gross Profit as if it were Net Profit.
+
+### Balance sheet
+
+Assets / liabilities / equity come straight from ledger account balances (no
+`Cash = sales - expenses` shortcuts). Revenue and expense accounts are not yet
+closed into equity, so the report exposes `difference` explicitly rather than
+inventing balancing entries.
+
+### Dashboard metrics
+
+Today's sales and count, today's payments received and count, today's
+purchases and count, today's COGS and gross profit, receivables outstanding,
+payables outstanding, inventory quantity and estimated value. Receivables and
+payables reuse the Step 6/7 services, so the dashboard always agrees with the
+Khatas.
+
+**Not available in V1:** low stock (no reorder/minimum-stock field exists) and
+expense/net-profit reporting. Both are surfaced via explicit flags, not
+fabricated numbers. "Today" is the current UTC day - no shop timezone is
+configured yet.
+
+### Reporting endpoints (read-only)
+
+```text
+GET /reports/trial-balance       ?start_date=&end_date=
+GET /reports/profit-and-loss     ?start_date=&end_date=
+GET /reports/balance-sheet       ?end_date=
+GET /reports/dashboard
 ```
 
 ## Stack

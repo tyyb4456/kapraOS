@@ -277,6 +277,39 @@ def _customer_payments_filter(
     )
 
 
+def _shop_customer_payments_filter(
+    shop_id: uuid.UUID,
+) -> tuple[ColumnElement[bool], ...]:
+    """Shop-wide counterpart of `_customer_payments_filter`.
+
+    Identical qualification rules, without pinning one customer: a payment
+    counts when it belongs to this shop, names a customer (a walk-in sale's
+    payment belongs to no customer Khata) and, if it references a sale, that
+    sale itself qualifies. Reporting uses this so the aggregate receivable can
+    never drift from the sum of the per-customer Khatas.
+    """
+
+    qualifying_sale = (
+        select(Sale.id)
+        .where(
+            Sale.id == Payment.sale_id,
+            Sale.shop_id == shop_id,
+            Sale.customer_id == Payment.customer_id,
+            Sale.status.in_(QUALIFYING_SALE_STATUSES),
+        )
+        .correlate(Payment)
+        .exists()
+    )
+
+    return (
+        Payment.shop_id == shop_id,
+        Payment.customer_id.is_not(None),
+        Payment.supplier_id.is_(None),
+        Payment.purchase_id.is_(None),
+        or_(Payment.sale_id.is_(None), qualifying_sale),
+    )
+
+
 def _apply_date_range(
     statement: Select[tuple[object, ...]],
     column: ColumnElement[datetime],
@@ -395,6 +428,36 @@ async def get_customer_summary(
         total_paid=balance.total_payments,
         outstanding_balance=balance.outstanding_balance,
     )
+
+
+async def get_total_outstanding(
+    session: AsyncSession, *, shop_id: uuid.UUID
+) -> Decimal:
+    """Shop-wide outstanding receivable: the sum of every customer Khata.
+
+    Derived with the same qualification rules the per-customer balance uses
+    (`QUALIFYING_SALE_STATUSES` and `_shop_customer_payments_filter`), so
+    reporting can never disagree with Customer Khata. Walk-in sales and their
+    payments are excluded - they belong to no customer's Khata.
+    """
+
+    sales = (
+        await session.execute(
+            select(func.coalesce(func.sum(Sale.total), 0)).where(
+                Sale.shop_id == shop_id,
+                Sale.customer_id.is_not(None),
+                Sale.status.in_(QUALIFYING_SALE_STATUSES),
+            )
+        )
+    ).scalar()
+    payments = (
+        await session.execute(
+            select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                *_shop_customer_payments_filter(shop_id)
+            )
+        )
+    ).scalar()
+    return _money(sales) - _money(payments)
 
 
 # --------------------------------------------------------------------------
