@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.models.brand import Brand
     from app.models.category import Category
     from app.models.customer import Customer
+    from app.models.expense import Expense
     from app.models.ledger_entry import LedgerEntry
     from app.models.payment import Payment
     from app.models.product import Product
@@ -140,6 +141,12 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         back_populates="shop",
         cascade="all, delete-orphan",
         overlaps="account,accounts,ledger_entries,shop",
+    )
+
+    expenses: Mapped[list["Expense"]] = relationship(
+        "Expense",
+        back_populates="shop",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only

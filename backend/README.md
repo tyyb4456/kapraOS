@@ -4,11 +4,11 @@ Multi-tenant Fabric & Fashion Retail Management SaaS - KapraOS backend.
 
 Built step by step per the phased plan in the architecture docs
 (Foundation → Catalog → Inventory → Purchases → POS → Customer Khata →
-Supplier Payables → Accounting → Intelligence). Steps 1-9 are implemented:
+Supplier Payables → Accounting → Intelligence). Steps 1-10 are implemented:
 project foundation, catalog, inventory, suppliers & purchases, sales/POS,
 customer receivables (Khata), supplier payables (Khata), the general
-ledger (double-entry accounting), and read-only reporting & financial
-statements.
+ledger (double-entry accounting), read-only reporting & financial
+statements, and the expense domain plus COGS ledger postings.
 
 ## Step 8 - General Ledger / Double-Entry Accounting
 
@@ -77,8 +77,137 @@ Payment-method → asset mapping is deterministic: `cash` → Cash; `card`,
 Customer Khata remains `Sales + customer Payments`; Supplier Khata remains
 `Purchases + supplier Payments`. The general ledger is an *additional*
 accounting representation of those same events, never their source of truth.
-No COGS, tax, returns, financial statements, manual journal-entry API or
-auth was added in this step.
+No tax, returns, manual journal-entry API or auth was added in this step.
+
+## Step 10 — Expense Domain + COGS Ledger Postings
+
+### COGS (Cost of Goods Sold)
+
+Every qualifying sale (`COMPLETED` / `PARTIAL`) now generates a COGS
+posting inside the same atomic transaction as the sale itself.
+
+```text
+Sale (COMPLETED / PARTIAL)
+    → Revenue group:  Dr Cash/Bank + Dr AR,  Cr Sales Revenue
+    → COGS group:     Dr Cost of Goods Sold,  Cr Inventory
+```
+
+The amount is `SUM(SaleItem.quantity × SaleItem.cost_price)` using the
+**immutable historical cost** snapshotted on each `SaleItem` at sale
+time. The current weighted-average inventory cost is never consulted,
+so a later, more expensive purchase cannot rewrite what an earlier
+sale cost.
+
+**Zero-cost sales** are permitted (zero-cost inventory is allowed) and
+are skipped silently — Step 8 forbids zero-value ledger lines, so no
+invalid line is written for a free sample.
+
+**Cancelled sales** generate no COGS: `post_cogs()` returns early
+unless the sale is `COMPLETED` or `PARTIAL`. Because V1 has no
+cancellation workflow, a sale that was posted as COMPLETED and then
+had its status flipped to CANCELLED afterwards keeps its ledger entries
+(post-hoc cancellation does not reverse the ledger — that is a future
+accounting-reversal step).
+
+**Duplicate protection** is unchanged: the reference
+`("SALE_COGS", sale.id)` is unique per `(shop_id, reference_type,
+reference_id, account_id)`, so replaying a sale writes no second COGS
+group.
+
+New system accounts (added to `DEFAULT_ACCOUNTS` by
+`ensure_system_accounts()`, idempotently):
+
+```text
+5000  Cost of Goods Sold   EXPENSE
+5100  Rent Expense         EXPENSE
+5200  Utilities Expense    EXPENSE
+5300  Salaries Expense     EXPENSE
+5400  Marketing Expense    EXPENSE
+5500  Transport Expense    EXPENSE
+5600  Maintenance Expense  EXPENSE
+5700  Supplies Expense     EXPENSE
+5900  Other Expense        EXPENSE
+```
+
+Several categories share the "Other Expense" account by design — the
+chart of accounts stays small and a future step can split it without
+touching this step.
+
+### Expense domain
+
+An immediate-payment operating expense is recorded via `POST /expenses`.
+There is deliberately **no payable/liability workflow** for expenses in
+V1 — `Accounts Payable` stays supplier-only.
+
+```text
+POST /expenses   { category, amount, payment_method, description?, expense_date? }
+GET  /expenses   (date filter, pagination)
+GET  /expenses/{id}
+```
+
+```text
+Expense (cash)
+    → Dr Rent Expense,  Cr Cash
+
+Expense (bank)
+    → Dr Marketing Expense,  Cr Bank
+```
+
+Posted expenses are **immutable**: there is no update or delete route,
+because a posted expense already has ledger entries and V1 has no
+reversal/void workflow (`step_10_desc.md` sections 16 and 37).
+
+### P&L is now fully ledger-derived
+
+```text
+Revenue      →  ledger REVENUE accounts
+COGS         →  ledger COGS account
+Expenses     →  ledger EXPENSE accounts (COGS excluded)
+Gross Profit = Revenue - COGS
+Net Profit   = Gross Profit - Expenses
+```
+
+All three components are now read from `ledger_entries`;
+`SaleItem.cost_price` is only the source used to *create* the COGS
+posting.
+
+### Dashboard
+
+`today_cogs` now reflects the ledger COGS. New fields
+`today_expenses` and `today_net_profit` are reported. Gross profit
+uses ledger COGS.
+
+### Expense accounting endpoints
+
+```text
+GET /accounts                        chart of accounts
+GET /accounts/{account_id}/balance   derived balance
+GET /accounts/{account_id}/ledger    ledger lines
+```
+
+### Integrity guarantees added in this step
+
+- **COGS atomicity:** `post_cogs()` runs inside the sale transaction,
+  so a COGS failure rolls the entire sale back.
+- **Zero-line guard:** a COGS of zero returns `[]` rather than writing
+  an invalid ledger line.
+- **Qualifying-sales guard:** `post_cogs()` returns early for
+  `CANCELLED` sales, keeping the rule centralised in one place.
+- **Idempotency:** both COGS (`"SALE_COGS"`) and expense (`"EXPENSE"`)
+  postings reuse the `(shop_id, reference_type, reference_id,
+  account_id)` unique constraint.
+- **Tenant isolation:** unchanged — a shop cannot create or read
+  another shop's COGS or expenses.
+
+### What Step 10 does NOT change
+
+Steps 1-9 tables are untouched. No `journals`, `posting_batches`,
+`cogs_entries`, `expense_ledger` or `expense_balances` tables were
+created — the ledger remains the single representation. No manual
+journal-entry or ledger-mutation API exists. Inventory quantity stays
+in the inventory service; the accounting service only writes the
+financial side. Tax, returns, supplier/customer returns, cash-flow
+statement, fiscal periods and payroll remain out of scope.
 
 ### Accounting endpoints (read-only)
 
@@ -120,44 +249,44 @@ Both `start_date` and `end_date` are inclusive. Each row carries the period's
 are available without ambiguity. `is_balanced` is the
 `Total Debits == Total Credits` check.
 
-### P&L: the hybrid V1 COGS source
+### P&L: fully ledger-derived (Step 10)
 
-Revenue comes from the ledger, but COGS does **not**: Step 8 posts no COGS
-entry. For V1:
+All three components are read from `ledger_entries`:
 
 ```text
-COGS = SUM(SaleItem.quantity × SaleItem.cost_price)
+Revenue  →  ledger REVENUE accounts
+COGS     →  ledger Cost of Goods Sold account (5000)
+Expenses →  ledger EXPENSE accounts (5100-5900), excluding COGS
+Gross Profit = Revenue - COGS
+Net Profit   = Gross Profit - Expenses
 ```
 
-`SaleItem.cost_price` is the weighted-average cost snapshotted at sale time
-and never rewritten, so historical COGS is correct even after later receipts
-move the current average. Current inventory cost is deliberately not used.
+`SaleItem.cost_price` is now only the source used to *create* the COGS
+posting. The ledger is the reporting source.
 
-### Expense limitation (V1)
-
-There is **no Expense domain**, so the P&L reports
-`expense_reporting_available = false` and returns `expenses = null`,
-`net_profit = null`. It never presents Gross Profit as if it were Net Profit.
+**Note on cancellation:** because there is no reversal workflow in V1,
+post-hoc status changes do not reverse ledger entries, so a sale that
+was posted as COMPLETED and later cancelled retains its COGS in the
+ledger.
 
 ### Balance sheet
 
 Assets / liabilities / equity come straight from ledger account balances (no
 `Cash = sales - expenses` shortcuts). Revenue and expense accounts are not yet
 closed into equity, so the report exposes `difference` explicitly rather than
-inventing balancing entries.
+inventing balancing entries. COGS reduces `Inventory` and `Expenses` instead,
+which the balance sheet reflects naturally through the account balances.
 
 ### Dashboard metrics
 
 Today's sales and count, today's payments received and count, today's
-purchases and count, today's COGS and gross profit, receivables outstanding,
-payables outstanding, inventory quantity and estimated value. Receivables and
-payables reuse the Step 6/7 services, so the dashboard always agrees with the
-Khatas.
+purchases and count, today's COGS, today's expenses, today's gross profit
+and today's net profit, receivables outstanding, payables outstanding,
+inventory quantity and estimated value. Receivables and payables reuse the
+Step 6/7 services, so the dashboard always agrees with the Khatas.
 
-**Not available in V1:** low stock (no reorder/minimum-stock field exists) and
-expense/net-profit reporting. Both are surfaced via explicit flags, not
-fabricated numbers. "Today" is the current UTC day - no shop timezone is
-configured yet.
+**Not available in V1:** low stock (no reorder/minimum-stock field exists).
+"Today" is the current UTC day - no shop timezone is configured yet.
 
 ### Reporting endpoints (read-only)
 

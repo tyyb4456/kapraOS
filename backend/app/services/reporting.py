@@ -7,17 +7,21 @@ an accounting posting. Every figure is derived at query time from the existing
 source-of-truth tables:
 
 * Trial Balance  -> `accounts` + `ledger_entries`
-* Profit & Loss  -> Revenue from the ledger's REVENUE accounts; COGS from the
-                    immutable historical `SaleItem.cost_price`
+* Profit & Loss  -> Revenue, COGS and Expenses, all from the ledger
 * Balance Sheet  -> ASSET / LIABILITY / EQUITY account balances
 * Dashboard      -> Sales / Purchases / Payments / Inventory aggregates, plus
                     the Step 6 and Step 7 shop-wide Khatas so reporting can
                     never drift from the receivables/payables services
 
-Two V1 limitations are surfaced rather than hidden: there is no Expense domain
-(so Net Profit is unavailable) and inventory has no reorder/minimum-stock
-field (so low stock is unavailable). Both are reported via explicit flags
-instead of fabricated numbers.
+After Step 10 the P&L is **fully ledger-derived**: Step 8 posts revenue, and
+Step 10 posts COGS (from the historical `SaleItem.cost_price`) and expenses, so
+`Revenue - COGS - Expenses = Net Profit` is assembled entirely from
+`ledger_entries`. The historical `SaleItem.cost_price` is now only the *source*
+used to create the COGS posting, never the reporting source.
+
+One V1 limitation is surfaced rather than hidden: inventory has no
+reorder/minimum-stock field, so low stock is unavailable and is reported via an
+explicit flag instead of a fabricated number.
 
 Money is `Decimal` throughout, quantized to NUMERIC(14,2). "Today" is the
 current UTC calendar day - the project has no configured shop timezone
@@ -38,10 +42,10 @@ from app.models.ledger_entry import LedgerEntry
 from app.models.payment import Payment
 from app.models.product import ProductVariant
 from app.models.purchase import Purchase
-from app.models.sale import Sale, SaleItem
+from app.models.sale import Sale
 from app.services import payables as payables_service
 from app.services import receivables as receivables_service
-from app.services.accounting import _normal_balance
+from app.services.accounting import COST_OF_GOODS_SOLD, _normal_balance
 from app.services.receivables import QUALIFYING_SALE_STATUSES
 
 _MONEY_SCALE = Decimal("0.01")
@@ -93,7 +97,14 @@ class TrialBalance:
 
 @dataclass(frozen=True)
 class ProfitAndLoss:
-    """Revenue, COGS and Gross Profit, with the V1 expense limitation."""
+    """Revenue, COGS, Gross Profit, Expenses and Net Profit for a period.
+
+    Every figure is derived from the ledger: `revenue` from the REVENUE
+    accounts, `cogs` from the Cost of Goods Sold account, and `expenses` from
+    the remaining EXPENSE accounts (COGS excluded, so it is never counted
+    twice). `expense_reporting_available` stays in the contract for
+    compatibility and is now always `True`.
+    """
 
     start_date: datetime | None
     end_date: datetime | None
@@ -143,6 +154,8 @@ class DashboardSummary:
     today_purchase_count: int
     today_cogs: Decimal
     today_gross_profit: Decimal
+    today_expenses: Decimal
+    today_net_profit: Decimal
     receivables_outstanding: Decimal
     payables_outstanding: Decimal
     inventory_quantity: Decimal
@@ -313,38 +326,45 @@ async def _revenue_for_period(
     return _money(_money(row[0]) - _money(row[1]))
 
 
-async def _cogs_for_period(
+async def _expense_activity_for_period(
     session: AsyncSession,
     shop_id: uuid.UUID,
     start_date: datetime | None,
     end_date: datetime | None,
+    *,
+    include_cogs: bool,
 ) -> Decimal:
-    """Historical COGS: SUM(SaleItem.quantity * SaleItem.cost_price).
+    """Debit activity of the ledger's EXPENSE accounts, net of reversals.
 
-    `SaleItem.cost_price` is the weighted-average cost captured at sale time
-    and never rewritten, which is exactly why this is the correct historical
-    figure. Current inventory cost is deliberately *not* used.
+    `include_cogs` selects which half of the EXPENSE accounts participate:
+    COGS reporting uses only the Cost of Goods Sold account, while expense
+    reporting uses every *other* EXPENSE account - so the two figures never
+    overlap and `Revenue - COGS - Expenses` is not double-counting.
     """
 
     statement = (
         select(
-            func.coalesce(
-                func.sum(SaleItem.quantity * SaleItem.cost_price), 0
-            )
+            func.coalesce(func.sum(LedgerEntry.debit), 0),
+            func.coalesce(func.sum(LedgerEntry.credit), 0),
         )
-        .select_from(SaleItem)
-        .join(Sale, Sale.id == SaleItem.sale_id)
+        .select_from(LedgerEntry)
+        .join(Account, Account.id == LedgerEntry.account_id)
         .where(
-            Sale.shop_id == shop_id,
-            Sale.status.in_(QUALIFYING_SALE_STATUSES),
+            LedgerEntry.shop_id == shop_id,
+            Account.account_type == AccountType.EXPENSE,
         )
     )
+    if include_cogs:
+        statement = statement.where(Account.code == COST_OF_GOODS_SOLD)
+    else:
+        statement = statement.where(Account.code != COST_OF_GOODS_SOLD)
     if start_date is not None:
-        statement = statement.where(Sale.created_at >= start_date)
+        statement = statement.where(LedgerEntry.created_at >= start_date)
     if end_date is not None:
-        statement = statement.where(Sale.created_at <= end_date)
+        statement = statement.where(LedgerEntry.created_at <= end_date)
 
-    return _money((await session.execute(statement)).scalar())
+    row = (await session.execute(statement)).one()
+    return _money(_money(row[0]) - _money(row[1]))
 
 
 async def get_profit_and_loss(
@@ -354,19 +374,29 @@ async def get_profit_and_loss(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
 ) -> ProfitAndLoss:
-    """Revenue - COGS = Gross Profit for the selected period.
+    """Revenue - COGS - Expenses = Net Profit, entirely from the ledger.
 
-    Revenue is ledger-derived; COGS is the hybrid V1 source
-    (`SaleItem.cost_price x quantity`). Because there is no Expense domain,
-    `expenses` / `net_profit` are `None` and `expense_reporting_available` is
-    `False` - an incomplete figure is never presented as a real Net Profit.
+        Revenue     = credit activity of REVENUE accounts
+        COGS        = debit activity of the Cost of Goods Sold account
+        Expenses    = debit activity of every other EXPENSE account
+        Gross Profit = Revenue - COGS
+        Net Profit   = Gross Profit - Expenses
+
+    All three are ledger-derived; the historical `SaleItem.cost_price` is only
+    the source of the COGS *posting*, never the reporting source.
     """
 
     _validate_range(start_date, end_date)
 
     revenue = await _revenue_for_period(session, shop_id, start_date, end_date)
-    cogs = await _cogs_for_period(session, shop_id, start_date, end_date)
+    cogs = await _expense_activity_for_period(
+        session, shop_id, start_date, end_date, include_cogs=True
+    )
+    expenses = await _expense_activity_for_period(
+        session, shop_id, start_date, end_date, include_cogs=False
+    )
     gross_profit = _money(revenue - cogs)
+    net_profit = _money(gross_profit - expenses)
 
     return ProfitAndLoss(
         start_date=start_date,
@@ -374,14 +404,15 @@ async def get_profit_and_loss(
         revenue=revenue,
         cogs=cogs,
         gross_profit=gross_profit,
-        expenses=None,
-        net_profit=None,
-        expense_reporting_available=False,
+        expenses=expenses,
+        net_profit=net_profit,
+        expense_reporting_available=True,
         notes=(
             "Revenue is derived from the general ledger's REVENUE accounts.",
-            "COGS is derived from historical SaleItem.cost_price; it is not "
-            "yet a general-ledger posting.",
-            "No Expense domain exists, so Net Profit is unavailable.",
+            "COGS is the ledger balance of the Cost of Goods Sold account; "
+            "the posting was created from historical SaleItem.cost_price.",
+            "Expenses are the ledger balance of the remaining EXPENSE "
+            "accounts, so they never include COGS twice.",
         ),
     )
 
@@ -483,24 +514,11 @@ async def get_dashboard_summary(
         )
     ).one()
 
-    cogs_today = _money(
-        (
-            await session.execute(
-                select(
-                    func.coalesce(
-                        func.sum(SaleItem.quantity * SaleItem.cost_price), 0
-                    )
-                )
-                .select_from(SaleItem)
-                .join(Sale, Sale.id == SaleItem.sale_id)
-                .where(
-                    Sale.shop_id == shop_id,
-                    Sale.status.in_(QUALIFYING_SALE_STATUSES),
-                    Sale.created_at >= day_start,
-                    Sale.created_at < day_end,
-                )
-            )
-        ).scalar()
+    cogs_today = await _expense_activity_for_period(
+        session, shop_id, day_start, day_end, include_cogs=True
+    )
+    expenses_today = await _expense_activity_for_period(
+        session, shop_id, day_start, day_end, include_cogs=False
     )
 
     payments_row = (
@@ -567,6 +585,8 @@ async def get_dashboard_summary(
         today_purchase_count=int(purchases_row[1]),
         today_cogs=cogs_today,
         today_gross_profit=_money(today_sales - cogs_today),
+        today_expenses=expenses_today,
+        today_net_profit=_money(today_sales - cogs_today - expenses_today),
         receivables_outstanding=receivables,
         payables_outstanding=payables,
         inventory_quantity=Decimal(inventory_row[0]),

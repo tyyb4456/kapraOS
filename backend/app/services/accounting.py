@@ -25,6 +25,16 @@ electronic method (card, bank, JazzCash, Easypaisa) lands in Bank, and anything
 unclassified (`other`) falls back to Cash. Step 8 does not add an account per
 payment method.
 
+Step 10 adds two more posting events without changing the mechanism:
+
+* `post_cogs()` - `Debit Cost of Goods Sold / Credit Inventory`, using the
+  historical `SaleItem.cost_price` snapshot;
+* `post_expense()` - `Debit <category> Expense / Credit Cash|Bank` for an
+  immediate-payment expense.
+
+Both reuse `_post_group()`, and both are idempotent through their own
+`(reference_type, reference_id)` pair (`SALE_COGS` / `EXPENSE`).
+
 Nothing here commits - like every other service in this project, the caller
 owns the transaction. `post_*()` flushes and returns the rows it wrote; a
 failure anywhere rolls the whole business event back.
@@ -39,19 +49,22 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account, AccountType
+from app.models.expense import Expense, ExpenseCategory
 from app.models.ledger_entry import LedgerEntry
 from app.models.payment import Payment, PaymentMethod
 from app.models.purchase import Purchase
-from app.models.sale import Sale
+from app.models.sale import Sale, SaleItem, SaleStatus
 
 _MONEY_SCALE = Decimal("0.01")
 _ZERO = Decimal("0.00")
 
-#: Reference types for the four supported posting events.
+#: Reference types for the supported posting events.
 REFERENCE_SALE = "SALE"
+REFERENCE_SALE_COGS = "SALE_COGS"
 REFERENCE_PURCHASE = "PURCHASE"
 REFERENCE_CUSTOMER_PAYMENT = "CUSTOMER_PAYMENT"
 REFERENCE_SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT"
+REFERENCE_EXPENSE = "EXPENSE"
 
 #: Codes referenced by name throughout this module.
 CASH = "1000"
@@ -61,9 +74,20 @@ INVENTORY = "1200"
 ACCOUNTS_PAYABLE = "2000"
 OWNER_EQUITY = "3000"
 SALES_REVENUE = "4000"
+COST_OF_GOODS_SOLD = "5000"
+RENT_EXPENSE = "5100"
+UTILITIES_EXPENSE = "5200"
+SALARIES_EXPENSE = "5300"
+MARKETING_EXPENSE = "5400"
+TRANSPORT_EXPENSE = "5500"
+MAINTENANCE_EXPENSE = "5600"
+SUPPLIES_EXPENSE = "5700"
+OTHER_EXPENSE = "5900"
 
 #: The default chart of accounts every shop is provisioned with. Kept as a
-#: module-level tuple so tests and callers can introspect it.
+#: module-level tuple so tests and callers can introspect it. Step 10 adds the
+#: COGS account and the small set of expense accounts `db_arch.md` section 23
+#: calls for; a category is not given its own account unless it needs one.
 DEFAULT_ACCOUNTS: tuple[tuple[str, str, AccountType], ...] = (
     (CASH, "Cash", AccountType.ASSET),
     (BANK, "Bank", AccountType.ASSET),
@@ -72,7 +96,30 @@ DEFAULT_ACCOUNTS: tuple[tuple[str, str, AccountType], ...] = (
     (ACCOUNTS_PAYABLE, "Accounts Payable", AccountType.LIABILITY),
     (OWNER_EQUITY, "Owner Equity", AccountType.EQUITY),
     (SALES_REVENUE, "Sales Revenue", AccountType.REVENUE),
+    (COST_OF_GOODS_SOLD, "Cost of Goods Sold", AccountType.EXPENSE),
+    (RENT_EXPENSE, "Rent Expense", AccountType.EXPENSE),
+    (UTILITIES_EXPENSE, "Utilities Expense", AccountType.EXPENSE),
+    (SALARIES_EXPENSE, "Salaries Expense", AccountType.EXPENSE),
+    (MARKETING_EXPENSE, "Marketing Expense", AccountType.EXPENSE),
+    (TRANSPORT_EXPENSE, "Transport Expense", AccountType.EXPENSE),
+    (MAINTENANCE_EXPENSE, "Maintenance Expense", AccountType.EXPENSE),
+    (SUPPLIES_EXPENSE, "Supplies Expense", AccountType.EXPENSE),
+    (OTHER_EXPENSE, "Other Expense", AccountType.EXPENSE),
 )
+
+#: Deterministic ExpenseCategory -> EXPENSE account code mapping. Centralised
+#: here (not in the expense service) so the chart of accounts stays one
+#: decision, and adding a category later is a one-line change.
+_CATEGORY_ACCOUNT_CODES: dict[ExpenseCategory, str] = {
+    ExpenseCategory.RENT: RENT_EXPENSE,
+    ExpenseCategory.SALARY: SALARIES_EXPENSE,
+    ExpenseCategory.UTILITIES: UTILITIES_EXPENSE,
+    ExpenseCategory.TRANSPORT: TRANSPORT_EXPENSE,
+    ExpenseCategory.MARKETING: MARKETING_EXPENSE,
+    ExpenseCategory.MAINTENANCE: MAINTENANCE_EXPENSE,
+    ExpenseCategory.SUPPLIES: SUPPLIES_EXPENSE,
+    ExpenseCategory.OTHER: OTHER_EXPENSE,
+}
 
 #: Deterministic PaymentMethod -> asset account code mapping.
 _METHOD_ACCOUNT_CODES: dict[PaymentMethod, str] = {
@@ -86,6 +133,12 @@ _METHOD_ACCOUNT_CODES: dict[PaymentMethod, str] = {
 
 #: Which side of an account increases its balance.
 _DEBIT_NORMAL = (AccountType.ASSET, AccountType.EXPENSE)
+
+#: Sale statuses that represent a real, revenue-generating sale. Kept local
+#: rather than imported from `app.services.receivables` (which imports this
+#: module) to avoid a circular import; the rule itself is the same one Step 6
+#: and Step 9 use.
+_QUALIFYING_SALE_STATUSES = (SaleStatus.COMPLETED, SaleStatus.PARTIAL)
 
 
 class AccountingError(Exception):
@@ -218,6 +271,15 @@ def _payment_account_code(method: PaymentMethod) -> str:
     except KeyError as exc:  # pragma: no cover - enum is exhaustive
         raise InvalidAccountTypeError(
             f"no account mapping for payment method {method!r}"
+        ) from exc
+
+
+def _expense_account_code(category: ExpenseCategory) -> str:
+    try:
+        return _CATEGORY_ACCOUNT_CODES[category]
+    except KeyError as exc:  # pragma: no cover - enum is exhaustive
+        raise InvalidAccountTypeError(
+            f"no account mapping for expense category {category!r}"
         ) from exc
 
 
@@ -354,6 +416,106 @@ async def post_sale(
         shop_id=sale.shop_id,
         reference_type=REFERENCE_SALE,
         reference_id=sale.id,
+        lines=lines,
+    )
+
+
+async def post_cogs(
+    session: AsyncSession, *, sale: Sale, description: str | None = None
+) -> list[LedgerEntry]:
+    """Post the cost of a sale: stock value out, COGS up.
+
+        Debit   Cost of Goods Sold    cogs
+        Credit  Inventory             cogs
+
+    The amount is `SUM(SaleItem.quantity * SaleItem.cost_price)` using the
+    *immutable* historical cost captured on each line at sale time
+    (`db_arch.md` sections 18 and 29). The current weighted-average inventory
+    cost is deliberately never consulted here, so a later, more expensive
+    purchase cannot rewrite what an earlier sale cost.
+
+    A zero-cost sale is possible (zero-cost inventory is allowed), and Step 8
+    forbids zero-value ledger lines, so a COGS of zero is skipped entirely -
+    the revenue posting is unaffected and no invalid line is written
+    (`step_10_desc.md` sections 7 and 26).
+
+    Only qualifying sales generate COGS: a sale whose status is CANCELLED (or
+    any future non-qualifying status) is skipped, so the rule stays centralised
+    in one place (`step_10_desc.md` section 9). `create_sale()` only ever
+    creates COMPLETED/PARTIAL sales, so in practice this guard protects a
+    replayed or externally-constructed sale.
+
+    Idempotent through the same mechanism as every other posting: the reference
+    is `("SALE_COGS", sale.id)`, so replaying a sale writes no second COGS and
+    the revenue group (`("SALE", sale.id)`) is untouched.
+    """
+
+    if sale.status not in _QUALIFYING_SALE_STATUSES:
+        return []
+
+    accounts = await ensure_system_accounts(session, shop_id=sale.shop_id)
+    cogs_account = accounts[COST_OF_GOODS_SOLD]
+    inventory = accounts[INVENTORY]
+
+    row = (
+        await session.execute(
+            select(
+                func.coalesce(
+                    func.sum(SaleItem.quantity * SaleItem.cost_price), 0
+                )
+            ).where(SaleItem.sale_id == sale.id)
+        )
+    ).scalar()
+    cogs = _money(row)
+    if cogs <= 0:
+        return []
+
+    lines = [
+        (cogs_account.id, cogs, _ZERO, description),
+        (inventory.id, _ZERO, cogs, description),
+    ]
+    return await _post_group(
+        session,
+        shop_id=sale.shop_id,
+        reference_type=REFERENCE_SALE_COGS,
+        reference_id=sale.id,
+        lines=lines,
+    )
+
+
+async def post_expense(
+    session: AsyncSession, *, expense: Expense, description: str | None = None
+) -> list[LedgerEntry]:
+    """Post an immediate-payment expense.
+
+        Debit   <category> Expense    amount
+        Credit  Cash / Bank           amount
+
+    The asset side reuses Step 8's existing `PaymentMethod` mapping - cash (and
+    `other`) leave Cash, every electronic method leaves Bank - so there is no
+    second mapping system to keep in step (`step_10_desc.md` section 25).
+
+    V1 has no expense-payable workflow: an expense is paid when it is recorded,
+    and `Accounts Payable` stays supplier-only.
+    """
+
+    accounts = await ensure_system_accounts(session, shop_id=expense.shop_id)
+    expense_account = accounts[_expense_account_code(expense.category)]
+    asset = accounts[_payment_account_code(expense.payment_method)]
+
+    amount = _money(expense.amount)
+    if amount <= 0:
+        return []
+
+    lines = [
+        (expense_account.id, amount, _ZERO, description),
+        (asset.id, _ZERO, amount, description),
+    ]
+    return await _post_group(
+        session,
+        shop_id=expense.shop_id,
+        reference_type=REFERENCE_EXPENSE,
+        reference_id=expense.id,
         lines=lines,
     )
 

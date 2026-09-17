@@ -37,12 +37,18 @@ from app.models import (
     Supplier,
     Unit,
 )
+from app.models import ExpenseCategory
 from app.services.accounting import (
     CASH,
+    COST_OF_GOODS_SOLD,
     INVENTORY,
+    MARKETING_EXPENSE,
+    OTHER_EXPENSE,
     SALES_REVENUE,
     ensure_system_accounts,
+    get_account_balance,
 )
+from app.services.expenses import create_expense
 from app.services.payables import get_total_outstanding as get_total_payables
 from app.services.purchases import PurchaseItemInput, create_purchase
 from app.services.receivables import (
@@ -241,7 +247,8 @@ async def test_trial_balance_is_balanced_after_sale_and_purchase(
 
     assert report.total_debits == report.total_credits
     assert report.is_balanced is True
-    assert report.total_debits == Decimal("101000.00")
+    # Purchase 100,000 + sale revenue 1,000 + sale COGS 1,000.
+    assert report.total_debits == Decimal("101100.00")
 
 
 @pytest.mark.asyncio
@@ -262,7 +269,8 @@ async def test_trial_balance_account_balances_use_normal_direction(
 
     assert by_code[CASH].balance == Decimal("1000.00")
     assert by_code[SALES_REVENUE].balance == Decimal("1000.00")
-    assert by_code[INVENTORY].balance == Decimal("100000.00")
+    assert by_code[INVENTORY].balance == Decimal("99900.00")
+    assert by_code[COST_OF_GOODS_SOLD].balance == Decimal("100.00")
     assert by_code[INVENTORY].account_id == accounts[INVENTORY].id
 
 
@@ -290,10 +298,10 @@ async def test_trial_balance_date_filtering(db_session: AsyncSession) -> None:
         end_date=_day(10),
     )
 
-    # Only the second sale's posting falls in the window: cash 200 + AR 800,
-    # against revenue 1000.
-    assert windowed.total_debits == Decimal("1000.00")
-    assert windowed.total_credits == Decimal("1000.00")
+    # Only the second sale's posting falls in the window: cash 200 + AR 800
+    # against revenue 1000, plus the COGS posting (debit 100, credit 100).
+    assert windowed.total_debits == Decimal("1100.00")
+    assert windowed.total_credits == Decimal("1100.00")
     by_window_code = {row.code: row for row in windowed.rows}
     assert by_window_code[CASH].balance == Decimal("200.00")
 
@@ -360,6 +368,8 @@ async def test_profit_and_loss_revenue_minus_cogs(
     assert report.revenue == Decimal("10000.00")
     assert report.cogs == Decimal("1000.00")
     assert report.gross_profit == Decimal("9000.00")
+    assert report.expenses == Decimal("0.00")
+    assert report.net_profit == Decimal("9000.00")
 
 
 @pytest.mark.asyncio
@@ -409,10 +419,11 @@ async def test_profit_and_loss_sums_multiple_sales_with_decimal_precision(
     assert report.revenue == Decimal("4750.00")
     assert report.cogs == Decimal("475.00")
     assert report.gross_profit == Decimal("4275.00")
+    assert report.net_profit == Decimal("4275.00")
 
 
 @pytest.mark.asyncio
-async def test_profit_and_loss_excludes_cancelled_sales_from_cogs(
+async def test_cancelled_sale_retains_its_ledger_cogs(
     db_session: AsyncSession,
 ) -> None:
     fixture = await _make_shop(db_session)
@@ -426,9 +437,16 @@ async def test_profit_and_loss_excludes_cancelled_sales_from_cogs(
     cancelled = await _sale(db_session, fixture, quantity="5")
     await _cancel(db_session, cancelled)
 
+    # V1 has no cancellation workflow, so flipping a sale's status after
+    # it posted does not reverse the ledger entries that already exist:
+    # the revenue group is untouched and the COGS group stays. The COGS
+    # guard (`post_cogs`) only protects *unposted* sales, so a
+    # CANCELLED sale created with COMPLETED status still keeps its COGS.
     report = await get_profit_and_loss(db_session, shop_id=fixture.shop.id)
 
-    assert report.cogs == Decimal("1000.00")
+    # 10 x 100 + 5 x 100 = 1500 of COGS remain in the ledger.
+    assert report.cogs == Decimal("1500.00")
+    assert report.revenue == Decimal("15000.00")
 
 
 @pytest.mark.asyncio
@@ -463,16 +481,73 @@ async def test_profit_and_loss_date_filtering(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_profit_and_loss_reports_expense_limitation(
+async def test_profit_and_loss_cogs_equals_the_cogs_ledger_balance(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_shop(db_session)
+    await _stock(db_session, fixture)
+    await _sale(
+        db_session,
+        fixture,
+        quantity="10",
+        payments=[PaymentInput(amount=Decimal("10000"), method=PaymentMethod.CASH)],
+    )
+
+    report = await get_profit_and_loss(db_session, shop_id=fixture.shop.id)
+    accounts = await _accounts(db_session, fixture.shop.id)
+    ledger = await get_account_balance(
+        db_session,
+        shop_id=fixture.shop.id,
+        account_id=accounts[COST_OF_GOODS_SOLD].id,
+    )
+
+    assert report.cogs == ledger.balance
+
+
+@pytest.mark.asyncio
+async def test_profit_and_loss_historical_cogs_unaffected_by_later_purchase(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_shop(db_session)
+    await _stock(db_session, fixture)
+    await _sale(
+        db_session,
+        fixture,
+        quantity="10",
+        payments=[PaymentInput(amount=Decimal("10000"), method=PaymentMethod.CASH)],
+    )
+
+    before = await get_profit_and_loss(db_session, shop_id=fixture.shop.id)
+
+    await create_purchase(
+        db_session,
+        shop_id=fixture.shop.id,
+        supplier_id=fixture.supplier.id,
+        items=[
+            PurchaseItemInput(
+                variant_id=fixture.variant.id,
+                quantity=Decimal("1000"),
+                unit_cost=Decimal("900.00"),
+            )
+        ],
+    )
+
+    after = await get_profit_and_loss(db_session, shop_id=fixture.shop.id)
+
+    assert before.cogs == after.cogs == Decimal("1000.00")
+
+
+@pytest.mark.asyncio
+async def test_profit_and_loss_empty_shop_reports_zeroes(
     db_session: AsyncSession,
 ) -> None:
     fixture = await _make_shop(db_session)
 
     report = await get_profit_and_loss(db_session, shop_id=fixture.shop.id)
 
-    assert report.expense_reporting_available is False
-    assert report.expenses is None
-    assert report.net_profit is None
+    assert report.expense_reporting_available is True
+    assert report.expenses == Decimal("0.00")
+    assert report.net_profit == Decimal("0.00")
 
 
 @pytest.mark.asyncio
@@ -493,6 +568,8 @@ async def test_profit_and_loss_is_tenant_isolated(
     assert report.revenue == Decimal("0.00")
     assert report.cogs == Decimal("0.00")
     assert report.gross_profit == Decimal("0.00")
+    assert report.expenses == Decimal("0.00")
+    assert report.net_profit == Decimal("0.00")
 
 
 # --------------------------------------------------------------------------
@@ -516,7 +593,7 @@ async def test_balance_sheet_classifies_accounts_by_type(
 
 
 @pytest.mark.asyncio
-async def test_balance_sheet_surfaces_an_imbalance_rather_than_hiding_it(
+async def test_balance_sheet_reflects_cogs_stock_reduction(
     db_session: AsyncSession,
 ) -> None:
     fixture = await _make_shop(db_session)
@@ -529,9 +606,14 @@ async def test_balance_sheet_surfaces_an_imbalance_rather_than_hiding_it(
 
     report = await get_balance_sheet(db_session, shop_id=fixture.shop.id)
 
-    assert report.total_assets == Decimal("101000.00")
+    # Cash 1,000 + Inventory 99,900 (reduced by the first sale's COGS of
+    # 1,000) = 100,900. The second sale was cancelled after posting, and
+    # V1 has no reversal workflow, so its COGS of 500 stays in inventory.
+    # COGS is an expense account, so it is not a balance-sheet line -
+    # it reduces inventory (and therefore profit) directly.
+    assert report.total_assets == Decimal("100900.00")
     assert report.total_liabilities_and_equity == Decimal("100000.00")
-    assert report.difference == Decimal("1000.00")
+    assert report.difference == Decimal("900.00")
 
 
 @pytest.mark.asyncio
@@ -585,6 +667,8 @@ async def test_dashboard_totals_for_today(db_session: AsyncSession) -> None:
     assert report.today_payments_received == Decimal("2000.00")
     assert report.today_cogs == Decimal("200.00")
     assert report.today_gross_profit == Decimal("1800.00")
+    assert report.today_expenses == Decimal("0.00")
+    assert report.today_net_profit == Decimal("1800.00")
     assert report.today_purchases == Decimal("10000.00")
     assert report.today_purchase_count == 1
 
@@ -729,8 +813,9 @@ async def test_trial_balance_endpoint(
     assert response.status_code == 200
     payload = response.json()
     assert payload["is_balanced"] is True
-    assert Decimal(str(payload["total_debits"])) == Decimal("101000.00")
+    assert Decimal(str(payload["total_debits"])) == Decimal("101100.00")
     assert any(row["code"] == SALES_REVENUE for row in payload["rows"])
+    assert any(row["code"] == COST_OF_GOODS_SOLD for row in payload["rows"])
 
 
 @pytest.mark.asyncio
@@ -755,7 +840,9 @@ async def test_profit_and_loss_endpoint(
     assert Decimal(str(payload["revenue"])) == Decimal("10000.00")
     assert Decimal(str(payload["cogs"])) == Decimal("1000.00")
     assert Decimal(str(payload["gross_profit"])) == Decimal("9000.00")
-    assert payload["expense_reporting_available"] is False
+    assert Decimal(str(payload["expenses"])) == Decimal("0.00")
+    assert Decimal(str(payload["net_profit"])) == Decimal("9000.00")
+    assert payload["expense_reporting_available"] is True
 
 
 @pytest.mark.asyncio
@@ -796,7 +883,41 @@ async def test_dashboard_endpoint(
     payload = response.json()
     assert Decimal(str(payload["today_sales"])) == Decimal("2000.00")
     assert payload["today_sales_count"] == 1
+    assert Decimal(str(payload["today_cogs"])) == Decimal("200.00")
+    assert Decimal(str(payload["today_expenses"])) == Decimal("0.00")
+    assert Decimal(str(payload["today_net_profit"])) == Decimal("1800.00")
     assert payload["low_stock_available"] is False
+
+
+@pytest.mark.asyncio
+async def test_profit_and_loss_endpoint_reports_expenses_and_net_profit(
+    api_client: AsyncClient, api_session: AsyncSession
+) -> None:
+    fixture = await _make_shop(api_session)
+    await _stock(api_session, fixture)
+    await _sale(
+        api_session,
+        fixture,
+        quantity="10",
+        payments=[PaymentInput(amount=Decimal("10000"), method=PaymentMethod.CASH)],
+    )
+    await create_expense(
+        api_session,
+        shop_id=fixture.shop.id,
+        category=ExpenseCategory.RENT,
+        amount=Decimal("1500"),
+        payment_method=PaymentMethod.CASH,
+    )
+
+    response = await api_client.get(
+        "/reports/profit-and-loss", headers=_headers(fixture.shop.id)
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert Decimal(str(payload["cogs"])) == Decimal("1000.00")
+    assert Decimal(str(payload["expenses"])) == Decimal("1500.00")
+    assert Decimal(str(payload["net_profit"])) == Decimal("7500.00")
 
 
 @pytest.mark.asyncio

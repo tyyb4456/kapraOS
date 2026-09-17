@@ -17,6 +17,7 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.brand import Brand
 from app.models.category import Category
 from app.models.customer import Customer
+from app.models.expense import Expense, ExpenseCategory
 from app.models.inventory import (
     Inventory,
     InventoryMovement,
@@ -46,6 +47,8 @@ __all__ = [
     "Brand",
     "Category",
     "Customer",
+    "Expense",
+    "ExpenseCategory",
     "Inventory",
     "InventoryMovement",
     "InventoryMovementType",

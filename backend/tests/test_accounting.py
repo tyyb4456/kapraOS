@@ -41,14 +41,24 @@ from app.services.accounting import (
     ACCOUNTS_RECEIVABLE,
     BANK,
     CASH,
+    COST_OF_GOODS_SOLD,
     INVENTORY,
+    MAINTENANCE_EXPENSE,
+    MARKETING_EXPENSE,
+    OTHER_EXPENSE,
+    RENT_EXPENSE,
+    SALARIES_EXPENSE,
     SALES_REVENUE,
+    SUPPLIES_EXPENSE,
+    TRANSPORT_EXPENSE,
+    UTILITIES_EXPENSE,
     AccountNotFoundError,
     UnbalancedPostingError,
     ensure_system_accounts,
     get_account_balance,
     get_account_ledger,
     list_accounts,
+    post_cogs,
     post_customer_payment,
     post_purchase,
     post_sale,
@@ -214,20 +224,21 @@ async def _make_customer(db_session: AsyncSession, shop_id: uuid.UUID):
 
 
 async def _entries_for(
-    db_session: AsyncSession, shop_id: uuid.UUID, reference_id: uuid.UUID
+    db_session: AsyncSession,
+    shop_id: uuid.UUID,
+    reference_id: uuid.UUID,
+    reference_type: str | None = None,
 ):
     from app.models import LedgerEntry
 
-    return list(
-        (
-            await db_session.execute(
-                sa.select(LedgerEntry).where(
-                    LedgerEntry.shop_id == shop_id,
-                    LedgerEntry.reference_id == reference_id,
-                )
-            )
-        ).scalars()
+    statement = sa.select(LedgerEntry).where(
+        LedgerEntry.shop_id == shop_id,
+        LedgerEntry.reference_id == reference_id,
     )
+    if reference_type is not None:
+        statement = statement.where(LedgerEntry.reference_type == reference_type)
+
+    return list((await db_session.execute(statement)).scalars())
 
 
 async def _ledger_count(db_session: AsyncSession, shop_id: uuid.UUID) -> int:
@@ -285,10 +296,21 @@ async def test_system_accounts_are_created(db_session: AsyncSession) -> None:
         ACCOUNTS_PAYABLE,
         "3000",
         SALES_REVENUE,
+        COST_OF_GOODS_SOLD,
+        RENT_EXPENSE,
+        UTILITIES_EXPENSE,
+        SALARIES_EXPENSE,
+        MARKETING_EXPENSE,
+        TRANSPORT_EXPENSE,
+        MAINTENANCE_EXPENSE,
+        SUPPLIES_EXPENSE,
+        OTHER_EXPENSE,
     }
     assert accounts[CASH].account_type is AccountType.ASSET
     assert accounts[ACCOUNTS_PAYABLE].account_type is AccountType.LIABILITY
     assert accounts[SALES_REVENUE].account_type is AccountType.REVENUE
+    assert accounts[COST_OF_GOODS_SOLD].account_type is AccountType.EXPENSE
+    assert accounts[RENT_EXPENSE].account_type is AccountType.EXPENSE
     assert all(account.is_system for account in accounts.values())
 
 
@@ -480,7 +502,7 @@ async def test_cash_sale_posts_cash_and_revenue(db_session: AsyncSession) -> Non
     )
     assert ar.balance == Decimal("0.00")
 
-    entries = await _entries_for(db_session, fixture.shop.id, sale.id)
+    entries = await _entries_for(db_session, fixture.shop.id, sale.id, "SALE")
     debit, credit = _totals(entries)
     assert debit == credit == Decimal("1000.00")
 
@@ -500,7 +522,7 @@ async def test_credit_sale_posts_receivable_and_revenue(
     )
     assert ar.balance == Decimal("1000.00")
 
-    entries = await _entries_for(db_session, fixture.shop.id, sale.id)
+    entries = await _entries_for(db_session, fixture.shop.id, sale.id, "SALE")
     debit, credit = _totals(entries)
     assert debit == credit == Decimal("1000.00")
 
@@ -534,7 +556,7 @@ async def test_partially_paid_sale_splits_cash_and_receivable(
     assert ar.balance == Decimal("700.00")
     assert revenue.balance == Decimal("1000.00")
 
-    entries = await _entries_for(db_session, fixture.shop.id, sale.id)
+    entries = await _entries_for(db_session, fixture.shop.id, sale.id, "SALE")
     debit, credit = _totals(entries)
     assert debit == credit == Decimal("1000.00")
 
@@ -554,6 +576,278 @@ async def test_sale_posting_is_idempotent(db_session: AsyncSession) -> None:
     after = await _ledger_count(db_session, fixture.shop.id)
 
     assert before == after
+
+
+# --------------------------------------------------------------------------
+# Sale COGS posting (Step 10)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sale_posts_cogs_and_reduces_inventory(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_shop(db_session)
+    await _stock(db_session, fixture, quantity="1000")
+    sale = await _sale(
+        db_session,
+        fixture,
+        quantity="10",
+        payments=[PaymentInput(amount=Decimal("10000"), method=PaymentMethod.CASH)],
+    )
+
+    accounts = await _accounts(db_session, fixture.shop.id)
+    cogs = await get_account_balance(
+        db_session,
+        shop_id=fixture.shop.id,
+        account_id=accounts[COST_OF_GOODS_SOLD].id,
+    )
+    inventory = await get_account_balance(
+        db_session, shop_id=fixture.shop.id, account_id=accounts[INVENTORY].id
+    )
+
+    assert cogs.balance == Decimal("1000.00")
+    assert inventory.balance == Decimal("99000.00")
+
+    entries = await _entries_for(db_session, fixture.shop.id, sale.id, "SALE_COGS")
+    debit, credit = _totals(entries)
+    assert debit == credit == Decimal("1000.00")
+
+    cogs_line = next(e for e in entries if e.account_id == accounts[COST_OF_GOODS_SOLD].id)
+    inventory_line = next(e for e in entries if e.account_id == accounts[INVENTORY].id)
+    assert _dec(cogs_line.debit) == Decimal("1000.00")
+    assert _dec(inventory_line.credit) == Decimal("1000.00")
+
+
+@pytest.mark.asyncio
+async def test_multi_item_sale_cogs_sums_every_line(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_shop(db_session)
+    second = ProductVariant(
+        shop_id=fixture.shop.id,
+        product_id=fixture.product.id,
+        sku="LINEN-WHT-002",
+        purchase_price=Decimal("100.00"),
+        selling_price=Decimal("1000.00"),
+        unit=Unit.METER,
+    )
+    db_session.add(second)
+    await db_session.flush()
+
+    await create_purchase(
+        db_session,
+        shop_id=fixture.shop.id,
+        supplier_id=fixture.supplier.id,
+        items=[
+            PurchaseItemInput(
+                variant_id=fixture.variant.id,
+                quantity=Decimal("100"),
+                unit_cost=Decimal("500.00"),
+            ),
+            PurchaseItemInput(
+                variant_id=second.id,
+                quantity=Decimal("100"),
+                unit_cost=Decimal("700.00"),
+            ),
+        ],
+    )
+
+    sale = await create_sale(
+        db_session,
+        shop_id=fixture.shop.id,
+        items=[
+            SaleItemInput(
+                variant_id=fixture.variant.id,
+                quantity=Decimal("2"),
+                unit_price=Decimal("900.00"),
+            ),
+            SaleItemInput(
+                variant_id=second.id,
+                quantity=Decimal("3"),
+                unit_price=Decimal("1200.00"),
+            ),
+        ],
+    )
+
+    accounts = await _accounts(db_session, fixture.shop.id)
+    cogs = await get_account_balance(
+        db_session,
+        shop_id=fixture.shop.id,
+        account_id=accounts[COST_OF_GOODS_SOLD].id,
+    )
+    # 2 x 500 + 3 x 700 = 1000 + 2100
+    assert cogs.balance == Decimal("3100.00")
+
+    entries = await _entries_for(db_session, fixture.shop.id, sale.id, "SALE_COGS")
+    debit, credit = _totals(entries)
+    assert debit == credit == Decimal("3100.00")
+
+
+@pytest.mark.asyncio
+async def test_decimal_quantity_and_cost_cogs(db_session: AsyncSession) -> None:
+    fixture = await _make_shop(db_session)
+    await create_purchase(
+        db_session,
+        shop_id=fixture.shop.id,
+        supplier_id=fixture.supplier.id,
+        items=[
+            PurchaseItemInput(
+                variant_id=fixture.variant.id,
+                quantity=Decimal("1000"),
+                unit_cost=Decimal("433.33"),
+            )
+        ],
+    )
+    await _sale(db_session, fixture, quantity="3.500", unit_price="1000")
+
+    accounts = await _accounts(db_session, fixture.shop.id)
+    cogs = await get_account_balance(
+        db_session,
+        shop_id=fixture.shop.id,
+        account_id=accounts[COST_OF_GOODS_SOLD].id,
+    )
+    assert cogs.balance == Decimal("1516.66")
+
+
+@pytest.mark.asyncio
+async def test_cogs_posting_is_idempotent(db_session: AsyncSession) -> None:
+    fixture = await _make_shop(db_session)
+    await _stock(db_session, fixture)
+    sale = await _sale(db_session, fixture, quantity="10")
+
+    before = await _ledger_count(db_session, fixture.shop.id)
+    await post_cogs(db_session, sale=sale)
+    after = await _ledger_count(db_session, fixture.shop.id)
+
+    assert before == after
+
+
+@pytest.mark.asyncio
+async def test_cancelled_sale_receives_no_cogs_posting(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_shop(db_session)
+    await _stock(db_session, fixture)
+    sale = await _sale(db_session, fixture, quantity="10")
+
+    sale.status = SaleStatus.CANCELLED
+    await db_session.flush()
+
+    accounts = await _accounts(db_session, fixture.shop.id)
+    before = await _ledger_count(db_session, fixture.shop.id)
+    entries = await post_cogs(db_session, sale=sale)
+    after = await _ledger_count(db_session, fixture.shop.id)
+
+    assert entries == []
+    assert before == after
+    cogs = await get_account_balance(
+        db_session,
+        shop_id=fixture.shop.id,
+        account_id=accounts[COST_OF_GOODS_SOLD].id,
+    )
+    assert cogs.balance == Decimal("1000.00")
+
+
+@pytest.mark.asyncio
+async def test_zero_cost_sale_skips_cogs_without_invalid_entries(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_shop(db_session)
+    await _stock(db_session, fixture, quantity="10")
+
+    # Force the snapshot cost to zero through the inventory service path used
+    # by sales: an uncosted receipt leaves the weighted average at 0.
+    zero_variant = ProductVariant(
+        shop_id=fixture.shop.id,
+        product_id=fixture.product.id,
+        sku="ZERO-COST-001",
+        purchase_price=Decimal("0.00"),
+        selling_price=Decimal("500.00"),
+        unit=Unit.METER,
+    )
+    db_session.add(zero_variant)
+    await db_session.flush()
+
+    from app.models import InventoryMovementType
+    from app.services import inventory as inventory_service
+
+    await inventory_service.add_stock(
+        db_session,
+        shop_id=fixture.shop.id,
+        variant_id=zero_variant.id,
+        quantity=Decimal("5"),
+        movement_type=InventoryMovementType.ADJUSTMENT,
+    )
+
+    sale = await create_sale(
+        db_session,
+        shop_id=fixture.shop.id,
+        items=[
+            SaleItemInput(
+                variant_id=zero_variant.id,
+                quantity=Decimal("2"),
+                unit_price=Decimal("500.00"),
+            )
+        ],
+        payments=[PaymentInput(amount=Decimal("1000"), method=PaymentMethod.CASH)],
+    )
+
+    entries = await _entries_for(db_session, fixture.shop.id, sale.id, "SALE_COGS")
+    assert entries == []
+
+    # The revenue posting is unaffected.
+    revenue_entries = await _entries_for(
+        db_session, fixture.shop.id, sale.id, "SALE"
+    )
+    debit, credit = _totals(revenue_entries)
+    assert debit == credit == Decimal("1000.00")
+
+
+@pytest.mark.asyncio
+async def test_cogs_failure_rolls_the_sale_back(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = await _make_shop(db_session)
+    await _stock(db_session, fixture, quantity="100")
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("cogs posting failed")
+
+    monkeypatch.setattr(
+        "app.services.accounting.post_cogs", _boom, raising=True
+    )
+
+    with pytest.raises(RuntimeError):
+        await _sale(db_session, fixture, quantity="10")
+
+    await db_session.rollback()
+
+    counts = (
+        await db_session.execute(sa.select(sa.func.count()).select_from(Sale))
+    ).scalar_one()
+    inventory = (
+        await db_session.execute(sa.select(sa.func.count()).select_from(Account))
+    ).scalar_one()
+    assert counts == 0
+    assert inventory == 0
+
+
+@pytest.mark.asyncio
+async def test_cogs_is_tenant_isolated(db_session: AsyncSession) -> None:
+    shop_a = await _make_shop(db_session, shop_name="Shop A", sku="A-1")
+    shop_b = await _make_shop(db_session, shop_name="Shop B", sku="B-1")
+    await _stock(db_session, shop_b, quantity="100")
+    await _sale(db_session, shop_b, quantity="10")
+
+    accounts_a = await _accounts(db_session, shop_a.shop.id)
+    cogs_a = await get_account_balance(
+        db_session,
+        shop_id=shop_a.shop.id,
+        account_id=accounts_a[COST_OF_GOODS_SOLD].id,
+    )
+
+    assert cogs_a.balance == Decimal("0.00")
 
 
 # --------------------------------------------------------------------------
@@ -590,7 +884,7 @@ async def test_purchase_posts_inventory_and_payable(
     assert inventory.balance == Decimal("5000.00")
     assert payable.balance == Decimal("5000.00")
 
-    entries = await _entries_for(db_session, fixture.shop.id, purchase.id)
+    entries = await _entries_for(db_session, fixture.shop.id, purchase.id, "PURCHASE")
     debit, credit = _totals(entries)
     assert debit == credit == Decimal("5000.00")
 
@@ -632,7 +926,9 @@ async def test_customer_payment_settles_receivable(db_session: AsyncSession) -> 
     assert ar.balance == Decimal("0.00")
     assert cash.balance == Decimal("10000.00")
 
-    entries = await _entries_for(db_session, fixture.shop.id, payment.id)
+    entries = await _entries_for(
+        db_session, fixture.shop.id, payment.id, "CUSTOMER_PAYMENT"
+    )
     debit, credit = _totals(entries)
     assert debit == credit == Decimal("6000.00")
 
@@ -711,7 +1007,9 @@ async def test_supplier_payment_settles_payable(db_session: AsyncSession) -> Non
     assert payable.balance == Decimal("0.00")
     assert cash.balance == Decimal("-30000.00")
 
-    entries = await _entries_for(db_session, fixture.shop.id, payment.id)
+    entries = await _entries_for(
+        db_session, fixture.shop.id, payment.id, "SUPPLIER_PAYMENT"
+    )
     debit, credit = _totals(entries)
     assert debit == credit == Decimal("30000.00")
 

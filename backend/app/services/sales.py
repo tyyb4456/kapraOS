@@ -12,6 +12,7 @@ transaction:
         -> record SALE inventory movements linked to the sale
         -> record the payment rows
         -> derive paid/due and the payment status
+        -> post the revenue group and the COGS group
 
 If anything fails the surrounding transaction rolls back, so the sale, its
 items, the stock change, the movements and the payments either all commit or
@@ -401,9 +402,12 @@ async def create_sale(
 
     await session.flush()
 
-    # 8. Accounting representation of the same event (Step 8). Posting is part
-    # of the same transaction, so an accounting failure rolls the sale back
-    # with everything else; it is idempotent, so a replay writes nothing new.
+    # 8. Accounting representation of the same event (Step 8 + Step 10).
+    # Posting is part of the same transaction, so an accounting failure rolls
+    # the sale back with everything else; both postings are idempotent, so a
+    # replay writes nothing new. COGS is the historical cost snapshot taken in
+    # step 6 - never recomputed from current inventory value.
     await accounting_service.post_sale(session, sale=sale)
+    await accounting_service.post_cogs(session, sale=sale)
 
     return sale

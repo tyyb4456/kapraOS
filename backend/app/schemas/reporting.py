@@ -47,7 +47,7 @@ class TrialBalanceResponse(BaseModel):
 
 
 class ProfitAndLossResponse(BaseModel):
-    """Revenue, COGS and Gross Profit for a period."""
+    """Revenue, COGS, Gross Profit, Expenses and Net Profit for a period."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -102,6 +102,8 @@ class DashboardResponse(BaseModel):
     today_purchase_count: int
     today_cogs: Decimal
     today_gross_profit: Decimal
+    today_expenses: Decimal
+    today_net_profit: Decimal
     receivables_outstanding: Decimal
     payables_outstanding: Decimal
     inventory_quantity: Decimal
