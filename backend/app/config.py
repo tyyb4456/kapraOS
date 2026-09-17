@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     database_url: str
     db_echo: bool = False
 
+    # Shop timezone for date-based reporting (e.g. "Asia/Karachi")
+    shop_timezone: str = "UTC"
+
     # Clerk configuration
     clerk_secret_key: str = ""
     clerk_jwt_key: str = ""
@@ -37,6 +40,11 @@ class Settings(BaseSettings):
         if not self.clerk_authorized_parties:
             return []
         return [p.strip() for p in self.clerk_authorized_parties.split(",") if p.strip()]
+
+    @property
+    def shop_tz(self) -> str:
+        """Return the configured shop timezone for datetime operations."""
+        return self.shop_timezone
 
 
 @lru_cache

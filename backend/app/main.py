@@ -1,8 +1,7 @@
 """FastAPI application entrypoint.
 
-Routers are included here as their domains are built. So far the health check,
-the customer Khata (Step 6) and the supplier Khata (Step 7) are exposed;
-products, sales, purchases and inventory remain service-layer only.
+Routers are included here as their domains are built. All domains
+are now exposed via REST endpoints.
 """
 
 from fastapi import FastAPI
@@ -12,8 +11,13 @@ from app.api.auth import router as auth_router
 from app.api.customers import router as customers_router
 from app.api.expenses import router as expenses_router
 from app.api.health import router as health_router
+from app.api.inventory import router as inventory_router
+from app.api.products import router as products_router
 from app.api.reporting import router as reporting_router
+from app.api.returns import router as returns_router
+from app.api.sales import router as sales_router
 from app.api.suppliers import router as suppliers_router
+from app.api.purchases import router as purchases_router
 from app.config import get_settings
 
 
@@ -32,6 +36,11 @@ def create_app() -> FastAPI:
     app.include_router(accounting_router)
     app.include_router(reporting_router)
     app.include_router(expenses_router)
+    app.include_router(products_router)
+    app.include_router(sales_router)
+    app.include_router(purchases_router)
+    app.include_router(inventory_router)
+    app.include_router(returns_router)
 
     return app
 

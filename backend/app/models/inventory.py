@@ -86,6 +86,10 @@ class Inventory(Base, UUIDMixin, TimestampMixin):
             "weighted_average_cost >= 0",
             name="ck_inventory_weighted_average_cost_non_negative",
         ),
+        CheckConstraint(
+            "reorder_level >= 0",
+            name="ck_inventory_reorder_level_non_negative",
+        ),
     )
 
     variant_id: Mapped[uuid.UUID] = mapped_column(
@@ -123,6 +127,16 @@ class Inventory(Base, UUIDMixin, TimestampMixin):
         server_default=text("0"),
     )
 
+    # V1 stock alert threshold. When quantity drops to or below this
+    # level, the variant is considered low-stock (reported by the
+    # inventory and reporting endpoints).
+    reorder_level: Mapped[Decimal] = mapped_column(
+        Numeric(14, 3),
+        nullable=False,
+        default=Decimal("0"),
+        server_default=text("0"),
+    )
+
     variant: Mapped["ProductVariant"] = relationship(
         "ProductVariant",
         back_populates="inventory",
@@ -136,7 +150,7 @@ class Inventory(Base, UUIDMixin, TimestampMixin):
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
         return (
             f"Inventory(variant_id={self.variant_id!r}, quantity={self.quantity!r}, "
-            f"reserved={self.reserved_quantity!r})"
+            f"reserved={self.reserved_quantity!r}, reorder={self.reorder_level!r})"
         )
 
 
