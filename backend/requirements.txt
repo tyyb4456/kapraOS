@@ -1,3 +1,4 @@
+clerk-backend-api>=6.0.0
 fastapi
 uvicorn
 sqlalchemy

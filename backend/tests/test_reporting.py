@@ -13,10 +13,11 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import NamedTuple
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import sqlalchemy as sa
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -36,8 +37,11 @@ from app.models import (
     Shop,
     Supplier,
     Unit,
+    User,
 )
 from app.models import ExpenseCategory
+from app.models.user import UserRole
+from app.models.user import UserRole
 from app.services.accounting import (
     CASH,
     COST_OF_GOODS_SOLD,
@@ -195,7 +199,7 @@ async def _cancel(db_session: AsyncSession, sale: Sale) -> None:
 
 
 def _headers(shop_id: uuid.UUID) -> dict[str, str]:
-    return {"X-Shop-Id": str(shop_id)}
+    return {"Authorization": "Bearer mock_token"}
 
 
 # --------------------------------------------------------------------------
@@ -796,7 +800,7 @@ async def test_reporting_never_mutates_state(db_session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_trial_balance_endpoint(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture)
@@ -805,8 +809,17 @@ async def test_trial_balance_endpoint(
         fixture,
         payments=[PaymentInput(amount=Decimal("1000"), method=PaymentMethod.CASH)],
     )
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/reports/trial-balance", headers=_headers(fixture.shop.id)
     )
 
@@ -820,7 +833,7 @@ async def test_trial_balance_endpoint(
 
 @pytest.mark.asyncio
 async def test_profit_and_loss_endpoint(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture)
@@ -830,8 +843,17 @@ async def test_profit_and_loss_endpoint(
         quantity="10",
         payments=[PaymentInput(amount=Decimal("10000"), method=PaymentMethod.CASH)],
     )
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/reports/profit-and-loss", headers=_headers(fixture.shop.id)
     )
 
@@ -847,12 +869,21 @@ async def test_profit_and_loss_endpoint(
 
 @pytest.mark.asyncio
 async def test_balance_sheet_endpoint(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture)
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/reports/balance-sheet", headers=_headers(fixture.shop.id)
     )
 
@@ -864,7 +895,7 @@ async def test_balance_sheet_endpoint(
 
 @pytest.mark.asyncio
 async def test_dashboard_endpoint(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture, quantity="100")
@@ -874,8 +905,17 @@ async def test_dashboard_endpoint(
         quantity="2",
         payments=[PaymentInput(amount=Decimal("2000"), method=PaymentMethod.CASH)],
     )
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/reports/dashboard", headers=_headers(fixture.shop.id)
     )
 
@@ -891,7 +931,7 @@ async def test_dashboard_endpoint(
 
 @pytest.mark.asyncio
 async def test_profit_and_loss_endpoint_reports_expenses_and_net_profit(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture)
@@ -908,8 +948,17 @@ async def test_profit_and_loss_endpoint_reports_expenses_and_net_profit(
         amount=Decimal("1500"),
         payment_method=PaymentMethod.CASH,
     )
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/reports/profit-and-loss", headers=_headers(fixture.shop.id)
     )
 
@@ -922,11 +971,20 @@ async def test_profit_and_loss_endpoint_reports_expenses_and_net_profit(
 
 @pytest.mark.asyncio
 async def test_report_endpoints_reject_invalid_date_range(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/reports/trial-balance",
         headers=_headers(fixture.shop.id),
         params={
@@ -940,7 +998,7 @@ async def test_report_endpoints_reject_invalid_date_range(
 
 @pytest.mark.asyncio
 async def test_report_endpoints_are_tenant_isolated(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     shop_a = await _make_shop(api_session, shop_name="Shop A", sku="A-1")
     shop_b = await _make_shop(api_session, shop_name="Shop B", sku="B-1")
@@ -950,8 +1008,17 @@ async def test_report_endpoints_are_tenant_isolated(
         shop_b,
         payments=[PaymentInput(amount=Decimal("1000"), method=PaymentMethod.CASH)],
     )
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=shop_a.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/reports/dashboard", headers=_headers(shop_a.shop.id)
     )
 
@@ -961,8 +1028,9 @@ async def test_report_endpoints_are_tenant_isolated(
 
 @pytest.mark.asyncio
 async def test_report_endpoints_require_a_shop(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
-    response = await api_client.get("/reports/dashboard")
+    shop = await _make_shop(api_session)
+    response = await mocked_api_client.get("/reports/dashboard")
 
     assert response.status_code == 401

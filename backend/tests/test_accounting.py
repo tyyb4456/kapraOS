@@ -35,7 +35,9 @@ from app.models import (
     Shop,
     Supplier,
     Unit,
+    User,
 )
+from app.models.user import UserRole
 from app.services.accounting import (
     ACCOUNTS_PAYABLE,
     ACCOUNTS_RECEIVABLE,
@@ -1147,12 +1149,12 @@ async def test_account_ledger_supports_date_filter_and_pagination(
 
 
 def _headers(shop_id: uuid.UUID) -> dict[str, str]:
-    return {"X-Shop-Id": str(shop_id)}
+    return {"Authorization": "Bearer mock_token"}
 
 
 @pytest.mark.asyncio
 async def test_accounts_endpoint_lists_the_chart(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture)
@@ -1161,8 +1163,17 @@ async def test_accounts_endpoint_lists_the_chart(
         fixture,
         payments=[PaymentInput(amount=Decimal("1000"), method=PaymentMethod.CASH)],
     )
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         "/accounts", headers=_headers(fixture.shop.id)
     )
 
@@ -1174,7 +1185,7 @@ async def test_accounts_endpoint_lists_the_chart(
 
 @pytest.mark.asyncio
 async def test_balance_endpoint_reports_a_derived_balance(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture)
@@ -1184,8 +1195,17 @@ async def test_balance_endpoint_reports_a_derived_balance(
         payments=[PaymentInput(amount=Decimal("1000"), method=PaymentMethod.CASH)],
     )
     accounts = await _accounts(api_session, fixture.shop.id)
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/accounts/{accounts[SALES_REVENUE].id}/balance",
         headers=_headers(fixture.shop.id),
     )
@@ -1197,7 +1217,7 @@ async def test_balance_endpoint_reports_a_derived_balance(
 
 @pytest.mark.asyncio
 async def test_ledger_endpoint_returns_entries(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _stock(api_session, fixture)
@@ -1207,8 +1227,17 @@ async def test_ledger_endpoint_returns_entries(
         payments=[PaymentInput(amount=Decimal("1000"), method=PaymentMethod.CASH)],
     )
     accounts = await _accounts(api_session, fixture.shop.id)
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/accounts/{accounts[CASH].id}/ledger",
         headers=_headers(fixture.shop.id),
     )
@@ -1221,13 +1250,22 @@ async def test_ledger_endpoint_returns_entries(
 
 @pytest.mark.asyncio
 async def test_endpoints_do_not_expose_another_shops_account(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     shop_a = await _make_shop(api_session, shop_name="Shop A", sku="A-1")
     shop_b = await _make_shop(api_session, shop_name="Shop B", sku="B-1")
     accounts_b = await _accounts(api_session, shop_b.shop.id)
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=shop_a.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/accounts/{accounts_b[CASH].id}/balance",
         headers=_headers(shop_a.shop.id),
     )
@@ -1237,11 +1275,11 @@ async def test_endpoints_do_not_expose_another_shops_account(
 
 @pytest.mark.asyncio
 async def test_accounts_endpoints_require_a_shop(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     accounts = await _accounts(api_session, fixture.shop.id)
 
-    response = await api_client.get(f"/accounts/{accounts[CASH].id}/balance")
+    response = await mocked_api_client.get(f"/accounts/{accounts[CASH].id}/balance")
 
     assert response.status_code == 401

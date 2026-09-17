@@ -18,6 +18,7 @@ Two things happen here, in order, and the order matters:
 import os
 import pathlib
 from collections.abc import AsyncGenerator, Generator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -55,6 +56,15 @@ session_module.AsyncSessionLocal = async_sessionmaker(
 AsyncSessionLocal = session_module.AsyncSessionLocal
 
 BACKEND_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def _mock_verify(user_clerk_id: str):
+    """Return a patcher that makes _verify_token return the given user."""
+    return patch(
+        "app.auth.auth._verify_token",
+        new_callable=AsyncMock,
+        return_value={"sub": user_clerk_id},
+    )
 
 
 def _alembic_config() -> Config:
@@ -147,3 +157,32 @@ async def api_client(api_session: AsyncSession) -> AsyncGenerator[AsyncClient, N
             yield ac
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest_asyncio.fixture
+async def mocked_api_client(api_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """An httpx client that bypasses Clerk verification.
+
+    Patches ``app.auth.auth._verify_token`` to return ``{"sub": "mock_clerk_id"}``.
+    Tests must create a ``User`` with ``clerk_user_id="mock_clerk_id"``
+    in ``api_session`` before making requests.
+    """
+
+    patcher = patch(
+        "app.auth.auth._verify_token",
+        new_callable=AsyncMock,
+        return_value={"sub": "mock_clerk_id"},
+    )
+    patcher.start()
+
+    async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        yield api_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        patcher.stop()

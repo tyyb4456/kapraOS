@@ -23,12 +23,20 @@ class Settings(BaseSettings):
     app_env: str = "local"
     debug: bool = False
 
-    # Async SQLAlchemy URL, e.g.
-    # postgresql+asyncpg://user:password@host:5432/dbname
     database_url: str
-
-    # Verbose SQL logging - keep off outside of local debugging.
     db_echo: bool = False
+
+    # Clerk configuration
+    clerk_secret_key: str = ""
+    clerk_jwt_key: str = ""
+    clerk_authorized_parties: str = ""
+
+    @property
+    def clerk_authorized_parties_list(self) -> list[str]:
+        """Parse authorized parties from comma-separated env var."""
+        if not self.clerk_authorized_parties:
+            return []
+        return [p.strip() for p in self.clerk_authorized_parties.split(",") if p.strip()]
 
 
 @lru_cache

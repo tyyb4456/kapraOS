@@ -1,10 +1,15 @@
 """User model.
 
-A User always belongs to exactly one Shop (`shop_id` is non-nullable with a
-CASCADE delete), which is the multi-tenancy foundation described in the
-architecture. Authentication (JWT, password hashing) is intentionally out of
-scope for this step - only the column that will hold a pre-hashed password
-is defined.
+Clerk owns authentication; this table stores the application-level
+identity that links a Clerk user to exactly one Shop (tenant).
+
+Fields:
+    id          - UUID primary key
+    shop_id     - FK to the tenant Shop (server-derived, never client-supplied)
+    clerk_user_id - stable Clerk user identifier (unique)
+    role        - OWNER or STAFF
+    name        - display name (optional, populated at provisioning)
+    email       - optional, kept for compatibility
 """
 
 import uuid
@@ -23,25 +28,19 @@ if TYPE_CHECKING:
 
 
 class UserRole(str, Enum):
-    """Roles referenced by the architecture doc's authorization model."""
+    """Minimal role set for V1: OWNER or STAFF."""
 
     OWNER = "owner"
-    MANAGER = "manager"
-    CASHIER = "cashier"
-    INVENTORY_MANAGER = "inventory_manager"
+    STAFF = "staff"
 
 
 class User(Base, UUIDMixin, TimestampMixin):
-    """A staff member (owner/manager/cashier/...) scoped to one shop."""
+    """An application user bound to exactly one Shop."""
 
     __tablename__ = "users"
 
     __table_args__ = (
-        # Login is by email; scoping uniqueness globally (rather than per
-        # shop) is the simplest production-safe default for a single
-        # sign-in system and avoids ambiguous "which shop did I mean to log
-        # into" flows. Revisit if a future requirement needs one person to
-        # hold accounts in multiple shops under the same email.
+        UniqueConstraint("clerk_user_id", name="uq_users_clerk_user_id"),
         UniqueConstraint("email", name="uq_users_email"),
     )
 
@@ -52,11 +51,15 @@ class User(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
+    clerk_user_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
     name: Mapped[str] = mapped_column(String(150), nullable=False)
 
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
     role: Mapped[UserRole] = mapped_column(
         SQLEnum(
@@ -65,7 +68,7 @@ class User(Base, UUIDMixin, TimestampMixin):
             values_callable=lambda enum_cls: [member.value for member in enum_cls],
         ),
         nullable=False,
-        server_default=UserRole.CASHIER.value,
+        server_default=UserRole.STAFF.value,
     )
 
     shop: Mapped["Shop"] = relationship(
@@ -74,4 +77,4 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
-        return f"User(id={self.id!r}, email={self.email!r}, role={self.role!r})"
+        return f"User(id={self.id!r}, clerk_user_id={self.clerk_user_id!r}, role={self.role!r})"

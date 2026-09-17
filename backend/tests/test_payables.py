@@ -32,7 +32,9 @@ from app.models import (
     Shop,
     Supplier,
     Unit,
+    User,
 )
+from app.models.user import UserRole
 from app.services.payables import (
     InvalidPaymentAmountError,
     InvalidPaymentMethodError,
@@ -951,17 +953,26 @@ async def test_summary_reports_purchases_paid_and_outstanding(
 
 
 def _headers(shop_id: uuid.UUID) -> dict[str, str]:
-    return {"X-Shop-Id": str(shop_id)}
+    return {"Authorization": "Bearer mock_token"}
 
 
 @pytest.mark.asyncio
 async def test_balance_endpoint_reports_the_outstanding_payable(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _buy(api_session, fixture, fixture.supplier, amount="10000", paid="7000")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/suppliers/{fixture.supplier.id}/balance",
         headers=_headers(fixture.shop.id),
     )
@@ -975,15 +986,24 @@ async def test_balance_endpoint_reports_the_outstanding_payable(
 
 @pytest.mark.asyncio
 async def test_statement_endpoint_returns_entries_in_order(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _buy(
         api_session, fixture, fixture.supplier, amount="10000", invoice="INV-1"
     )
     await _pay(api_session, fixture, fixture.supplier, "7000")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/suppliers/{fixture.supplier.id}/statement",
         headers=_headers(fixture.shop.id),
     )
@@ -1000,13 +1020,22 @@ async def test_statement_endpoint_returns_entries_in_order(
 
 @pytest.mark.asyncio
 async def test_summary_endpoint_returns_the_dashboard_figures(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _buy(api_session, fixture, fixture.supplier, amount="10000")
     await _pay(api_session, fixture, fixture.supplier, "7000")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/suppliers/{fixture.supplier.id}/summary",
         headers=_headers(fixture.shop.id),
     )
@@ -1021,12 +1050,21 @@ async def test_summary_endpoint_returns_the_dashboard_figures(
 
 @pytest.mark.asyncio
 async def test_payment_endpoint_records_a_settlement(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _buy(api_session, fixture, fixture.supplier, amount="10000")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.post(
+    response = await mocked_api_client.post(
         f"/suppliers/{fixture.supplier.id}/payments",
         headers=_headers(fixture.shop.id),
         json={"amount": "4000.00", "method": "cash", "reference": "CASH-9"},
@@ -1045,12 +1083,21 @@ async def test_payment_endpoint_records_a_settlement(
 
 @pytest.mark.asyncio
 async def test_payment_endpoint_rejects_an_overpayment(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     await _buy(api_session, fixture, fixture.supplier, amount="10000")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.post(
+    response = await mocked_api_client.post(
         f"/suppliers/{fixture.supplier.id}/payments",
         headers=_headers(fixture.shop.id),
         json={"amount": "12000.00", "method": "cash"},
@@ -1062,13 +1109,22 @@ async def test_payment_endpoint_rejects_an_overpayment(
 
 @pytest.mark.asyncio
 async def test_endpoints_do_not_expose_another_shops_supplier(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     shop_a = await _make_shop(api_session, shop_name="Shop A", sku="A-1")
     shop_b = await _make_shop(api_session, shop_name="Shop B", sku="B-1")
     await _buy(api_session, shop_b, shop_b.supplier, amount="10000")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=shop_a.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/suppliers/{shop_b.supplier.id}/balance",
         headers=_headers(shop_a.shop.id),
     )
@@ -1078,10 +1134,10 @@ async def test_endpoints_do_not_expose_another_shops_supplier(
 
 @pytest.mark.asyncio
 async def test_endpoints_require_a_shop(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
 
-    response = await api_client.get(f"/suppliers/{fixture.supplier.id}/balance")
+    response = await mocked_api_client.get(f"/suppliers/{fixture.supplier.id}/balance")
 
     assert response.status_code == 401

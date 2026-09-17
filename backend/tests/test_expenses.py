@@ -35,7 +35,9 @@ from app.models import (
     Shop,
     Supplier,
     Unit,
+    User,
 )
+from app.models.user import UserRole
 from app.services.accounting import (
     BANK,
     CASH,
@@ -163,7 +165,7 @@ def _totals(entries) -> tuple[Decimal, Decimal]:
 
 
 def _headers(shop_id: uuid.UUID) -> dict[str, str]:
-    return {"X-Shop-Id": str(shop_id)}
+    return {"Authorization": "Bearer mock_token"}
 
 
 # --------------------------------------------------------------------------
@@ -559,11 +561,20 @@ async def test_list_expenses_validates_arguments(
 
 @pytest.mark.asyncio
 async def test_create_expense_endpoint(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.post(
+    response = await mocked_api_client.post(
         "/expenses",
         headers=_headers(fixture.shop.id),
         json={
@@ -583,11 +594,20 @@ async def test_create_expense_endpoint(
 
 @pytest.mark.asyncio
 async def test_create_expense_endpoint_rejects_bad_amount(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.post(
+    response = await mocked_api_client.post(
         "/expenses",
         headers=_headers(fixture.shop.id),
         json={
@@ -602,18 +622,27 @@ async def test_create_expense_endpoint_rejects_bad_amount(
 
 @pytest.mark.asyncio
 async def test_list_and_read_expense_endpoints(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     expense = await _expense(api_session, fixture, amount="5000")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    listing = await api_client.get(
+    listing = await mocked_api_client.get(
         "/expenses", headers=_headers(fixture.shop.id)
     )
     assert listing.status_code == 200
     assert len(listing.json()) == 1
 
-    read = await api_client.get(
+    read = await mocked_api_client.get(
         f"/expenses/{expense.id}", headers=_headers(fixture.shop.id)
     )
     assert read.status_code == 200
@@ -622,13 +651,22 @@ async def test_list_and_read_expense_endpoints(
 
 @pytest.mark.asyncio
 async def test_expense_endpoints_do_not_expose_another_shops_expense(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     shop_a = await _make_shop(api_session, shop_name="Shop A", sku="A-1")
     shop_b = await _make_shop(api_session, shop_name="Shop B", sku="B-1")
     expense_b = await _expense(api_session, shop_b, amount="100")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=shop_a.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.get(
+    response = await mocked_api_client.get(
         f"/expenses/{expense_b.id}", headers=_headers(shop_a.shop.id)
     )
 
@@ -637,21 +675,30 @@ async def test_expense_endpoints_do_not_expose_another_shops_expense(
 
 @pytest.mark.asyncio
 async def test_expense_endpoints_require_a_shop(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
-    response = await api_client.get("/expenses")
+    response = await mocked_api_client.get("/expenses")
 
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_expenses_have_no_delete_route(
-    api_client: AsyncClient, api_session: AsyncSession
+    mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
     expense = await _expense(api_session, fixture, amount="100")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
 
-    response = await api_client.delete(
+    response = await mocked_api_client.delete(
         f"/expenses/{expense.id}", headers=_headers(fixture.shop.id)
     )
 
