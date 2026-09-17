@@ -61,6 +61,7 @@ _ZERO = Decimal("0.00")
 #: Reference types for the supported posting events.
 REFERENCE_SALE = "SALE"
 REFERENCE_SALE_COGS = "SALE_COGS"
+REFERENCE_SALE_RETURN = "SALE_RETURN"
 REFERENCE_PURCHASE = "PURCHASE"
 REFERENCE_CUSTOMER_PAYMENT = "CUSTOMER_PAYMENT"
 REFERENCE_SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT"
@@ -478,6 +479,121 @@ async def post_cogs(
         session,
         shop_id=sale.shop_id,
         reference_type=REFERENCE_SALE_COGS,
+        reference_id=sale.id,
+        lines=lines,
+    )
+
+
+async def post_sale_return(
+    session: AsyncSession,
+    *,
+    sale: Sale,
+    returned_quantity: Decimal,
+    refund_amount: Decimal,
+    description: str | None = None,
+) -> list[LedgerEntry]:
+    """Reverse a sale's accounting postings for a customer return.
+
+    This posts the opposite of `post_sale` + `post_cogs` for the returned portion:
+
+        Debit   Sales Revenue         refund_amount
+        Credit  Cash / Bank           refund_amount (if paid)
+        Credit  Accounts Receivable   refund_amount (if unpaid)
+
+        Debit   Inventory             cogs_on_returned
+        Credit  Cost of Goods Sold    cogs_on_returned
+
+    The COGS is calculated proportionally from the sale's historical cost
+    snapshot: `SUM(SaleItem.quantity * SaleItem.cost_price) * (returned_qty / total_qty)`.
+
+    Idempotent through reference `("SALE_RETURN", sale.id, returned_qty)`.
+    """
+    accounts = await ensure_system_accounts(session, shop_id=sale.shop_id)
+    cash = accounts[CASH]
+    bank = accounts[BANK]
+    receivable = accounts[ACCOUNTS_RECEIVABLE]
+    revenue = accounts[SALES_REVENUE]
+    cogs_account = accounts[COST_OF_GOODS_SOLD]
+    inventory = accounts[INVENTORY]
+
+    refund_amount = _money(refund_amount)
+    if refund_amount <= 0:
+        return []
+
+    total_qty = sum(item.quantity for item in sale.items)
+    if total_qty <= 0:
+        return []
+
+    # Calculate COGS proportionally for the returned quantity
+    row = (
+        await session.execute(
+            select(
+                func.coalesce(
+                    func.sum(SaleItem.quantity * SaleItem.cost_price), 0
+                )
+            ).where(SaleItem.sale_id == sale.id)
+        )
+    ).scalar()
+    total_cogs = _money(row)
+    if total_cogs <= 0:
+        cogs_on_returned = _ZERO
+    else:
+        cogs_on_returned = _money(
+            total_cogs * (returned_quantity / total_qty)
+        )
+
+    # Refund payment allocation: payments on this sale
+    payments = (
+        await session.execute(
+            select(Payment).where(
+                Payment.shop_id == sale.shop_id,
+                Payment.sale_id == sale.id,
+            )
+        )
+    ).scalars().all()
+
+    by_account: dict[uuid.UUID, Decimal] = {}
+    for payment in payments:
+        code = _payment_account_code(payment.method)
+        account = cash if code == CASH else bank
+        by_account[account.id] = by_account.get(account.id, _ZERO) + _money(
+            payment.amount
+        )
+
+    paid_total = sum(by_account.values(), start=_ZERO)
+    due_total = _money(sale.total - sale.paid_amount)
+
+    # The refund goes back the same way: first to cash/bank up to what was paid,
+    # then to AR for the rest (mirroring post_sale logic)
+    lines: list[tuple[uuid.UUID, Decimal, Decimal, str | None]] = []
+
+    remaining_refund = refund_amount
+
+    # Reverse cash/bank (what was originally paid)
+    for account_id, amount in by_account.items():
+        if amount > 0 and remaining_refund > 0:
+            refund_to_account = min(amount, remaining_refund)
+            lines.append((account_id, _ZERO, refund_to_account, description))
+            remaining_refund -= refund_to_account
+
+    # Reverse AR (what was still due)
+    if remaining_refund > 0 and due_total > 0:
+        refund_to_ar = min(due_total, remaining_refund)
+        lines.append((receivable.id, _ZERO, refund_to_ar, description))
+        remaining_refund -= refund_to_ar
+
+    # Revenue reversal (always the full refund amount)
+    lines.append((revenue.id, refund_amount, _ZERO, description))
+
+    # COGS reversal: Debit Inventory, Credit COGS
+    if cogs_on_returned > 0:
+        lines.append((inventory.id, cogs_on_returned, _ZERO, description))
+        lines.append((cogs_account.id, _ZERO, cogs_on_returned, description))
+
+    return await _post_group(
+        session,
+        shop_id=sale.shop_id,
+        reference_type=REFERENCE_SALE_RETURN,
         reference_id=sale.id,
         lines=lines,
     )

@@ -1,7 +1,8 @@
 """Returns endpoints (Step 4).
 
 Process customer returns for completed sales. This reverses stock
-via InventoryMovement (CUSTOMER_RETURN) and updates the sale status.
+via InventoryMovement (CUSTOMER_RETURN), updates the sale status,
+and reverses the accounting postings (revenue, COGS, inventory asset).
 """
 
 from datetime import datetime
@@ -13,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.dependencies import DbSession, ShopId
 from app.services import inventory as inventory_service
+from app.services import accounting as accounting_service
 from app.services.inventory import (
     InventoryError,
     VariantNotFoundError,
@@ -100,6 +102,17 @@ async def create_return(
 
         await db.flush()
 
+        # Reverse the accounting postings for the returned portion
+        await accounting_service.post_sale_return(
+            db,
+            sale=sale,
+            returned_quantity=return_qty,
+            refund_amount=refund_amount,
+            description=notes or f"Return for sale {sale_id}",
+        )
+
+        # Record the refund as an audit trail (no separate accounting posting -
+        # the reversal above handles the ledger entries)
         if refund_amount > 0:
             refund_payment = Payment(
                 shop_id=shop_id,
