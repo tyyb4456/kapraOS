@@ -8,3 +8,14 @@ export async function getCustomers(): Promise<Customer[]> {
 export async function getCustomerKhata(customerId: string): Promise<KhataEntry[]> {
   return apiClient.get<KhataEntry[]>(`/customers/${customerId}/khata`);
 }
+
+export interface CreateCustomerRequest {
+  name: string;
+  phone?: string;
+  email?: string;
+  credit_limit?: number;
+}
+
+export async function createCustomer(data: CreateCustomerRequest): Promise<Customer> {
+  return apiClient.post<Customer>('/customers', data);
+}

@@ -26,6 +26,7 @@ export interface Category {
   name: string;
   code?: string | null;
   parent_id?: string | null;
+  variants_count?: number;
   created_at: string;
 }
 

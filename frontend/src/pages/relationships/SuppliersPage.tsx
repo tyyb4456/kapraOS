@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Building2 } from 'lucide-react';
 import {
@@ -17,11 +17,78 @@ import {
   TableHead,
   TableCell,
   Badge,
+  Skeleton,
+  Dialog,
 } from '../../components/ui/index.ts';
 import { formatCurrency } from '../../lib/formatters.ts';
+import { getSuppliers, createSupplier } from '../../lib/api/suppliers.ts';
+import type { Supplier } from '../../types/index.ts';
 
 export function SuppliersPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [formData, setFormData] = useState({ name: '', contact_person: '', phone: '', email: '' });
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadSuppliers = async () => {
+      try {
+        setLoading(true);
+        const data = await getSuppliers();
+        setSuppliers(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load suppliers');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSuppliers();
+  }, []);
+
+  const filteredSuppliers = suppliers.filter(
+    (supplier) =>
+      supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier.contact_person?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name) {
+      setError('Supplier name is required');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await createSupplier({
+        name: formData.name,
+        contact_person: formData.contact_person || undefined,
+        phone: formData.phone || undefined,
+        email: formData.email || undefined,
+      });
+      setIsAddModalOpen(false);
+      setFormData({ name: '', contact_person: '', phone: '', email: '' });
+      // Reload suppliers
+      const data = await getSuppliers();
+      setSuppliers(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create supplier');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getStatusBadge = (balance: number) => {
+    if (balance <= 0) {
+      return <Badge variant="success" size="sm">Clear</Badge>;
+    }
+    return <Badge variant="neutral" size="sm">Active Supplier</Badge>;
+  };
 
   return (
     <PageContainer>
@@ -35,11 +102,7 @@ export function SuppliersPage() {
         actions={
           <div className="flex items-center gap-2">
             <Link to="/suppliers/khata">
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<Building2 className="w-4 h-4" />}
-              >
+              <Button variant="outline" size="sm" leftIcon={<Building2 className="w-4 h-4" />}>
                 Supplier Khata
               </Button>
             </Link>
@@ -47,6 +110,7 @@ export function SuppliersPage() {
               variant="primary"
               size="sm"
               leftIcon={<Plus className="w-4 h-4" />}
+              onClick={() => setIsAddModalOpen(true)}
             >
               Add Supplier
             </Button>
@@ -65,69 +129,119 @@ export function SuppliersPage() {
         </CardContent>
       </Card>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Supplier / Mill Name</TableHead>
-            <TableHead>Contact Person</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead align="right">Current Payable</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead align="right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell className="font-medium text-zinc-900">
-              Kohinoor Textile Mills Ltd.
-            </TableCell>
-            <TableCell className="text-zinc-700">Tariq Mahmood</TableCell>
-            <TableCell className="font-mono text-xs text-zinc-600">
-              042-3591234
-            </TableCell>
-            <TableCell align="right" className="font-tabular font-bold text-zinc-900">
-              {formatCurrency(185000)}
-            </TableCell>
-            <TableCell>
-              <Badge variant="neutral" size="sm">
-                Active Supplier
-              </Badge>
-            </TableCell>
-            <TableCell align="right">
-              <Link to="/suppliers/khata">
-                <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                  View Ledger
-                </Button>
-              </Link>
-            </TableCell>
-          </TableRow>
+      {error && (
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-700">
+          {error}
+        </div>
+      )}
 
-          <TableRow>
-            <TableCell className="font-medium text-zinc-900">
-              Nishat Weaving Mills
-            </TableCell>
-            <TableCell className="text-zinc-700">Mian Aslam</TableCell>
-            <TableCell className="font-mono text-xs text-zinc-600">
-              041-8765432
-            </TableCell>
-            <TableCell align="right" className="font-tabular font-bold text-zinc-900">
-              {formatCurrency(72000)}
-            </TableCell>
-            <TableCell>
-              <Badge variant="neutral" size="sm">
-                Active Supplier
-              </Badge>
-            </TableCell>
-            <TableCell align="right">
-              <Link to="/suppliers/khata">
-                <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                  View Ledger
-                </Button>
-              </Link>
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Supplier / Mill Name</TableHead>
+              <TableHead>Contact Person</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead align="right">Current Payable</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead align="right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell align="right"><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell align="right"><Skeleton className="h-4 w-16" /></TableCell>
+                </TableRow>
+              ))
+            ) : filteredSuppliers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-zinc-500">
+                  {searchTerm ? 'No matching suppliers found' : 'No suppliers added yet'}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredSuppliers.map((supplier) => (
+                <TableRow key={supplier.id}>
+                  <TableCell className="font-medium text-zinc-900">
+                    {supplier.name}
+                  </TableCell>
+                  <TableCell className="text-zinc-700">
+                    {supplier.contact_person || '—'}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-zinc-600">
+                    {supplier.phone || '—'}
+                  </TableCell>
+                  <TableCell align="right" className="font-tabular font-bold text-zinc-900">
+                    {formatCurrency(supplier.current_balance)}
+                  </TableCell>
+                  <TableCell>
+                    {getStatusBadge(supplier.current_balance)}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Link to={`/suppliers/khata/${supplier.id}`}>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+                        View Ledger
+                      </Button>
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* Add Supplier Modal */}
+      <Dialog
+        open={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="Add New Supplier"
+        description="Record textile mill or fabric supplier details for purchasing and payables."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Supplier'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          <Input
+            label="Supplier / Mill Name *"
+            placeholder="e.g. Kohinoor Textile Mills Ltd."
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          />
+          <Input
+            label="Contact Person"
+            placeholder="e.g. Tariq Mahmood"
+            value={formData.contact_person}
+            onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+          />
+          <Input
+            label="Phone Number"
+            placeholder="042-3591234"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          />
+          <Input
+            label="Email (Optional)"
+            placeholder="supplier@example.com"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          />
+        </form>
+      </Dialog>
     </PageContainer>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   PageContainer,
   PageHeader,
@@ -14,14 +14,67 @@ import {
   TableHead,
   TableCell,
   Badge,
+  Skeleton,
 } from '../../components/ui/index.ts';
 import { formatDate, formatQuantity } from '../../lib/formatters.ts';
+import { getStockMovements } from '../../lib/api/inventory.ts';
+import type { StockMovement } from '../../types/index.ts';
 
-const SAMPLE_DATE_1 = '2026-03-17T11:45:00.000Z';
-const SAMPLE_DATE_2 = '2026-03-17T10:15:00.000Z';
+type MovementType = 'all' | 'purchase_in' | 'sale_out' | 'return_in' | 'return_out' | 'adjustment' | 'transfer';
 
 export function StockMovementsPage() {
-  const [filterType, setFilterType] = useState('all');
+  const [filterType, setFilterType] = useState<MovementType>('all');
+  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadMovements = async () => {
+      try {
+        setLoading(true);
+        const data = await getStockMovements({ limit: 200 });
+        setMovements(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load stock movements');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadMovements();
+  }, []);
+
+  const filteredMovements = filterType === 'all'
+    ? movements
+    : movements.filter((m) => m.movement_type === filterType);
+
+  const getMovementBadge = (type: string) => {
+    switch (type) {
+      case 'purchase_in':
+        return <Badge variant="success" size="sm">Purchase In</Badge>;
+      case 'sale_out':
+        return <Badge variant="neutral" size="sm">Sale Out</Badge>;
+      case 'return_in':
+        return <Badge variant="secondary" size="sm">Return In</Badge>;
+      case 'return_out':
+        return <Badge variant="warning" size="sm">Return Out</Badge>;
+      case 'adjustment':
+        return <Badge variant="neutral" size="sm">Adjustment</Badge>;
+      case 'transfer':
+        return <Badge variant="secondary" size="sm">Transfer</Badge>;
+      default:
+        return <Badge variant="neutral" size="sm">{type}</Badge>;
+    }
+  };
+
+  const getQuantityColor = (type: string, quantity: number) => {
+    if (type === 'purchase_in' || type === 'return_in') {
+      return 'text-emerald-700';
+    }
+    if (type === 'sale_out' || type === 'return_out') {
+      return 'text-rose-700';
+    }
+    return quantity >= 0 ? 'text-emerald-700' : 'text-rose-700';
+  };
 
   return (
     <PageContainer>
@@ -40,78 +93,82 @@ export function StockMovementsPage() {
             <div className="w-full sm:w-56">
               <Select
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
+                onChange={(e) => setFilterType(e.target.value as MovementType)}
               >
                 <option value="all">All Movement Types</option>
                 <option value="purchase_in">Purchase Inward (+)</option>
                 <option value="sale_out">POS Sale Cut (-)</option>
                 <option value="return_in">Customer Return (+)</option>
+                <option value="return_out">Customer Return Out (-)</option>
                 <option value="adjustment">Stock Audit Adjustment</option>
+                <option value="transfer">Transfer</option>
               </Select>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Timestamp</TableHead>
-            <TableHead>SKU</TableHead>
-            <TableHead>Product / Material</TableHead>
-            <TableHead>Movement Type</TableHead>
-            <TableHead align="right">Qty Delta</TableHead>
-            <TableHead>Reference / Invoice</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell className="text-xs text-zinc-600">
-              {formatDate(SAMPLE_DATE_1, true)}
-            </TableCell>
-            <TableCell className="font-mono text-xs text-zinc-500">
-              COT-LAWN-01-NAVY
-            </TableCell>
-            <TableCell className="font-medium text-zinc-900">
-              Egyptian Lawn - Plain
-            </TableCell>
-            <TableCell>
-              <Badge variant="success" size="sm">
-                Purchase In
-              </Badge>
-            </TableCell>
-            <TableCell align="right" className="font-tabular font-semibold text-emerald-700">
-              +{formatQuantity(100, 'meters')}
-            </TableCell>
-            <TableCell className="font-mono text-xs text-zinc-600">
-              PO-2026-0042
-            </TableCell>
-          </TableRow>
+      {error && (
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-700">
+          {error}
+        </div>
+      )}
 
-          <TableRow>
-            <TableCell className="text-xs text-zinc-600">
-              {formatDate(SAMPLE_DATE_2, true)}
-            </TableCell>
-            <TableCell className="font-mono text-xs text-zinc-500">
-              SUIT-WOL-04-BLK
-            </TableCell>
-            <TableCell className="font-medium text-zinc-900">
-              Italian Wool Blend 120s
-            </TableCell>
-            <TableCell>
-              <Badge variant="neutral" size="sm">
-                Sale Out
-              </Badge>
-            </TableCell>
-            <TableCell align="right" className="font-tabular font-semibold text-rose-700">
-              -{formatQuantity(4.25, 'meters')}
-            </TableCell>
-            <TableCell className="font-mono text-xs text-zinc-600">
-              INV-10892
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Timestamp</TableHead>
+              <TableHead>SKU</TableHead>
+              <TableHead>Product / Material</TableHead>
+              <TableHead>Movement Type</TableHead>
+              <TableHead align="right">Qty Delta</TableHead>
+              <TableHead>Reference / Invoice</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell align="right"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                </TableRow>
+              ))
+            ) : filteredMovements.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-zinc-500">
+                  No stock movements found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredMovements.map((movement) => (
+                <TableRow key={movement.id}>
+                  <TableCell className="text-xs text-zinc-600">
+                    {formatDate(movement.created_at, true)}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-zinc-500">
+                    {movement.sku}
+                  </TableCell>
+                  <TableCell className="font-medium text-zinc-900">
+                    {movement.product_name}
+                  </TableCell>
+                  <TableCell>{getMovementBadge(movement.movement_type)}</TableCell>
+                  <TableCell align="right" className={`font-tabular font-semibold ${getQuantityColor(movement.movement_type, movement.quantity)}`}>
+                    {movement.quantity >= 0 ? '+' : ''}{formatQuantity(movement.quantity, movement.unit)}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-zinc-600">
+                    {movement.reference_type ? `${movement.reference_type}:${movement.reference_id}` : '—'}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
     </PageContainer>
   );
 }

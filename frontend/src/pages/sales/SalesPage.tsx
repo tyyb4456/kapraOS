@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import {
@@ -18,14 +18,68 @@ import {
   TableHead,
   TableCell,
   Badge,
+  Skeleton,
 } from '../../components/ui/index.ts';
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
-
-const SAMPLE_DATE_1 = '2026-03-17T11:50:00.000Z';
-const SAMPLE_DATE_2 = '2026-03-17T09:30:00.000Z';
+import { getSales } from '../../lib/api/sales.ts';
+import type { Sale } from '../../types/index.ts';
 
 export function SalesPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadSales = async () => {
+      try {
+        setLoading(true);
+        const data = await getSales();
+        setSales(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load sales');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSales();
+  }, []);
+
+  const filteredSales = sales.filter(
+    (sale) =>
+      sale.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getPaymentMethodBadge = (method: string) => {
+    switch (method) {
+      case 'cash':
+        return <Badge variant="neutral" size="sm">Cash</Badge>;
+      case 'khata':
+        return <Badge variant="warning" size="sm">Khata (Credit)</Badge>;
+      case 'card':
+        return <Badge variant="secondary" size="sm">Card</Badge>;
+      case 'bank_transfer':
+        return <Badge variant="secondary" size="sm">Bank Transfer</Badge>;
+      default:
+        return <Badge variant="neutral" size="sm">{method}</Badge>;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <Badge variant="success" size="sm">Completed</Badge>;
+      case 'pending':
+        return <Badge variant="warning" size="sm">Pending</Badge>;
+      case 'cancelled':
+        return <Badge variant="destructive" size="sm">Cancelled</Badge>;
+      case 'refunded':
+        return <Badge variant="secondary" size="sm">Refunded</Badge>;
+      default:
+        return <Badge variant="neutral" size="sm">{status}</Badge>;
+    }
+  };
 
   return (
     <PageContainer>
@@ -73,87 +127,77 @@ export function SalesPage() {
         </CardContent>
       </Card>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Invoice #</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Payment Method</TableHead>
-            <TableHead align="right">Subtotal</TableHead>
-            <TableHead align="right">Total Amount</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead align="right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell className="font-mono text-xs font-medium text-zinc-900">
-              INV-10892
-            </TableCell>
-            <TableCell className="text-xs text-zinc-600">
-              {formatDate(SAMPLE_DATE_1, true)}
-            </TableCell>
-            <TableCell className="font-medium text-zinc-900">
-              Chaudhry Fabric Traders
-            </TableCell>
-            <TableCell>
-              <Badge variant="neutral" size="sm">
-                Cash
-              </Badge>
-            </TableCell>
-            <TableCell align="right" className="font-tabular text-zinc-600">
-              {formatCurrency(14450)}
-            </TableCell>
-            <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-              {formatCurrency(14450)}
-            </TableCell>
-            <TableCell>
-              <Badge variant="success" size="sm">
-                Completed
-              </Badge>
-            </TableCell>
-            <TableCell align="right">
-              <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                Print Bill
-              </Button>
-            </TableCell>
-          </TableRow>
+      {error && (
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-700">
+          {error}
+        </div>
+      )}
 
-          <TableRow>
-            <TableCell className="font-mono text-xs font-medium text-zinc-900">
-              INV-10891
-            </TableCell>
-            <TableCell className="text-xs text-zinc-600">
-              {formatDate(SAMPLE_DATE_2, true)}
-            </TableCell>
-            <TableCell className="font-medium text-zinc-900">
-              Haji Muhammad & Sons
-            </TableCell>
-            <TableCell>
-              <Badge variant="warning" size="sm">
-                Khata (Credit)
-              </Badge>
-            </TableCell>
-            <TableCell align="right" className="font-tabular text-zinc-600">
-              {formatCurrency(38500)}
-            </TableCell>
-            <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-              {formatCurrency(38500)}
-            </TableCell>
-            <TableCell>
-              <Badge variant="success" size="sm">
-                Completed
-              </Badge>
-            </TableCell>
-            <TableCell align="right">
-              <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                Print Bill
-              </Button>
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Invoice #</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Payment Method</TableHead>
+              <TableHead align="right">Subtotal</TableHead>
+              <TableHead align="right">Total Amount</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead align="right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell align="right"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell align="right"><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell align="right"><Skeleton className="h-4 w-16" /></TableCell>
+                </TableRow>
+              ))
+            ) : filteredSales.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-zinc-500">
+                  {searchTerm ? 'No matching sales found' : 'No sales recorded yet'}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredSales.map((sale) => (
+                <TableRow key={sale.id}>
+                  <TableCell className="font-mono text-xs font-medium text-zinc-900">
+                    {sale.invoice_number || '—'}
+                  </TableCell>
+                  <TableCell className="text-xs text-zinc-600">
+                    {formatDate(sale.created_at, true)}
+                  </TableCell>
+                  <TableCell className="font-medium text-zinc-900">
+                    {sale.customer_name || 'Walk-in Customer'}
+                  </TableCell>
+                  <TableCell>{getPaymentMethodBadge(sale.payment_method)}</TableCell>
+                  <TableCell align="right" className="font-tabular text-zinc-600">
+                    {formatCurrency(sale.subtotal)}
+                  </TableCell>
+                  <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
+                    {formatCurrency(sale.total_amount)}
+                  </TableCell>
+                  <TableCell>{getStatusBadge(sale.status)}</TableCell>
+                  <TableCell align="right">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+                      Print Bill
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
     </PageContainer>
   );
 }
