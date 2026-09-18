@@ -12,7 +12,7 @@ from uuid import UUID
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
@@ -34,6 +34,7 @@ from app.schemas.sales import (
     SaleSummaryResponse,
 )
 from app.models.sale import Sale, SaleItem, SaleStatus
+from app.models.customer import Customer
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -89,7 +90,10 @@ async def create_sale(
         raise _not_found(exc) from exc
     except (EmptySaleError, InvalidSaleItemError, InvalidSaleTotalsError, DuplicateSaleItemError) as exc:
         raise _unprocessable(exc) from exc
-    return SaleResponse.model_validate(sale)
+    response = SaleResponse.model_validate(sale)
+    if sale.customer:
+        response.customer_name = sale.customer.name
+    return response
 
 
 @router.get("", response_model=list[SaleListItemResponse])
@@ -115,7 +119,35 @@ async def list_sales(
     stmt = stmt.order_by(Sale.created_at.desc())
     stmt = stmt.offset(offset).limit(limit)
     sales = (await db.execute(stmt)).scalars().all()
-    return [SaleListItemResponse.model_validate(s) for s in sales]
+
+    results = []
+    for sale in sales:
+        customer_name = None
+        payment_method = None
+        if sale.customer_id is not None:
+            customer = await db.get(Customer, sale.customer_id)
+            if customer and customer.shop_id == shop_id:
+                customer_name = customer.name
+        if sale.payments:
+            payment_method = sale.payments[0].method
+        items_count = len(sale.items) if sale.items else 0
+        results.append(SaleListItemResponse(
+            id=sale.id,
+            invoice_number=sale.invoice_number,
+            customer_id=sale.customer_id,
+            customer_name=customer_name,
+            payment_method=payment_method,
+            subtotal=sale.subtotal,
+            discount=sale.discount,
+            total_amount=sale.total,
+            paid_amount=sale.paid_amount,
+            due_amount=sale.due_amount,
+            items_count=items_count,
+            status=sale.status,
+            shop_id=sale.shop_id,
+            created_at=sale.created_at,
+        ))
+    return results
 
 
 @router.get("/{sale_id}", response_model=SaleResponse)
@@ -127,7 +159,10 @@ async def get_sale(
     sale = await db.get(Sale, sale_id)
     if sale is None or sale.shop_id != shop_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
-    return SaleResponse.model_validate(sale)
+    response = SaleResponse.model_validate(sale)
+    if sale.customer:
+        response.customer_name = sale.customer.name
+    return response
 
 
 @router.get("/summary", response_model=SaleSummaryResponse)
@@ -151,4 +186,3 @@ async def sales_summary(
         today_gross_profit=Decimal("0"),
         today_net_profit=Decimal("0"),
     )
-

@@ -89,6 +89,7 @@ class Product(Base, UUIDMixin, TimestampMixin):
             name="fk_products_brand_same_shop",
         ),
         CheckConstraint("length(trim(name)) > 0", name="ck_products_name_not_blank"),
+        Index("uq_products_code_shop", "code", "shop_id", unique=True, postgresql_where=text("code IS NOT NULL")),
     )
 
     shop_id: Mapped[uuid.UUID] = mapped_column(
@@ -113,6 +114,10 @@ class Product(Base, UUIDMixin, TimestampMixin):
     )
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    unit: Mapped[str] = mapped_column(String(20), nullable=False, default="meter")
 
     product_type: Mapped[ProductType] = mapped_column(
         SQLEnum(

@@ -18,12 +18,23 @@ export interface CreateProductRequest {
   variants: Array<{
     sku: string;
     barcode?: string;
-    cost_price: number;
+    purchase_price: number;
     selling_price: number;
+    unit: string;
     attributes?: Record<string, string>;
   }>;
 }
 
 export async function createProduct(data: CreateProductRequest): Promise<Product> {
   return apiClient.post<Product>('/products', data);
+}
+
+export interface CreateCategoryRequest {
+  name: string;
+  code?: string;
+  parent_id?: string;
+}
+
+export async function createCategory(data: CreateCategoryRequest): Promise<Category> {
+  return apiClient.post<Category>('/products/categories', data);
 }

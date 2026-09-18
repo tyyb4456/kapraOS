@@ -129,6 +129,8 @@ async def create_return(
     except Exception as exc:
         raise _unprocessable(f"Return processing failed: {exc}") from exc
 
+    await db.commit()
+
     return {
         "sale_id": sale_id,
         "returned_quantity": float(return_qty),

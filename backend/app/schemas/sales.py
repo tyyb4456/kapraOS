@@ -35,6 +35,7 @@ class SaleResponse(BaseModel):
 
     id: UUID
     customer_id: UUID | None = None
+    customer_name: str | None = None
     invoice_number: str | None = None
     subtotal: Decimal
     discount: Decimal
@@ -55,10 +56,16 @@ class SaleListItemResponse(BaseModel):
     id: UUID
     invoice_number: str | None = None
     customer_id: UUID | None = None
-    total: Decimal
+    customer_name: str | None = None
+    payment_method: PaymentMethod
+    subtotal: Decimal
+    discount: Decimal
+    total_amount: Decimal
     paid_amount: Decimal
     due_amount: Decimal
+    items_count: int
     status: SaleStatus
+    shop_id: UUID
     created_at: datetime
 
 

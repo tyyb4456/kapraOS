@@ -19,7 +19,7 @@ import {
   Select,
   Card,
 } from '../../components/ui/index.ts';
-import { getCategories } from '../../lib/api/products.ts';
+import { getCategories, createCategory } from '../../lib/api/products.ts';
 import type { Category } from '../../types/index.ts';
 
 export function CategoriesPage() {
@@ -28,6 +28,7 @@ export function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '', parent_id: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -43,6 +44,34 @@ export function CategoriesPage() {
     };
     loadCategories();
   }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) {
+      setError('Category name is required');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await createCategory({
+        name: formData.name,
+        code: formData.code || undefined,
+        parent_id: formData.parent_id || undefined,
+      });
+      setIsAddModalOpen(false);
+      setFormData({ name: '', code: '', parent_id: '' });
+      // Reload categories
+      const data = await getCategories();
+      setCategories(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create category');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <PageContainer>
@@ -134,17 +163,12 @@ export function CategoriesPage() {
         title="Add New Category"
         description="Create a category to group fabric items."
         footer={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => setIsAddModalOpen(false)}>
-              Save Category
-            </Button>
-          </>
+          <Button variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
+            Cancel
+          </Button>
         }
       >
-        <div className="space-y-3.5">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           <Input
             label="Category Name"
             placeholder="e.g. Winter Shawls & Wool"
@@ -157,11 +181,11 @@ export function CategoriesPage() {
             value={formData.code}
             onChange={(e) => setFormData({ ...formData, code: e.target.value })}
           />
-<Select
-              label="Parent Category (Optional)"
-              value={formData.parent_id}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, parent_id: e.target.value })}
-            >
+          <Select
+            label="Parent Category (Optional)"
+            value={formData.parent_id}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({ ...formData, parent_id: e.target.value })}
+          >
             <option value="">None (Top Level)</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -169,7 +193,12 @@ export function CategoriesPage() {
               </option>
             ))}
           </Select>
-        </div>
+          <div className="flex justify-end gap-2 mt-4 border-t border-zinc-100 pt-4">
+            <Button variant="primary" size="sm" type="submit" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Category'}
+            </Button>
+          </div>
+        </form>
       </Dialog>
     </PageContainer>
   );

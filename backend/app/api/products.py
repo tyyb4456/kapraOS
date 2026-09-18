@@ -8,6 +8,7 @@ catalog management. The shop is always resolved server-side.
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
+from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from app.api.dependencies import DbSession, ShopId
 from app.models.category import Category
 from app.models.brand import Brand
 from app.models.attribute import Attribute, AttributeValue
-from app.models.product import Product, ProductVariant
+from app.models.product import Product, ProductVariant, ProductType
 from app.schemas.products import (
     CategoryResponse,
     CategoryTreeResponse,
@@ -104,6 +105,7 @@ async def create_category(
     )
     db.add(category)
     await db.flush()
+    await db.commit()
     return CategoryResponse.model_validate(category)
 
 
@@ -129,6 +131,7 @@ async def create_brand(
     brand = Brand(shop_id=shop_id, name=body.name)
     db.add(brand)
     await db.flush()
+    await db.commit()
     return BrandResponse.model_validate(brand)
 
 
@@ -154,6 +157,7 @@ async def create_attribute(
     attr = Attribute(shop_id=shop_id, name=body.name)
     db.add(attr)
     await db.flush()
+    await db.commit()
     return AttributeResponse.model_validate(attr)
 
 
@@ -183,6 +187,7 @@ async def create_attribute_value(
     )
     db.add(value)
     await db.flush()
+    await db.commit()
     return AttributeValueResponse.model_validate(value)
 
 
@@ -226,22 +231,64 @@ async def get_product(
     return ProductDetailResponse.model_validate(product)
 
 
+def _resolve_unit(unit_str: str) -> str:
+    mapping = {
+        "meters": "meter", "meter": "meter",
+        "yards": "yard", "yard": "yard",
+        "pieces": "piece", "piece": "piece",
+        "sets": "set", "set": "set",
+        "rolls": "roll", "roll": "roll",
+    }
+    return mapping.get(unit_str.lower(), unit_str)
+
+
 @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(
     shop_id: ShopId,
     db: DbSession,
     body: CreateProductRequest,
 ) -> ProductResponse:
+    category_id = body.category_id
+    if isinstance(category_id, str):
+        category_id = UUID(category_id)
+
+    brand_id = body.brand_id
+    if isinstance(brand_id, str):
+        brand_id = UUID(brand_id)
+
+    try:
+        product_type = ProductType(body.product_type)
+    except ValueError:
+        product_type = ProductType.OTHER
+
     product = Product(
         shop_id=shop_id,
         name=body.name,
-        product_type=body.product_type,
+        product_type=product_type,
         description=body.description,
-        category_id=body.category_id,
-        brand_id=body.brand_id,
+        category_id=category_id,
+        brand_id=brand_id,
+        code=body.code,
+        unit=body.unit,
     )
     db.add(product)
     await db.flush()
+    await db.refresh(product)
+
+    for v in body.variants:
+        variant = ProductVariant(
+            product_id=product.id,
+            shop_id=shop_id,
+            sku=v.sku,
+            barcode=v.barcode,
+            purchase_price=Decimal(str(v.purchase_price)),
+            selling_price=Decimal(str(v.selling_price)),
+            unit=_resolve_unit(v.unit),
+        )
+        db.add(variant)
+
+    await db.flush()
+    await db.commit()
     return ProductResponse.model_validate(product)
 
 
@@ -293,6 +340,7 @@ async def create_variant(
     )
     db.add(variant)
     await db.flush()
+    await db.commit()
     return ProductVariantResponse.model_validate(variant)
 
 
@@ -313,4 +361,5 @@ async def update_variant(
     if body.is_active is not None:
         variant.is_active = body.is_active
     await db.flush()
+    await db.commit()
     return ProductVariantResponse.model_validate(variant)

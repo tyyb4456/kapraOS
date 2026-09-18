@@ -1,11 +1,12 @@
-"""Customer Khata endpoints.
+"""Customer endpoints.
 
-Four focused routes over the Step 6 receivables service - deliberately not a
-customer CRUD surface, which belongs to its own step:
+CRUD routes for customers and the Step 6 receivables (Khata) service:
 
-    GET  /customers/{customer_id}/balance     how much do they owe?
-    GET  /customers/{customer_id}/statement   why do they owe it?
-    GET  /customers/{customer_id}/summary     dashboard line for one customer
+    GET  /customers                    list all customers
+    POST /customers                    create a new customer
+    GET  /customers/{customer_id}/balance     outstanding balance
+    GET  /customers/{customer_id}/statement   Khata statement
+    GET  /customers/{customer_id}/summary     dashboard summary
     POST /customers/{customer_id}/payments    record money received
 
 The shop is always resolved server-side (see `app.api.dependencies`), so a
@@ -13,7 +14,7 @@ customer id belonging to another tenant returns 404 rather than reading
 anything. Domain errors are translated here and nowhere else - the service
 raises `ReceivablesError` subclasses and stays free of HTTP concerns.
 
-`get_db` does not commit, so the one write route commits explicitly (the read
+`get_db` does not commit, so the write routes commit explicitly (the read
 routes never need to).
 """
 
@@ -22,12 +23,17 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
+from app.models.customer import Customer
 from app.schemas.receivables import (
     CustomerBalanceResponse,
+    CustomerResponse,
     CustomerStatementResponse,
     CustomerSummaryResponse,
+    CreateCustomerRequest,
     PaymentResponse,
     RecordCustomerPaymentRequest,
     RecordCustomerPaymentResponse,
@@ -46,7 +52,7 @@ from app.services.receivables import (
     SaleNotSettleableError,
 )
 
-router = APIRouter(prefix="/customers", tags=["khata"])
+router = APIRouter(prefix="/customers", tags=["customers"])
 
 CustomerId = Annotated[uuid.UUID, Path(description="Customer to report on.")]
 
@@ -58,6 +64,62 @@ def _not_found(exc: Exception) -> HTTPException:
 def _unprocessable(exc: Exception) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+    )
+
+
+@router.get("", response_model=list[CustomerResponse])
+async def list_customers(
+    shop_id: ShopId,
+    db: DbSession,
+) -> list[CustomerResponse]:
+    customers = (await db.execute(
+        select(Customer).where(Customer.shop_id == shop_id).order_by(Customer.name.asc())
+    )).scalars().all()
+
+    results = []
+    for customer in customers:
+        balance = await receivables_service.get_customer_balance(
+            db, shop_id=shop_id, customer_id=customer.id
+        )
+        results.append(CustomerResponse(
+            id=customer.id,
+            shop_id=customer.shop_id,
+            name=customer.name,
+            phone=customer.phone,
+            email=customer.email,
+            current_balance=float(balance.outstanding_balance),
+            credit_limit=float(customer.credit_limit) if customer.credit_limit is not None else None,
+            created_at=customer.created_at,
+        ))
+    return results
+
+
+@router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
+async def create_customer(
+    shop_id: ShopId,
+    db: DbSession,
+    body: CreateCustomerRequest,
+) -> CustomerResponse:
+    customer = Customer(
+        shop_id=shop_id,
+        name=body.name,
+        phone=body.phone,
+        email=body.email,
+        credit_limit=body.credit_limit,
+    )
+    db.add(customer)
+    await db.flush()
+    await db.refresh(customer)
+    await db.commit()
+    return CustomerResponse(
+        id=customer.id,
+        shop_id=customer.shop_id,
+        name=customer.name,
+        phone=customer.phone,
+        email=customer.email,
+        current_balance=0.0,
+        credit_limit=float(customer.credit_limit) if customer.credit_limit is not None else None,
+        created_at=customer.created_at,
     )
 
 

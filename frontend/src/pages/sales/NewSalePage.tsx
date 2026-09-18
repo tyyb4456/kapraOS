@@ -18,8 +18,9 @@ import {
 import { formatCurrency } from '../../lib/formatters.ts';
 import { createSale, type CreateSaleRequest } from '../../lib/api/sales.ts';
 import { getProducts } from '../../lib/api/products.ts';
+import { getCustomers } from '../../lib/api/customers.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
-import type { ProductVariant } from '../../types/index.ts';
+import type { ProductVariant, Customer } from '../../types/index.ts';
 
 interface SaleItem {
   id: string;
@@ -47,6 +48,7 @@ export function NewSalePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [variants, setVariants] = useState<VariantWithProduct[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -67,6 +69,18 @@ export function NewSalePage() {
       }
     };
     loadProducts();
+  }, []);
+
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const data = await getCustomers();
+        setCustomers(data);
+      } catch (err) {
+        console.error('Failed to load customers:', err);
+      }
+    };
+    loadCustomers();
   }, []);
 
   const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
@@ -207,8 +221,11 @@ export function NewSalePage() {
                     <label className="block text-xs font-medium text-zinc-700 mb-1">Customer Account</label>
                     <Select value={customerId} onChange={e => setCustomerId(e.target.value)}>
                       <option value="walk_in">Walk-in Customer (Cash)</option>
-                      <option value="c1">Chaudhry Fabric Traders (Khata)</option>
-                      <option value="c2">Haji Muhammad & Sons (Khata)</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}{c.phone ? ` (${c.phone})` : ''}{c.current_balance > 0 ? ` — Balance: ${formatCurrency(c.current_balance)}` : ''}
+                        </option>
+                      ))}
                     </Select>
                   </div>
                   <div>

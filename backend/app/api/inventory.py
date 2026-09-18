@@ -51,13 +51,13 @@ async def list_inventory(
     low_stock: bool = False,
     search: str | None = None,
 ) -> list[InventoryResponse]:
-    variant_stmt = select(ProductVariant).where(ProductVariant.shop_id == shop_id)
+    variant_stmt = select(ProductVariant.id).where(ProductVariant.shop_id == shop_id)
     if search is not None:
         variant_stmt = variant_stmt.where(
             ProductVariant.sku.ilike(f"%{search}%")
             | ProductVariant.barcode.ilike(f"%{search}%")
         )
-    variant_subq = variant_stmt.subquery()
+    variant_subq = variant_stmt.scalar_subquery()
 
     if low_stock:
         inv_stmt = select(Inventory).where(

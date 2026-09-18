@@ -15,6 +15,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.customer import Customer
 from app.models.payment import PaymentMethod
 from app.services.receivables import StatementEntryType
 
@@ -109,3 +110,27 @@ class RecordCustomerPaymentResponse(BaseModel):
 
     payment: PaymentResponse
     balance: CustomerBalanceResponse
+
+
+class CustomerResponse(BaseModel):
+    """A customer record for the directory listing."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    shop_id: uuid.UUID
+    name: str
+    phone: str | None = None
+    email: str | None = None
+    current_balance: float
+    credit_limit: float | None = None
+    created_at: datetime
+
+
+class CreateCustomerRequest(BaseModel):
+    """Request to create a new customer."""
+
+    name: str
+    phone: str | None = None
+    email: str | None = None
+    credit_limit: float | None = None

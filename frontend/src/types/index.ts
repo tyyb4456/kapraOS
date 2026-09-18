@@ -35,8 +35,9 @@ export interface ProductVariant {
   product_id: string;
   sku: string;
   barcode?: string | null;
-  cost_price: number;
+  purchase_price: number;
   selling_price: number;
+  unit: string;
   attributes: Record<string, string>;
   is_active: boolean;
 }

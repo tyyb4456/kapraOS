@@ -14,7 +14,8 @@ reference a customer belonging to a different shop.
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, UniqueConstraint
+from decimal import Decimal
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -56,6 +57,12 @@ class Customer(Base, UUIDMixin, TimestampMixin):
     # Optional: a walk-in may leave just a name, and many regulars have no
     # phone recorded at all.
     phone: Mapped[str | None] = mapped_column(String(30))
+
+    email: Mapped[str | None] = mapped_column(String(255))
+
+    credit_limit: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 2), nullable=True
+    )
 
     address: Mapped[str | None] = mapped_column(String(300))
 

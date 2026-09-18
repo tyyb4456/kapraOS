@@ -6,5 +6,6 @@ export async function getInventory(params?: { low_stock?: boolean }): Promise<In
 }
 
 export async function getStockMovements(params?: { variant_id?: string; limit?: number }): Promise<StockMovement[]> {
-  return apiClient.get<StockMovement[]>('/inventory/movements', { params });
+  const response = await apiClient.get<{ movements: StockMovement[]; total: number }>('/inventory/movements', { params });
+  return response.movements;
 }

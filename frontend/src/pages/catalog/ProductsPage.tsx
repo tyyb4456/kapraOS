@@ -108,8 +108,9 @@ export function ProductsPage() {
         variants: formData.variants.map((v) => ({
           sku: v.sku,
           barcode: v.barcode || undefined,
-          cost_price: v.cost_price,
+          purchase_price: v.cost_price,
           selling_price: v.selling_price,
+          unit: formData.unit,
           attributes: v.attributes,
         })),
       });
@@ -245,7 +246,7 @@ export function ProductsPage() {
                   </TableCell>
                   <TableCell className="capitalize text-zinc-600">{product.unit}</TableCell>
                   <TableCell align="right" className="font-tabular text-zinc-600">
-                    {product.variants?.[0] ? formatCurrency(product.variants[0].cost_price) : '—'}
+                    {product.variants?.[0] ? formatCurrency(product.variants[0].purchase_price) : '—'}
                   </TableCell>
                   <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
                     {product.variants?.[0] ? formatCurrency(product.variants[0].selling_price) : '—'}

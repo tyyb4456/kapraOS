@@ -95,10 +95,12 @@ class ProductResponse(BaseModel):
 
     id: UUID
     name: str
+    code: str | None = None
     product_type: str
     description: str | None = None
     category_id: UUID
     brand_id: UUID | None = None
+    unit: str
     shop_id: UUID
     created_at: datetime
 
@@ -122,10 +124,12 @@ class ProductDetailResponse(BaseModel):
 
     id: UUID
     name: str
+    code: str | None = None
     product_type: str
     description: str | None = None
     category: CategoryResponse | None = None
     brand: BrandResponse | None = None
+    unit: str
     variants: list[ProductVariantResponse] = []
 
 
@@ -147,22 +151,24 @@ class CreateAttributeValueRequest(BaseModel):
     value: str
 
 
-class CreateProductRequest(BaseModel):
-    name: str
-    product_type: str
-    description: str | None = None
-    category_id: UUID
-    brand_id: UUID | None = None
-
-
 class CreateProductVariantRequest(BaseModel):
-    product_id: UUID
     sku: str
     barcode: str | None = None
     purchase_price: float
     selling_price: float
     unit: str
-    attribute_value_ids: list[UUID] | None = None
+    attributes: dict[str, str] | None = None
+
+
+class CreateProductRequest(BaseModel):
+    name: str
+    code: str | None = None
+    product_type: str = "other"
+    description: str | None = None
+    category_id: UUID | str
+    brand_id: UUID | None = None
+    unit: str = "meter"
+    variants: list[CreateProductVariantRequest] = []
 
 
 class UpdateProductVariantRequest(BaseModel):
