@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import { ClerkProvider, useAuth as useClerkAuth, useUser as useClerkUser } from '@clerk/clerk-react';
 import { setApiTokenGetter, ApiError } from '../lib/api/client.ts';
-import { getAuthMe } from '../lib/api/auth.ts';
+import { getAuthMe, syncAuth } from '../lib/api/auth.ts';
 import type { CurrentUser } from '../types/index.ts';
 
 export interface AuthContextType {
@@ -59,7 +59,20 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      const meData = await getAuthMe();
+      let meData;
+      try {
+        meData = await getAuthMe();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401 && err.message.toLowerCase().includes('not provisioned')) {
+          // Clerk user exists but not yet provisioned in application DB
+          meData = await syncAuth({
+            name: clerkUser?.fullName || clerkUser?.firstName || undefined,
+            email: clerkUser?.primaryEmailAddress?.emailAddress,
+          });
+        } else {
+          throw err;
+        }
+      }
       setBackendUser({
         id: meData.id,
         clerkUserId: meData.clerk_user_id,

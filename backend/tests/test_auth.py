@@ -265,3 +265,42 @@ class TestAuthMechanism:
     def test_no_password_hash_column(self) -> None:
         columns = [c.name for c in User.__table__.columns]
         assert "password_hash" not in columns
+
+
+class TestAuthSync:
+    """Tests for POST /auth/sync."""
+
+    @pytest.mark.asyncio
+    async def test_no_token_returns_401(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        response = await client.post("/auth/sync")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_new_user_sync_provisions_user_and_shop(
+        self,
+        api_client: AsyncClient,
+        api_session: AsyncSession,
+    ) -> None:
+        clerk_id = "clerk_sync_new_user_123"
+        with _mock_verify(clerk_id):
+            response = await api_client.post(
+                "/auth/sync",
+                json={"name": "New Sync User", "email": "sync@example.com"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["clerk_user_id"] == clerk_id
+        assert data["role"] == "owner"
+        assert "shop_id" in data
+        assert "id" in data
+
+        # Calling sync again for same user is idempotent
+        with _mock_verify(clerk_id):
+            response2 = await api_client.post("/auth/sync")
+        assert response2.status_code == 200
+        assert response2.json()["id"] == data["id"]
+        assert response2.json()["shop_id"] == data["shop_id"]

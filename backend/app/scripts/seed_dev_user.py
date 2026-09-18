@@ -24,6 +24,9 @@ async def seed_user(clerk_user_id: str, name: str = "Store Owner", email: str = 
             print(f"    User ID: {existing_user.id}")
             print(f"    Shop ID: {existing_user.shop_id}")
             print(f"    Role:    {existing_user.role}")
+            from app.services.accounting import ensure_system_accounts
+            await ensure_system_accounts(db, shop_id=existing_user.shop_id)
+            await db.commit()
             return
 
         # Check if shop exists or create a new one
@@ -41,6 +44,10 @@ async def seed_user(clerk_user_id: str, name: str = "Store Owner", email: str = 
         else:
             shop = existing_shop
             print(f"[+] Using existing Shop: '{shop.name}' ({shop.id})")
+
+        # Initialize chart of accounts
+        from app.services.accounting import ensure_system_accounts
+        await ensure_system_accounts(db, shop_id=shop.id)
 
         # Create user
         user = User(
@@ -62,6 +69,25 @@ async def seed_user(clerk_user_id: str, name: str = "Store Owner", email: str = 
 
 def main():
     if len(sys.argv) < 2:
+        # Try auto-detecting user from Clerk
+        try:
+            from clerk_backend_api import Clerk
+            from app.config import get_settings
+            settings = get_settings()
+            if settings.clerk_secret_key:
+                clerk = Clerk(bearer_auth=settings.clerk_secret_key)
+                users = clerk.users.list()
+                if users:
+                    u = users[0]
+                    clerk_id = u.id
+                    name = f"{u.first_name or ''} {u.last_name or ''}".strip() or "Tayyab Hussain"
+                    email = u.email_addresses[0].email_address if u.email_addresses else "owner@kapraos.local"
+                    print(f"[*] Auto-detected Clerk user: {name} ({email}, ID: {clerk_id})")
+                    asyncio.run(seed_user(clerk_id, name, email, "KapraOS Fabrics & Suiting"))
+                    return
+        except Exception as exc:
+            print(f"[!] Auto-detect failed: {exc}")
+
         print("Usage: python -m app.scripts.seed_dev_user <clerk_user_id> [name] [email] [shop_name]")
         sys.exit(1)
 
