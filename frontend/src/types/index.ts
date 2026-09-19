@@ -65,12 +65,24 @@ export interface InventoryItem {
   unit: UnitOfMeasure;
   attributes: Record<string, string>;
   quantity_on_hand: number;
+  quantity?: number;
   cost_price: number;
   selling_price: number;
   low_stock_threshold?: number;
 }
 
-export type MovementType = 'purchase_in' | 'sale_out' | 'return_in' | 'return_out' | 'adjustment' | 'transfer';
+export type MovementType =
+  | 'purchase_in'
+  | 'sale_out'
+  | 'return_in'
+  | 'return_out'
+  | 'adjustment'
+  | 'transfer'
+  | 'purchase'
+  | 'sale'
+  | 'customer_return'
+  | 'supplier_return'
+  | 'damage';
 
 export interface StockMovement {
   id: string;

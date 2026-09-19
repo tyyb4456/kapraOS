@@ -21,12 +21,17 @@ class InventoryResponse(BaseModel):
     id: UUID
     variant_id: UUID
     quantity: Decimal
+    quantity_on_hand: Decimal = Decimal("0")
     reserved_quantity: Decimal
     available_quantity: Decimal
     weighted_average_cost: Decimal
     unit: str | None = None
     sku: str | None = None
     product_name: str | None = None
+    cost_price: Decimal = Decimal("0")
+    selling_price: Decimal = Decimal("0")
+    attributes: dict[str, str] = {}
+    low_stock_threshold: Decimal | None = None
 
 
 class InventoryMovementResponse(BaseModel):
@@ -44,6 +49,9 @@ class InventoryMovementResponse(BaseModel):
     reference_id: UUID | None = None
     notes: str | None = None
     created_at: datetime
+    sku: str | None = None
+    product_name: str | None = None
+    unit: str | None = None
 
 
 class InventoryMovementListResponse(BaseModel):

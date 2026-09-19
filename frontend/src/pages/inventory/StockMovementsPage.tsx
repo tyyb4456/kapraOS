@@ -20,7 +20,19 @@ import { formatDate, formatQuantity } from '../../lib/formatters.ts';
 import { getStockMovements } from '../../lib/api/inventory.ts';
 import type { StockMovement } from '../../types/index.ts';
 
-type MovementType = 'all' | 'purchase_in' | 'sale_out' | 'return_in' | 'return_out' | 'adjustment' | 'transfer';
+type MovementType =
+  | 'all'
+  | 'purchase'
+  | 'sale'
+  | 'customer_return'
+  | 'supplier_return'
+  | 'adjustment'
+  | 'damage'
+  | 'transfer'
+  | 'purchase_in'
+  | 'sale_out'
+  | 'return_in'
+  | 'return_out';
 
 export function StockMovementsPage() {
   const [filterType, setFilterType] = useState<MovementType>('all');
@@ -43,22 +55,41 @@ export function StockMovementsPage() {
     loadMovements();
   }, []);
 
-  const filteredMovements = filterType === 'all'
-    ? movements
-    : movements.filter((m) => m.movement_type === filterType);
+  const filteredMovements = movements.filter((m) => {
+    if (filterType === 'all') return true;
+    if (filterType === 'purchase' || filterType === 'purchase_in') {
+      return m.movement_type === 'purchase' || m.movement_type === 'purchase_in';
+    }
+    if (filterType === 'sale' || filterType === 'sale_out') {
+      return m.movement_type === 'sale' || m.movement_type === 'sale_out';
+    }
+    if (filterType === 'customer_return' || filterType === 'return_in') {
+      return m.movement_type === 'customer_return' || m.movement_type === 'return_in';
+    }
+    if (filterType === 'supplier_return' || filterType === 'return_out') {
+      return m.movement_type === 'supplier_return' || m.movement_type === 'return_out';
+    }
+    return m.movement_type === filterType;
+  });
 
   const getMovementBadge = (type: string) => {
     switch (type) {
+      case 'purchase':
       case 'purchase_in':
         return <Badge variant="success" size="sm">Purchase In</Badge>;
+      case 'sale':
       case 'sale_out':
         return <Badge variant="neutral" size="sm">Sale Out</Badge>;
+      case 'customer_return':
       case 'return_in':
-        return <Badge variant="secondary" size="sm">Return In</Badge>;
+        return <Badge variant="secondary" size="sm">Customer Return</Badge>;
+      case 'supplier_return':
       case 'return_out':
-        return <Badge variant="warning" size="sm">Return Out</Badge>;
+        return <Badge variant="warning" size="sm">Supplier Return</Badge>;
       case 'adjustment':
         return <Badge variant="neutral" size="sm">Adjustment</Badge>;
+      case 'damage':
+        return <Badge variant="destructive" size="sm">Damage</Badge>;
       case 'transfer':
         return <Badge variant="secondary" size="sm">Transfer</Badge>;
       default:
@@ -67,10 +98,10 @@ export function StockMovementsPage() {
   };
 
   const getQuantityColor = (type: string, quantity: number) => {
-    if (type === 'purchase_in' || type === 'return_in') {
+    if (type === 'purchase_in' || type === 'purchase' || type === 'return_in' || type === 'customer_return') {
       return 'text-emerald-700';
     }
-    if (type === 'sale_out' || type === 'return_out') {
+    if (type === 'sale_out' || type === 'sale' || type === 'return_out' || type === 'supplier_return' || type === 'damage') {
       return 'text-rose-700';
     }
     return quantity >= 0 ? 'text-emerald-700' : 'text-rose-700';
@@ -96,11 +127,12 @@ export function StockMovementsPage() {
                 onChange={(e) => setFilterType(e.target.value as MovementType)}
               >
                 <option value="all">All Movement Types</option>
-                <option value="purchase_in">Purchase Inward (+)</option>
-                <option value="sale_out">POS Sale Cut (-)</option>
-                <option value="return_in">Customer Return (+)</option>
-                <option value="return_out">Customer Return Out (-)</option>
+                <option value="purchase">Purchase Inward (+)</option>
+                <option value="sale">POS Sale Cut (-)</option>
+                <option value="customer_return">Customer Return (+)</option>
+                <option value="supplier_return">Supplier Return (-)</option>
                 <option value="adjustment">Stock Audit Adjustment</option>
+                <option value="damage">Damage (-)</option>
                 <option value="transfer">Transfer</option>
               </Select>
             </div>

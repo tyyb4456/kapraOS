@@ -24,6 +24,7 @@ import type { InventoryItem } from '../../types/index.ts';
 
 export function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +44,27 @@ export function InventoryPage() {
     loadInventory();
   }, []);
 
-  const filteredInventory = inventory.filter(
-    (item) =>
+  const filteredInventory = inventory.filter((item) => {
+    const matchesSearch =
       (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.product_name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      (item.product_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    const qty = Number(item.quantity_on_hand ?? item.quantity ?? 0);
+    const threshold = item.low_stock_threshold ?? 0;
+
+    if (statusFilter === 'out') {
+      return qty <= 0;
+    }
+    if (statusFilter === 'low') {
+      return threshold > 0 ? qty > 0 && qty <= threshold : false;
+    }
+    if (statusFilter === 'in') {
+      return threshold > 0 ? qty > threshold : qty > 0;
+    }
+    return true;
+  });
 
   const getStockStatusBadge = (qty: number, threshold?: number) => {
     if (qty <= 0) {
@@ -82,7 +99,10 @@ export function InventoryPage() {
               />
             </div>
             <div className="w-full sm:w-44">
-              <Select defaultValue="all">
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
                 <option value="all">All Stock Status</option>
                 <option value="low">Low Stock Only</option>
                 <option value="out">Out of Stock</option>
@@ -128,37 +148,43 @@ export function InventoryPage() {
             ) : filteredInventory.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-zinc-500">
-                  {searchTerm ? 'No matching inventory items found' : 'No inventory items yet'}
+                  {searchTerm || statusFilter !== 'all' ? 'No matching inventory items found' : 'No inventory items yet'}
                 </TableCell>
               </TableRow>
             ) : (
-              filteredInventory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-mono text-xs text-zinc-500">
-                    {item.sku}
-                  </TableCell>
-                  <TableCell className="font-medium text-zinc-900">
-                    {item.product_name}
-                  </TableCell>
-                  <TableCell className="text-xs text-zinc-600">
-                    {Object.entries(item.attributes || {})
-                      .map(([k, v]) => `${k}: ${v}`)
-                      .join(', ') || '—'}
-                  </TableCell>
-                  <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-                    {formatQuantity(item.quantity_on_hand, item.unit)}
-                  </TableCell>
-                  <TableCell align="right" className="font-tabular text-zinc-600">
-                    {formatCurrency(item.quantity_on_hand * item.cost_price)}
-                  </TableCell>
-                  <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-                    {formatCurrency(item.quantity_on_hand * item.selling_price)}
-                  </TableCell>
-                  <TableCell>
-                    {getStockStatusBadge(item.quantity_on_hand, item.low_stock_threshold)}
-                  </TableCell>
-                </TableRow>
-              ))
+              filteredInventory.map((item) => {
+                const qty = Number(item.quantity_on_hand ?? item.quantity ?? 0);
+                const cost = Number(item.cost_price ?? 0);
+                const price = Number(item.selling_price ?? 0);
+
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono text-xs text-zinc-500">
+                      {item.sku}
+                    </TableCell>
+                    <TableCell className="font-medium text-zinc-900">
+                      {item.product_name}
+                    </TableCell>
+                    <TableCell className="text-xs text-zinc-600">
+                      {Object.entries(item.attributes || {})
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join(', ') || '—'}
+                    </TableCell>
+                    <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
+                      {formatQuantity(qty, item.unit)}
+                    </TableCell>
+                    <TableCell align="right" className="font-tabular text-zinc-600">
+                      {formatCurrency(qty * cost)}
+                    </TableCell>
+                    <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
+                      {formatCurrency(qty * price)}
+                    </TableCell>
+                    <TableCell>
+                      {getStockStatusBadge(qty, item.low_stock_threshold)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

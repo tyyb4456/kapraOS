@@ -12,6 +12,7 @@ from decimal import Decimal
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import DbSession, ShopId
 from app.services import inventory as inventory_service
@@ -28,7 +29,7 @@ from app.schemas.inventory import (
     StockValueResponse,
 )
 from app.models.inventory import Inventory, InventoryMovement
-from app.models.product import ProductVariant, Product
+from app.models.product import ProductVariant, Product, VariantAttributeValue
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -43,6 +44,53 @@ def _unprocessable(exc: Exception) -> HTTPException:
     )
 
 
+def _extract_attributes(variant: ProductVariant) -> dict[str, str]:
+    attrs = {}
+    for av in variant.attribute_values or []:
+        if av.attribute and av.attribute_value:
+            attrs[av.attribute.name] = av.attribute_value.value
+    return attrs
+
+
+def _build_inventory_response(
+    inv: Inventory | None,
+    variant: ProductVariant,
+    product: Product | None,
+    attributes: dict[str, str] | None = None,
+) -> InventoryResponse:
+    qty = inv.quantity if inv else Decimal("0")
+    reserved = inv.reserved_quantity if inv else Decimal("0")
+    avail = inv.available_quantity if inv else Decimal("0")
+    cost = (
+        inv.weighted_average_cost
+        if inv and inv.weighted_average_cost > Decimal("0")
+        else variant.purchase_price
+    )
+    reorder = inv.reorder_level if inv else Decimal("0")
+    unit_val = (
+        variant.unit.value
+        if hasattr(variant.unit, "value")
+        else str(variant.unit)
+    )
+
+    return InventoryResponse(
+        id=inv.id if inv else variant.id,
+        variant_id=variant.id,
+        quantity=qty,
+        quantity_on_hand=qty,
+        reserved_quantity=reserved,
+        available_quantity=avail,
+        weighted_average_cost=cost,
+        unit=unit_val,
+        sku=variant.sku,
+        product_name=product.name if product else None,
+        cost_price=cost,
+        selling_price=variant.selling_price,
+        attributes=attributes or {},
+        low_stock_threshold=reorder,
+    )
+
+
 @router.get("", response_model=list[InventoryResponse])
 async def list_inventory(
     shop_id: ShopId,
@@ -51,44 +99,49 @@ async def list_inventory(
     low_stock: bool = False,
     search: str | None = None,
 ) -> list[InventoryResponse]:
-    variant_stmt = select(ProductVariant.id).where(ProductVariant.shop_id == shop_id)
+    stmt = (
+        select(ProductVariant)
+        .options(
+            selectinload(ProductVariant.product),
+            selectinload(ProductVariant.inventory),
+            selectinload(ProductVariant.attribute_values).selectinload(
+                VariantAttributeValue.attribute
+            ),
+            selectinload(ProductVariant.attribute_values).selectinload(
+                VariantAttributeValue.attribute_value
+            ),
+        )
+        .where(ProductVariant.shop_id == shop_id)
+    )
+
     if search is not None:
-        variant_stmt = variant_stmt.where(
+        stmt = stmt.outerjoin(Product, Product.id == ProductVariant.product_id)
+        stmt = stmt.where(
             ProductVariant.sku.ilike(f"%{search}%")
             | ProductVariant.barcode.ilike(f"%{search}%")
+            | Product.name.ilike(f"%{search}%")
         )
-    variant_subq = variant_stmt.scalar_subquery()
-
-    if low_stock:
-        inv_stmt = select(Inventory).where(
-            Inventory.variant_id.in_(variant_subq),
-            Inventory.quantity <= Inventory.reserved_quantity + 1,
-        )
-    else:
-        inv_stmt = select(Inventory).where(Inventory.variant_id.in_(variant_subq))
 
     if variant_id is not None:
-        inv_stmt = inv_stmt.where(Inventory.variant_id == variant_id)
+        stmt = stmt.where(ProductVariant.id == variant_id)
 
-    results = (await db.execute(inv_stmt)).scalars().all()
-
-    variants_map = {}
-    if results:
-        variant_ids = [r.variant_id for r in results]
-        variants = (await db.execute(
-            select(ProductVariant).where(ProductVariant.id.in_(variant_ids))
-        )).scalars().all()
-        products = (await db.execute(
-            select(Product).where(Product.id.in_([v.product_id for v in variants]))
-        )).scalars().all()
-        product_map = {p.id: p for p in products}
-        variants_map = {v.id: v for v in variants}
+    variants = (await db.execute(stmt)).scalars().all()
 
     responses = []
-    for inv in results:
-        v = variants_map.get(inv.variant_id)
-        p = product_map.get(v.product_id) if v else None
-        responses.append(InventoryResponse.model_validate(inv))
+    for v in variants:
+        inv = v.inventory
+        qty = inv.quantity if inv else Decimal("0")
+        reserved = inv.reserved_quantity if inv else Decimal("0")
+        reorder = inv.reorder_level if inv else Decimal("0")
+
+        if low_stock:
+            threshold = reorder if reorder > Decimal("0") else (reserved + 1)
+            if qty > threshold:
+                continue
+
+        attrs = _extract_attributes(v)
+        responses.append(_build_inventory_response(inv, v, v.product, attrs))
+
     return responses
 
 
@@ -121,8 +174,47 @@ async def list_inventory_movements(
     stmt = stmt.offset(offset).limit(limit)
     movements = (await db.execute(stmt)).scalars().all()
 
-    return InventoryMovementListResponse.model_validate(
-        {"movements": [InventoryMovementResponse.model_validate(m) for m in movements], "total": total}
+    variant_ids = list({m.variant_id for m in movements})
+    variants_map = {}
+    if variant_ids:
+        v_stmt = (
+            select(ProductVariant)
+            .options(selectinload(ProductVariant.product))
+            .where(ProductVariant.id.in_(variant_ids))
+        )
+        variants = (await db.execute(v_stmt)).scalars().all()
+        variants_map = {v.id: v for v in variants}
+
+    movement_responses = []
+    for m in movements:
+        v = variants_map.get(m.variant_id)
+        p = v.product if v else None
+        unit_val = (
+            (v.unit.value if hasattr(v.unit, "value") else str(v.unit))
+            if v
+            else None
+        )
+        movement_responses.append(
+            InventoryMovementResponse(
+                id=m.id,
+                shop_id=m.shop_id,
+                variant_id=m.variant_id,
+                movement_type=m.movement_type,
+                quantity=m.quantity,
+                unit_cost=m.unit_cost,
+                reference_type=m.reference_type,
+                reference_id=m.reference_id,
+                notes=m.notes,
+                created_at=m.created_at,
+                sku=v.sku if v else None,
+                product_name=p.name if p else None,
+                unit=unit_val,
+            )
+        )
+
+    return InventoryMovementListResponse(
+        movements=movement_responses,
+        total=total or 0,
     )
 
 
@@ -132,17 +224,26 @@ async def get_inventory(
     shop_id: ShopId,
     db: DbSession,
 ) -> InventoryResponse:
-    result = await db.execute(
-        select(Inventory).where(Inventory.variant_id == variant_id)
+    stmt = (
+        select(ProductVariant)
+        .options(
+            selectinload(ProductVariant.product),
+            selectinload(ProductVariant.inventory),
+            selectinload(ProductVariant.attribute_values).selectinload(
+                VariantAttributeValue.attribute
+            ),
+            selectinload(ProductVariant.attribute_values).selectinload(
+                VariantAttributeValue.attribute_value
+            ),
+        )
+        .where(ProductVariant.id == variant_id, ProductVariant.shop_id == shop_id)
     )
-    inv = result.scalar_one_or_none()
-    if inv is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory not found for this variant")
+    variant = (await db.execute(stmt)).scalar_one_or_none()
+    if variant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found for this shop")
 
-    variant = await db.get(ProductVariant, variant_id)
-    product = await db.get(Product, variant.product_id) if variant else None
-
-    return InventoryResponse.model_validate(inv)
+    attrs = _extract_attributes(variant)
+    return _build_inventory_response(variant.inventory, variant, variant.product, attrs)
 
 
 @router.post("/{variant_id}/adjust", response_model=InventoryResponse)
@@ -165,6 +266,21 @@ async def adjust_stock(
         raise _not_found(exc) from exc
     except InsufficientStockError as exc:
         raise _unprocessable(exc) from exc
-    return InventoryResponse.model_validate(
-        await db.get(Inventory, variant_id)
+
+    stmt = (
+        select(ProductVariant)
+        .options(
+            selectinload(ProductVariant.product),
+            selectinload(ProductVariant.inventory),
+            selectinload(ProductVariant.attribute_values).selectinload(
+                VariantAttributeValue.attribute
+            ),
+            selectinload(ProductVariant.attribute_values).selectinload(
+                VariantAttributeValue.attribute_value
+            ),
+        )
+        .where(ProductVariant.id == variant_id, ProductVariant.shop_id == shop_id)
     )
+    variant = (await db.execute(stmt)).scalar_one()
+    attrs = _extract_attributes(variant)
+    return _build_inventory_response(variant.inventory, variant, variant.product, attrs)
