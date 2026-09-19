@@ -45,11 +45,14 @@ export function SalesPage() {
     loadSales();
   }, []);
 
-  const filteredSales = sales.filter(
-    (sale) =>
-      sale.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSales = sales.filter((sale) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (sale.invoice_number ?? '').toLowerCase().includes(term) ||
+      (sale.customer_name ?? '').toLowerCase().includes(term)
+    );
+  });
 
   const getPaymentMethodBadge = (method: string) => {
     switch (method) {

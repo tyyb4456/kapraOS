@@ -45,8 +45,8 @@ export function InventoryPage() {
 
   const filteredInventory = inventory.filter(
     (item) =>
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.product_name.toLowerCase().includes(searchTerm.toLowerCase())
+      (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.product_name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStockStatusBadge = (qty: number, threshold?: number) => {
@@ -141,7 +141,7 @@ export function InventoryPage() {
                     {item.product_name}
                   </TableCell>
                   <TableCell className="text-xs text-zinc-600">
-                    {Object.entries(item.attributes)
+                    {Object.entries(item.attributes || {})
                       .map(([k, v]) => `${k}: ${v}`)
                       .join(', ') || '—'}
                   </TableCell>
