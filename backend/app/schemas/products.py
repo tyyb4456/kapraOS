@@ -98,11 +98,13 @@ class ProductResponse(BaseModel):
     code: str | None = None
     product_type: str
     description: str | None = None
-    category_id: UUID
+    category_id: UUID | None = None
     brand_id: UUID | None = None
     unit: str
     shop_id: UUID
     created_at: datetime
+    category: CategoryResponse | None = None
+    variants: list[ProductVariantResponse] = []
 
 
 class VariantAttributeResponse(BaseModel):

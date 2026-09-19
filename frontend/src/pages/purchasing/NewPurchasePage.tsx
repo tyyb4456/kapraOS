@@ -90,7 +90,7 @@ export function NewPurchasePage() {
           sku: variant.sku,
           unit: variant.unit || 'meters',
           quantity: 1,
-          unit_cost: variant.cost_price,
+          unit_cost: variant.purchase_price ?? (variant as any).cost_price ?? 0,
         },
       ]);
     }
@@ -219,7 +219,7 @@ export function NewPurchasePage() {
                   Item Details
                 </h4>
                 <div className="flex gap-2">
-                  {variants.filter(p => p.is_active).map(variant => (
+                  {variants.filter(p => p.is_active !== false).map(variant => (
                     <button
                       key={variant.id}
                       type="button"

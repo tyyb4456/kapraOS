@@ -106,7 +106,7 @@ export function NewSalePage() {
           sku: variant.sku,
           unit: variant.unit || 'meters',
           quantity: 1,
-          unit_price: variant.selling_price,
+          unit_price: Number(variant.selling_price) || 0,
           discount: 0,
         },
       ]);
@@ -158,7 +158,7 @@ export function NewSalePage() {
           discount: item.discount,
         })),
         customer_id: customerId === 'walk_in' ? undefined : customerId,
-        discount: totalDiscount,
+        discount: 0,
         payments: [
           {
             amount: netTotal,
@@ -178,10 +178,10 @@ export function NewSalePage() {
   };
 
   const filteredProducts = variants
-    .filter(p => p.is_active)
+    .filter(p => p.is_active !== false)
     .filter(p =>
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.product_name.toLowerCase().includes(searchQuery.toLowerCase())
+      (p.sku || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.product_name || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
   return (
@@ -357,12 +357,15 @@ export function NewSalePage() {
                             key={variant.id}
                             type="button"
                             onClick={() => handleAddItem(variant)}
-                            className="w-full p-3 text-left hover:bg-zinc-50 rounded-md border border-zinc-100 transition-colors"
+                            className="w-full p-3 text-left hover:bg-zinc-50 rounded-md border border-zinc-200 transition-colors flex items-center justify-between group cursor-pointer"
                           >
-                            <div className="font-medium text-zinc-900">{variant.sku}</div>
-                            <div className="text-xs text-zinc-500">{variant.product_name}</div>
-                            <div className="text-xs text-zinc-500">
-                              {formatCurrency(variant.selling_price)} / {variant.unit || 'meter'}
+                            <div>
+                              <div className="font-medium text-zinc-900 group-hover:text-zinc-950">{variant.product_name}</div>
+                              <div className="text-xs text-zinc-500 font-mono mt-0.5">SKU: {variant.sku}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-semibold text-zinc-900">{formatCurrency(variant.selling_price)}</div>
+                              <div className="text-xs text-zinc-500 capitalize">per {variant.unit || 'meter'}</div>
                             </div>
                           </button>
                         ))}

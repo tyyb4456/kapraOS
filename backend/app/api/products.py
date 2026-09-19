@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
@@ -202,7 +203,14 @@ async def list_products(
     product_type: str | None = None,
     search: str | None = None,
 ) -> list[ProductResponse]:
-    stmt = select(Product).where(Product.shop_id == shop_id)
+    stmt = (
+        select(Product)
+        .options(
+            selectinload(Product.variants),
+            selectinload(Product.category),
+        )
+        .where(Product.shop_id == shop_id)
+    )
     if category_id is not None:
         stmt = stmt.where(Product.category_id == category_id)
     if brand_id is not None:
@@ -222,12 +230,18 @@ async def get_product(
     shop_id: ShopId,
     db: DbSession,
 ) -> ProductDetailResponse:
-    product = await db.get(Product, product_id)
-    if product is None or product.shop_id != shop_id:
+    stmt = (
+        select(Product)
+        .options(
+            selectinload(Product.variants),
+            selectinload(Product.category),
+            selectinload(Product.brand),
+        )
+        .where(Product.id == product_id, Product.shop_id == shop_id)
+    )
+    product = (await db.execute(stmt)).scalar_one_or_none()
+    if product is None:
         raise _not_found(f"Product {product_id} not found")
-    variants = (await db.execute(
-        select(ProductVariant).where(ProductVariant.product_id == product_id)
-    )).scalars().all()
     return ProductDetailResponse.model_validate(product)
 
 
@@ -289,7 +303,17 @@ async def create_product(
 
     await db.flush()
     await db.commit()
-    return ProductResponse.model_validate(product)
+
+    stmt = (
+        select(Product)
+        .options(
+            selectinload(Product.variants),
+            selectinload(Product.category),
+        )
+        .where(Product.id == product.id)
+    )
+    product_with_relations = (await db.execute(stmt)).scalar_one()
+    return ProductResponse.model_validate(product_with_relations)
 
 
 # ---- Product Variants ----
@@ -301,7 +325,7 @@ async def list_variants(
     product_id: UUID | None = None,
     sku: str | None = None,
 ) -> list[ProductVariantResponse]:
-    stmt = select(ProductVariant)
+    stmt = select(ProductVariant).where(ProductVariant.shop_id == shop_id)
     if product_id is not None:
         stmt = stmt.where(ProductVariant.product_id == product_id)
     if sku is not None:

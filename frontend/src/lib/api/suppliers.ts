@@ -11,9 +11,9 @@ export async function getSupplierKhata(supplierId: string): Promise<KhataEntry[]
 
 export interface CreateSupplierRequest {
   name: string;
-  contact_person?: string;
   phone?: string;
-  email?: string;
+  address?: string;
+  notes?: string;
 }
 
 export async function createSupplier(data: CreateSupplierRequest): Promise<Supplier> {

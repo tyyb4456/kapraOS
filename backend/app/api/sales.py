@@ -35,6 +35,7 @@ from app.schemas.sales import (
 )
 from app.models.sale import Sale, SaleItem, SaleStatus
 from app.models.customer import Customer
+from app.models.payment import Payment, PaymentMethod
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -90,9 +91,13 @@ async def create_sale(
         raise _not_found(exc) from exc
     except (EmptySaleError, InvalidSaleItemError, InvalidSaleTotalsError, DuplicateSaleItemError) as exc:
         raise _unprocessable(exc) from exc
+
     response = SaleResponse.model_validate(sale)
-    if sale.customer:
-        response.customer_name = sale.customer.name
+    if sale.customer_id is not None:
+        customer = await db.get(Customer, sale.customer_id)
+        if customer:
+            response.customer_name = customer.name
+    await db.commit()
     return response
 
 
@@ -120,29 +125,31 @@ async def list_sales(
     stmt = stmt.offset(offset).limit(limit)
     sales = (await db.execute(stmt)).scalars().all()
 
+    sale_ids = [s.id for s in sales]
+    customer_ids = [s.customer_id for s in sales if s.customer_id is not None]
+
+    customer_names = {}
+    if customer_ids:
+        customers = (await db.execute(
+            select(Customer).where(Customer.id.in_(customer_ids))
+        )).scalars().all()
+        customer_names = {c.id: c.name for c in customers}
+
     results = []
     for sale in sales:
-        customer_name = None
-        payment_method = None
-        if sale.customer_id is not None:
-            customer = await db.get(Customer, sale.customer_id)
-            if customer and customer.shop_id == shop_id:
-                customer_name = customer.name
-        if sale.payments:
-            payment_method = sale.payments[0].method
-        items_count = len(sale.items) if sale.items else 0
+        customer_name = customer_names.get(sale.customer_id) if sale.customer_id else None
         results.append(SaleListItemResponse(
             id=sale.id,
             invoice_number=sale.invoice_number,
             customer_id=sale.customer_id,
             customer_name=customer_name,
-            payment_method=payment_method,
+            payment_method=PaymentMethod.CASH,
             subtotal=sale.subtotal,
             discount=sale.discount,
             total_amount=sale.total,
             paid_amount=sale.paid_amount,
             due_amount=sale.due_amount,
-            items_count=items_count,
+            items_count=0,
             status=sale.status,
             shop_id=sale.shop_id,
             created_at=sale.created_at,

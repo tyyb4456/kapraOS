@@ -25,10 +25,12 @@ from app.services.purchases import (
 from app.schemas.purchases import (
     CreatePurchaseRequest,
     PurchaseResponse,
+    PurchaseItemResponse,
     PurchaseListItemResponse,
 )
-from app.models.purchase import Purchase
-from sqlalchemy import func
+from app.models.purchase import Purchase, PurchaseItem
+from app.models.supplier import Supplier
+from sqlalchemy import func, select
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 
@@ -73,7 +75,36 @@ async def create_purchase(
         raise _not_found(exc) from exc
     except (EmptyPurchaseError, InvalidPurchaseItemError, InvalidPurchaseTotalsError, DuplicatePurchaseItemError) as exc:
         raise _unprocessable(exc) from exc
-    return PurchaseResponse.model_validate(purchase)
+
+    await db.commit()
+
+    # Eagerly load items to avoid greenlet issues with model_validate
+    items = (await db.execute(
+        select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
+    )).scalars().all()
+
+    return PurchaseResponse(
+        id=purchase.id,
+        supplier_id=purchase.supplier_id,
+        invoice_number=purchase.invoice_number,
+        subtotal=purchase.subtotal,
+        discount=purchase.discount,
+        total=purchase.total,
+        paid_amount=purchase.paid_amount,
+        due_amount=purchase.due_amount,
+        shop_id=purchase.shop_id,
+        created_at=purchase.created_at,
+        items=[
+            PurchaseItemResponse(
+                id=item.id,
+                variant_id=item.variant_id,
+                quantity=item.quantity,
+                unit_cost=item.unit_cost,
+                total=item.total,
+            )
+            for item in items
+        ],
+    )
 
 
 @router.get("", response_model=list[PurchaseListItemResponse])
@@ -86,7 +117,11 @@ async def list_purchases(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[PurchaseListItemResponse]:
-    stmt = select(Purchase).where(Purchase.shop_id == shop_id)
+    stmt = (
+        select(Purchase, Supplier.name)
+        .join(Supplier, Purchase.supplier_id == Supplier.id, isouter=True)
+        .where(Purchase.shop_id == shop_id)
+    )
     if supplier_id is not None:
         stmt = stmt.where(Purchase.supplier_id == supplier_id)
     if start_date is not None:
@@ -95,8 +130,34 @@ async def list_purchases(
         stmt = stmt.where(Purchase.created_at <= end_date)
     stmt = stmt.order_by(Purchase.created_at.desc())
     stmt = stmt.offset(offset).limit(limit)
-    purchases = (await db.execute(stmt)).scalars().all()
-    return [PurchaseListItemResponse.model_validate(p) for p in purchases]
+    results = (await db.execute(stmt)).all()
+
+    purchases = []
+    for purchase, supplier_name in results:
+        # Count items for this purchase
+        item_count = (
+            await db.execute(
+                select(func.count(PurchaseItem.id)).where(
+                    PurchaseItem.purchase_id == purchase.id
+                )
+            )
+        ).scalar() or 0
+
+        purchases.append(
+            PurchaseListItemResponse(
+                id=purchase.id,
+                shop_id=purchase.shop_id,
+                order_number=purchase.invoice_number,
+                supplier_id=purchase.supplier_id,
+                supplier_name=supplier_name,
+                status="received",
+                total_amount=purchase.total,
+                paid_amount=purchase.paid_amount,
+                items_count=item_count,
+                created_at=purchase.created_at,
+            )
+        )
+    return purchases
 
 
 @router.get("/{purchase_id}", response_model=PurchaseResponse)
@@ -108,4 +169,31 @@ async def get_purchase(
     purchase = await db.get(Purchase, purchase_id)
     if purchase is None or purchase.shop_id != shop_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase not found")
-    return PurchaseResponse.model_validate(purchase)
+
+    # Eagerly load items to avoid greenlet issues with model_validate
+    items = (await db.execute(
+        select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
+    )).scalars().all()
+
+    return PurchaseResponse(
+        id=purchase.id,
+        supplier_id=purchase.supplier_id,
+        invoice_number=purchase.invoice_number,
+        subtotal=purchase.subtotal,
+        discount=purchase.discount,
+        total=purchase.total,
+        paid_amount=purchase.paid_amount,
+        due_amount=purchase.due_amount,
+        shop_id=purchase.shop_id,
+        created_at=purchase.created_at,
+        items=[
+            PurchaseItemResponse(
+                id=item.id,
+                variant_id=item.variant_id,
+                quantity=item.quantity,
+                unit_cost=item.unit_cost,
+                total=item.total,
+            )
+            for item in items
+        ],
+    )

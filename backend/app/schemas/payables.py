@@ -110,3 +110,27 @@ class RecordSupplierPaymentResponse(BaseModel):
 
     payment: PaymentResponse
     balance: SupplierBalanceResponse
+
+
+class SupplierResponse(BaseModel):
+    """A supplier record for the directory listing."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    shop_id: uuid.UUID
+    name: str
+    phone: str | None = None
+    address: str | None = None
+    notes: str | None = None
+    current_balance: float
+    created_at: datetime
+
+
+class CreateSupplierRequest(BaseModel):
+    """Request to create a new supplier."""
+
+    name: str
+    phone: str | None = None
+    address: str | None = None
+    notes: str | None = None

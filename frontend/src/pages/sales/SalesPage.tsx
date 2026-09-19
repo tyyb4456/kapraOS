@@ -55,12 +55,16 @@ export function SalesPage() {
     switch (method) {
       case 'cash':
         return <Badge variant="neutral" size="sm">Cash</Badge>;
-      case 'khata':
-        return <Badge variant="warning" size="sm">Khata (Credit)</Badge>;
       case 'card':
         return <Badge variant="secondary" size="sm">Card</Badge>;
-      case 'bank_transfer':
+      case 'bank':
         return <Badge variant="secondary" size="sm">Bank Transfer</Badge>;
+      case 'jazzcash':
+        return <Badge variant="secondary" size="sm">JazzCash</Badge>;
+      case 'easypaisa':
+        return <Badge variant="secondary" size="sm">Easypaisa</Badge>;
+      case 'other':
+        return <Badge variant="secondary" size="sm">Other</Badge>;
       default:
         return <Badge variant="neutral" size="sm">{method}</Badge>;
     }
@@ -70,12 +74,12 @@ export function SalesPage() {
     switch (status) {
       case 'completed':
         return <Badge variant="success" size="sm">Completed</Badge>;
-      case 'pending':
-        return <Badge variant="warning" size="sm">Pending</Badge>;
+      case 'partial':
+        return <Badge variant="warning" size="sm">Partial</Badge>;
       case 'cancelled':
         return <Badge variant="destructive" size="sm">Cancelled</Badge>;
-      case 'refunded':
-        return <Badge variant="secondary" size="sm">Refunded</Badge>;
+      case 'returned':
+        return <Badge variant="secondary" size="sm">Returned</Badge>;
       default:
         return <Badge variant="neutral" size="sm">{status}</Badge>;
     }

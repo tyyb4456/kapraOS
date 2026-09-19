@@ -48,11 +48,14 @@ class PurchaseListItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    invoice_number: str | None = None
+    shop_id: UUID
+    order_number: str | None = None
     supplier_id: UUID
-    total: Decimal
+    supplier_name: str | None = None
+    status: str = "received"
+    total_amount: Decimal
     paid_amount: Decimal
-    due_amount: Decimal
+    items_count: int = 0
     created_at: datetime
 
 

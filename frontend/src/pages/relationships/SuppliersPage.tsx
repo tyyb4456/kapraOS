@@ -30,7 +30,7 @@ export function SuppliersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: '', contact_person: '', phone: '', email: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', address: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -50,8 +50,7 @@ export function SuppliersPage() {
 
   const filteredSuppliers = suppliers.filter(
     (supplier) =>
-      supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.contact_person?.toLowerCase().includes(searchTerm.toLowerCase())
+      supplier.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,12 +66,12 @@ export function SuppliersPage() {
     try {
       await createSupplier({
         name: formData.name,
-        contact_person: formData.contact_person || undefined,
         phone: formData.phone || undefined,
-        email: formData.email || undefined,
+        address: formData.address || undefined,
+        notes: formData.notes || undefined,
       });
       setIsAddModalOpen(false);
-      setFormData({ name: '', contact_person: '', phone: '', email: '' });
+      setFormData({ name: '', phone: '', address: '', notes: '' });
       // Reload suppliers
       const data = await getSuppliers();
       setSuppliers(data);
@@ -121,7 +120,7 @@ export function SuppliersPage() {
       <Card>
         <CardContent className="p-3.5 sm:p-4">
           <Input
-            placeholder="Search suppliers by name or contact person..."
+            placeholder="Search suppliers by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             leftIcon={<Search className="w-4 h-4" />}
@@ -140,8 +139,8 @@ export function SuppliersPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Supplier / Mill Name</TableHead>
-              <TableHead>Contact Person</TableHead>
               <TableHead>Phone</TableHead>
+              <TableHead>Address</TableHead>
               <TableHead align="right">Current Payable</TableHead>
               <TableHead>Status</TableHead>
               <TableHead align="right">Actions</TableHead>
@@ -152,7 +151,7 @@ export function SuppliersPage() {
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell align="right"><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
@@ -171,11 +170,11 @@ export function SuppliersPage() {
                   <TableCell className="font-medium text-zinc-900">
                     {supplier.name}
                   </TableCell>
-                  <TableCell className="text-zinc-700">
-                    {supplier.contact_person || '—'}
-                  </TableCell>
                   <TableCell className="font-mono text-xs text-zinc-600">
                     {supplier.phone || '—'}
+                  </TableCell>
+                  <TableCell className="text-zinc-700 text-sm max-w-[200px] truncate">
+                    {supplier.address || '—'}
                   </TableCell>
                   <TableCell align="right" className="font-tabular font-bold text-zinc-900">
                     {formatCurrency(supplier.current_balance)}
@@ -222,23 +221,22 @@ export function SuppliersPage() {
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           />
           <Input
-            label="Contact Person"
-            placeholder="e.g. Tariq Mahmood"
-            value={formData.contact_person}
-            onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-          />
-          <Input
             label="Phone Number"
             placeholder="042-3591234"
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
           />
           <Input
-            label="Email (Optional)"
-            placeholder="supplier@example.com"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            label="Address (Optional)"
+            placeholder="123 Industrial Area, Lahore"
+            value={formData.address}
+            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          />
+          <Input
+            label="Notes (Optional)"
+            placeholder="Wholesale fabric supplier, payment terms: Net 30"
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           />
         </form>
       </Dialog>

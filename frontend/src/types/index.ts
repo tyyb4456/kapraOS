@@ -116,16 +116,16 @@ export interface Supplier {
   id: string;
   shop_id: string;
   name: string;
-  contact_person?: string | null;
   phone?: string | null;
-  email?: string | null;
+  address?: string | null;
+  notes?: string | null;
   current_balance: number;
   created_at: string;
 }
 
 // Sales & POS
-export type SaleStatus = 'completed' | 'pending' | 'cancelled' | 'refunded';
-export type PaymentMethod = 'cash' | 'khata' | 'card' | 'bank_transfer';
+export type SaleStatus = 'completed' | 'partial' | 'cancelled' | 'returned';
+export type PaymentMethod = 'cash' | 'card' | 'bank' | 'jazzcash' | 'easypaisa' | 'other';
 
 export interface SaleItem {
   id?: string;

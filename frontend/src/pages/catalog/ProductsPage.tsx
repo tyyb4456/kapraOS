@@ -90,10 +90,15 @@ export function ProductsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || formData.variants.some((v) => !v.sku)) {
-      setError('Product name and at least one variant with SKU are required');
+    if (!formData.name.trim()) {
+      setError('Product name is required');
       return;
     }
+
+    const preparedVariants = formData.variants.map((v, i) => ({
+      ...v,
+      sku: v.sku.trim() || (i === 0 && formData.code ? formData.code.trim() : `${formData.name.substring(0, 3).toUpperCase()}-${String(i + 1).padStart(2, '0')}`),
+    }));
 
     setSubmitting(true);
     setError(null);
@@ -105,7 +110,7 @@ export function ProductsPage() {
         category_id: formData.category_id || undefined,
         unit: formData.unit,
         description: formData.description || undefined,
-        variants: formData.variants.map((v) => ({
+        variants: preparedVariants.map((v) => ({
           sku: v.sku,
           barcode: v.barcode || undefined,
           purchase_price: v.cost_price,
@@ -305,7 +310,16 @@ export function ProductsPage() {
                 label="Product Code / SKU"
                 placeholder="e.g. WNW-01"
                 value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData((prev) => {
+                    const updatedVariants = [...prev.variants];
+                    if (updatedVariants.length > 0 && (!updatedVariants[0].sku || updatedVariants[0].sku === prev.code)) {
+                      updatedVariants[0] = { ...updatedVariants[0], sku: val };
+                    }
+                    return { ...prev, code: val, variants: updatedVariants };
+                  });
+                }}
               />
               <Select
                 label="Measurement Unit"
@@ -340,12 +354,16 @@ export function ProductsPage() {
                 type="number"
                 step="0.01"
                 value={formData.variants[0]?.cost_price || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    variants: [{ ...formData.variants[0], cost_price: parseFloat(e.target.value) || 0 }],
-                  })
-                }
+                onChange={(e) => {
+                  const cost = parseFloat(e.target.value) || 0;
+                  setFormData((prev) => {
+                    const updatedVariants = [...prev.variants];
+                    if (updatedVariants.length > 0) {
+                      updatedVariants[0] = { ...updatedVariants[0], cost_price: cost };
+                    }
+                    return { ...prev, variants: updatedVariants };
+                  });
+                }}
               />
               <Input
                 label="Default Selling Price (PKR)"
@@ -353,12 +371,16 @@ export function ProductsPage() {
                 type="number"
                 step="0.01"
                 value={formData.variants[0]?.selling_price || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    variants: [{ ...formData.variants[0], selling_price: parseFloat(e.target.value) || 0 }],
-                  })
-                }
+                onChange={(e) => {
+                  const price = parseFloat(e.target.value) || 0;
+                  setFormData((prev) => {
+                    const updatedVariants = [...prev.variants];
+                    if (updatedVariants.length > 0) {
+                      updatedVariants[0] = { ...updatedVariants[0], selling_price: price };
+                    }
+                    return { ...prev, variants: updatedVariants };
+                  });
+                }}
               />
             </div>
             <Input

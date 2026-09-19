@@ -22,13 +22,18 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
+from app.models.supplier import Supplier
 from app.schemas.payables import (
+    CreateSupplierRequest,
     PaymentResponse,
     RecordSupplierPaymentRequest,
     RecordSupplierPaymentResponse,
     SupplierBalanceResponse,
+    SupplierResponse,
     SupplierStatementResponse,
     SupplierSummaryResponse,
 )
@@ -48,6 +53,62 @@ from app.services.payables import (
 router = APIRouter(prefix="/suppliers", tags=["payables"])
 
 SupplierId = Annotated[uuid.UUID, Path(description="Supplier to report on.")]
+
+
+@router.get("", response_model=list[SupplierResponse])
+async def list_suppliers(
+    shop_id: ShopId,
+    db: DbSession,
+) -> list[SupplierResponse]:
+    suppliers = (await db.execute(
+        select(Supplier).where(Supplier.shop_id == shop_id).order_by(Supplier.name.asc())
+    )).scalars().all()
+
+    results = []
+    for supplier in suppliers:
+        balance = await payables_service.get_supplier_balance(
+            db, shop_id=shop_id, supplier_id=supplier.id
+        )
+        results.append(SupplierResponse(
+            id=supplier.id,
+            shop_id=supplier.shop_id,
+            name=supplier.name,
+            phone=supplier.phone,
+            address=supplier.address,
+            notes=supplier.notes,
+            current_balance=float(balance.outstanding_balance),
+            created_at=supplier.created_at,
+        ))
+    return results
+
+
+@router.post("", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)
+async def create_supplier(
+    shop_id: ShopId,
+    db: DbSession,
+    body: CreateSupplierRequest,
+) -> SupplierResponse:
+    supplier = Supplier(
+        shop_id=shop_id,
+        name=body.name,
+        phone=body.phone,
+        address=body.address,
+        notes=body.notes,
+    )
+    db.add(supplier)
+    await db.flush()
+    await db.refresh(supplier)
+    await db.commit()
+    return SupplierResponse(
+        id=supplier.id,
+        shop_id=supplier.shop_id,
+        name=supplier.name,
+        phone=supplier.phone,
+        address=supplier.address,
+        notes=supplier.notes,
+        current_balance=0.0,
+        created_at=supplier.created_at,
+    )
 
 
 def _not_found(exc: Exception) -> HTTPException:
