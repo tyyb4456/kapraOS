@@ -157,11 +157,12 @@ export interface Sale {
   customer_id?: string | null;
   customer_name?: string | null;
   status: SaleStatus;
-  payment_method: PaymentMethod;
+  payment_method?: PaymentMethod | null;
   subtotal: number;
   discount: number;
   total_amount: number;
   paid_amount: number;
+  due_amount?: number;
   items_count: number;
   items?: SaleItem[];
   created_at: string;

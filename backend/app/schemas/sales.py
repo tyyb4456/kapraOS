@@ -57,7 +57,7 @@ class SaleListItemResponse(BaseModel):
     invoice_number: str | None = None
     customer_id: UUID | None = None
     customer_name: str | None = None
-    payment_method: PaymentMethod
+    payment_method: PaymentMethod | None = None
     subtotal: Decimal
     discount: Decimal
     total_amount: Decimal

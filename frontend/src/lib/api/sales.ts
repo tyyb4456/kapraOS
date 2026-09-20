@@ -1,5 +1,5 @@
 import { apiClient } from './client.ts';
-import type { Sale } from '../../types/index.ts';
+import type { Sale, PaymentMethod } from '../../types/index.ts';
 
 export async function getSales(params?: { customer_id?: string; status?: string }): Promise<Sale[]> {
   return apiClient.get<Sale[]>('/sales', { params });
@@ -17,7 +17,7 @@ export interface CreateSaleRequest {
   discount?: number;
   payments?: Array<{
     amount: number;
-    method: 'cash' | 'khata' | 'card' | 'bank_transfer';
+    method: PaymentMethod;
     reference?: string;
   }>;
 }

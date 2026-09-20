@@ -54,7 +54,10 @@ export function SalesPage() {
     );
   });
 
-  const getPaymentMethodBadge = (method: string) => {
+  const getPaymentMethodBadge = (method?: string | null, paidAmount?: number, dueAmount?: number) => {
+    if (!method || (paidAmount === 0 && (dueAmount ?? 0) > 0)) {
+      return <Badge variant="warning" size="sm">Customer Khata</Badge>;
+    }
     switch (method) {
       case 'cash':
         return <Badge variant="neutral" size="sm">Cash</Badge>;
@@ -186,7 +189,7 @@ export function SalesPage() {
                   <TableCell className="font-medium text-zinc-900">
                     {sale.customer_name || 'Walk-in Customer'}
                   </TableCell>
-                  <TableCell>{getPaymentMethodBadge(sale.payment_method)}</TableCell>
+                  <TableCell>{getPaymentMethodBadge(sale.payment_method, sale.paid_amount, sale.due_amount)}</TableCell>
                   <TableCell align="right" className="font-tabular text-zinc-600">
                     {formatCurrency(sale.subtotal)}
                   </TableCell>

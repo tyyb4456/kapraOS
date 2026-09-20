@@ -20,7 +20,9 @@ import { createSale, type CreateSaleRequest } from '../../lib/api/sales.ts';
 import { getProducts } from '../../lib/api/products.ts';
 import { getCustomers } from '../../lib/api/customers.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
-import type { ProductVariant, Customer } from '../../types/index.ts';
+import type { ProductVariant, Customer, PaymentMethod } from '../../types/index.ts';
+
+type SettlementOption = PaymentMethod | 'khata';
 
 interface SaleItem {
   id: string;
@@ -41,7 +43,7 @@ interface VariantWithProduct extends ProductVariant {
 export function NewSalePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'khata'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<SettlementOption>('cash');
   const [customerId, setCustomerId] = useState<string>('walk_in');
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<SaleItem[]>([]);
@@ -146,6 +148,11 @@ export function NewSalePage() {
       return;
     }
 
+    if (paymentMethod === 'khata' && (customerId === 'walk_in' || !customerId)) {
+      setError('Please select a customer account to sell on Customer Khata (credit).');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -159,12 +166,15 @@ export function NewSalePage() {
         })),
         customer_id: customerId === 'walk_in' ? undefined : customerId,
         discount: 0,
-        payments: [
-          {
-            amount: netTotal,
-            method: paymentMethod === 'cash' ? 'cash' : 'khata',
-          },
-        ],
+        payments:
+          paymentMethod === 'khata'
+            ? []
+            : [
+                {
+                  amount: netTotal,
+                  method: paymentMethod,
+                },
+              ],
       };
 
       await createSale(payload);
@@ -409,9 +419,16 @@ export function NewSalePage() {
 
                 {/* Payment Method Selector */}
                 <div className="space-y-2">
-                  <label className="block text-xs font-medium text-zinc-700">
-                    Settlement Method
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-medium text-zinc-700">
+                      Settlement Method
+                    </label>
+                    {paymentMethod === 'khata' && (
+                      <Badge variant="warning" size="sm">
+                        Credit / Khata
+                      </Badge>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -435,7 +452,61 @@ export function NewSalePage() {
                     >
                       Customer Khata
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('card')}
+                      className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
+                        paymentMethod === 'card'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                      }`}
+                    >
+                      Card
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('bank')}
+                      className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
+                        paymentMethod === 'bank'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                      }`}
+                    >
+                      Bank Transfer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('jazzcash')}
+                      className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
+                        paymentMethod === 'jazzcash'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                      }`}
+                    >
+                      JazzCash
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('easypaisa')}
+                      className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
+                        paymentMethod === 'easypaisa'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                      }`}
+                    >
+                      EasyPaisa
+                    </button>
                   </div>
+                  {paymentMethod === 'khata' && customerId === 'walk_in' && (
+                    <p className="text-[11px] text-amber-600 font-medium">
+                      ⚠️ Please select a Customer Account above to post this sale to Khata.
+                    </p>
+                  )}
+                  {paymentMethod === 'khata' && customerId !== 'walk_in' && (
+                    <p className="text-[11px] text-zinc-500">
+                      ℹ️ Bill will be added to the customer's Khata receivable.
+                    </p>
+                  )}
                 </div>
 
                 <Button
@@ -446,7 +517,11 @@ export function NewSalePage() {
                   disabled={submitting || items.length === 0}
                   leftIcon={submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 >
-                  {submitting ? 'Processing...' : `Complete Sale (${formatCurrency(netTotal)})`}
+                  {submitting
+                    ? 'Processing...'
+                    : paymentMethod === 'khata'
+                    ? `Post to Khata (${formatCurrency(netTotal)})`
+                    : `Complete Sale (${formatCurrency(netTotal)})`}
                 </Button>
               </CardContent>
             </Card>

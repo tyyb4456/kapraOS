@@ -135,6 +135,27 @@ async def list_sales(
         )).scalars().all()
         customer_names = {c.id: c.name for c in customers}
 
+    payments_by_sale = {}
+    if sale_ids:
+        payments = (await db.execute(
+            select(Payment).where(
+                Payment.sale_id.in_(sale_ids),
+                Payment.shop_id == shop_id,
+            )
+        )).scalars().all()
+        for p in payments:
+            if p.sale_id not in payments_by_sale:
+                payments_by_sale[p.sale_id] = p.method
+
+    items_count_by_sale = {}
+    if sale_ids:
+        item_counts = (await db.execute(
+            select(SaleItem.sale_id, func.count(SaleItem.id))
+            .where(SaleItem.sale_id.in_(sale_ids))
+            .group_by(SaleItem.sale_id)
+        )).all()
+        items_count_by_sale = {row[0]: row[1] for row in item_counts}
+
     results = []
     for sale in sales:
         customer_name = customer_names.get(sale.customer_id) if sale.customer_id else None
@@ -143,13 +164,13 @@ async def list_sales(
             invoice_number=sale.invoice_number,
             customer_id=sale.customer_id,
             customer_name=customer_name,
-            payment_method=PaymentMethod.CASH,
+            payment_method=payments_by_sale.get(sale.id),
             subtotal=sale.subtotal,
             discount=sale.discount,
             total_amount=sale.total,
             paid_amount=sale.paid_amount,
             due_amount=sale.due_amount,
-            items_count=0,
+            items_count=items_count_by_sale.get(sale.id, 0),
             status=sale.status,
             shop_id=sale.shop_id,
             created_at=sale.created_at,
