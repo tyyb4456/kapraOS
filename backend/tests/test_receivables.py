@@ -1126,6 +1126,33 @@ async def test_statement_endpoint_returns_entries_in_order(
 
 
 @pytest.mark.asyncio
+async def test_khata_endpoint_alias(
+    mocked_api_client: AsyncClient, api_session: AsyncSession
+) -> None:
+    fixture = await _make_shop(api_session)
+    ahmed = await _make_customer(api_session, fixture.shop.id)
+    await _sell(api_session, fixture, ahmed, amount="5000", paid="2000", invoice="INV-K1")
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=fixture.shop.id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
+
+    response = await mocked_api_client.get(
+        f"/customers/{ahmed.id}/khata", headers=_headers(fixture.shop.id)
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_entries"] == 2
+    assert Decimal(str(payload["closing_balance"])) == Decimal("3000.00")
+
+
+@pytest.mark.asyncio
 async def test_summary_endpoint_returns_the_dashboard_figures(
     mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:

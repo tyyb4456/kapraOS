@@ -145,6 +145,11 @@ async def read_supplier_balance(
     response_model=SupplierStatementResponse,
     summary="Supplier Khata statement",
 )
+@router.get(
+    "/{supplier_id}/khata",
+    response_model=SupplierStatementResponse,
+    summary="Supplier Khata statement (alias)",
+)
 async def read_supplier_statement(
     supplier_id: SupplierId,
     shop_id: ShopId,

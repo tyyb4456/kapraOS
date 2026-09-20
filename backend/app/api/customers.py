@@ -147,6 +147,11 @@ async def read_customer_balance(
     response_model=CustomerStatementResponse,
     summary="Customer Khata statement",
 )
+@router.get(
+    "/{customer_id}/khata",
+    response_model=CustomerStatementResponse,
+    summary="Customer Khata statement (alias)",
+)
 async def read_customer_statement(
     customer_id: CustomerId,
     shop_id: ShopId,

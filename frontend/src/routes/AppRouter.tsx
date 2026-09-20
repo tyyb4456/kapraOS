@@ -61,8 +61,10 @@ export function AppRouter() {
         {/* Relationships & Khata */}
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/khata" element={<CustomerKhataPage />} />
+        <Route path="/customers/khata/:id" element={<CustomerKhataPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/suppliers/khata" element={<SupplierKhataPage />} />
+        <Route path="/suppliers/khata/:id" element={<SupplierKhataPage />} />
 
         {/* Finance */}
         <Route path="/expenses" element={<ExpensesPage />} />
