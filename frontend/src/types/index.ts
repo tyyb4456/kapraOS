@@ -243,3 +243,25 @@ export interface UpdateShopSettingsRequest {
   tax_id?: string | null;
   default_unit?: string;
 }
+
+// Dashboard (GET /reports/dashboard)
+export interface DashboardSummary {
+  as_of: string;
+  today_sales: number;
+  today_sales_count: number;
+  today_payments_received: number;
+  today_payment_count: number;
+  today_purchases: number;
+  today_purchase_count: number;
+  today_cogs: number;
+  today_gross_profit: number;
+  today_expenses: number;
+  today_net_profit: number;
+  receivables_outstanding: number;
+  payables_outstanding: number;
+  inventory_quantity: number;
+  inventory_estimated_value: number;
+  low_stock_variant_count: number | null;
+  low_stock_available: boolean;
+  notes: string[];
+}

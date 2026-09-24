@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TrendingUp,
@@ -20,10 +21,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card.
 import { Button } from '../components/ui/Button.tsx';
 import { Badge } from '../components/ui/Badge.tsx';
 import { EmptyState } from '../components/ui/EmptyState.tsx';
-import { formatCurrency } from '../lib/formatters.ts';
+import { Skeleton } from '../components/ui/Skeleton.tsx';
+import { Alert } from '../components/ui/Alert.tsx';
+import { formatCurrency, formatDate } from '../lib/formatters.ts';
+import { getDashboard } from '../lib/api/dashboard.ts';
+import { getSales } from '../lib/api/sales.ts';
+import { getInventory } from '../lib/api/inventory.ts';
+import type { DashboardSummary, Sale, InventoryItem } from '../types/index.ts';
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
+  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [lowStock, setLowStock] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -31,6 +43,38 @@ export function DashboardPage() {
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [dash, sales, low] = await Promise.all([
+          getDashboard(),
+          getSales({ limit: 5 }).catch(() => [] as Sale[]),
+          getInventory({ low_stock: true }).catch(() => [] as InventoryItem[]),
+        ]);
+        if (cancelled) return;
+        setDashboard(dash);
+        setRecentSales(sales);
+        setLowStock(low.slice(0, 5));
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const metricValue = (value: number | undefined) =>
+    loading ? <Skeleton className="h-7 w-28" /> : formatCurrency(value ?? 0);
 
   return (
     <PageContainer>
@@ -62,6 +106,12 @@ export function DashboardPage() {
         }
       />
 
+      {error && (
+        <Alert variant="danger" title="Could not load dashboard">
+          {error}
+        </Alert>
+      )}
+
       {/* Today's Overview Metric Shells */}
       <div>
         <SectionHeader
@@ -81,11 +131,13 @@ export function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="text-xl font-bold font-tabular text-zinc-900">
-                {formatCurrency(0)}
+                {metricValue(dashboard?.today_sales)}
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <Badge variant="neutral" size="sm">
-                  0 transactions
+                  {loading
+                    ? '…'
+                    : `${dashboard?.today_sales_count ?? 0} transaction${(dashboard?.today_sales_count ?? 0) === 1 ? '' : 's'}`}
                 </Badge>
                 <span className="text-[11px] text-zinc-400">Recorded today</span>
               </div>
@@ -103,13 +155,13 @@ export function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="text-xl font-bold font-tabular text-zinc-900">
-                {formatCurrency(0)}
+                {metricValue(dashboard?.today_payments_received)}
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <Badge variant="neutral" size="sm">
-                  Cash & Khata
+                  {loading ? '…' : `${dashboard?.today_payment_count ?? 0} collection${(dashboard?.today_payment_count ?? 0) === 1 ? '' : 's'}`}
                 </Badge>
-                <span className="text-[11px] text-zinc-400">Collections</span>
+                <span className="text-[11px] text-zinc-400">Cash & Khata</span>
               </div>
             </CardContent>
           </Card>
@@ -125,11 +177,13 @@ export function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="text-xl font-bold font-tabular text-zinc-900">
-                {formatCurrency(0)}
+                {metricValue(dashboard?.today_purchases)}
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <Badge variant="neutral" size="sm">
-                  0 shipments
+                  {loading
+                    ? '…'
+                    : `${dashboard?.today_purchase_count ?? 0} shipment${(dashboard?.today_purchase_count ?? 0) === 1 ? '' : 's'}`}
                 </Badge>
                 <span className="text-[11px] text-zinc-400">Inward inventory</span>
               </div>
@@ -147,7 +201,7 @@ export function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="text-xl font-bold font-tabular text-zinc-900">
-                {formatCurrency(0)}
+                {metricValue(dashboard?.today_expenses)}
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <Badge variant="neutral" size="sm">
@@ -231,17 +285,50 @@ export function DashboardPage() {
           />
           <Card>
             <CardContent className="p-6">
-              <EmptyState
-                title="No transactions recorded today"
-                description="When sales or stock movements occur, they will appear chronologically in this feed."
-                action={
-                  <Link to="/sales/new">
-                    <Button variant="outline" size="sm">
-                      Create First Sale
-                    </Button>
-                  </Link>
-                }
-              />
+              {loading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : recentSales.length > 0 ? (
+                <div className="divide-y divide-zinc-100">
+                  {recentSales.map((sale) => (
+                    <Link
+                      key={sale.id}
+                      to="/sales"
+                      className="flex items-center justify-between py-3 first:pt-0 last:pb-0 hover:bg-zinc-50/60 rounded px-2 -mx-2 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-zinc-900 truncate">
+                          {sale.invoice_number || 'Counter sale'}
+                          {sale.customer_name ? (
+                            <span className="font-normal text-zinc-500"> · {sale.customer_name}</span>
+                          ) : null}
+                        </div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                          {formatDate(sale.created_at, true)} · {sale.items_count} item{(sale.items_count ?? 0) === 1 ? '' : 's'} · {sale.status}
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold font-tabular text-zinc-900 shrink-0 ml-4">
+                        {formatCurrency(Number(sale.total_amount ?? 0))}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No transactions recorded today"
+                  description="When sales or stock movements occur, they will appear chronologically in this feed."
+                  action={
+                    <Link to="/sales/new">
+                      <Button variant="outline" size="sm">
+                        Create First Sale
+                      </Button>
+                    </Link>
+                  }
+                />
+              )}
             </CardContent>
           </Card>
         </div>
@@ -261,10 +348,42 @@ export function DashboardPage() {
           />
           <Card>
             <CardContent className="p-6">
-              <EmptyState
-                title="All stock levels healthy"
-                description="Low stock alerts and yardage warnings will be flagged here as inventory depletes."
-              />
+              {loading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : lowStock.length > 0 ? (
+                <div className="divide-y divide-zinc-100">
+                  {lowStock.map((item) => {
+                    const qty = Number(item.quantity_on_hand ?? item.quantity ?? 0);
+                    return (
+                      <Link
+                        key={item.id}
+                        to="/inventory"
+                        className="flex items-center justify-between py-3 first:pt-0 last:pb-0 hover:bg-zinc-50/60 rounded px-2 -mx-2 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-zinc-900 truncate">
+                            {item.product_name || item.sku}
+                          </div>
+                          <div className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                            {item.sku} · {item.unit}
+                          </div>
+                        </div>
+                        <Badge variant="warning" size="sm" className="shrink-0 ml-3">
+                          {qty} left
+                        </Badge>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState
+                  title="All stock levels healthy"
+                  description="Low stock alerts and yardage warnings will be flagged here as inventory depletes."
+                />
+              )}
             </CardContent>
           </Card>
         </div>

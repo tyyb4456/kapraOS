@@ -1,7 +1,12 @@
 import { apiClient } from './client.ts';
 import type { Sale, PaymentMethod } from '../../types/index.ts';
 
-export async function getSales(params?: { customer_id?: string; status?: string }): Promise<Sale[]> {
+export async function getSales(params?: {
+  customer_id?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<Sale[]> {
   return apiClient.get<Sale[]>('/sales', { params });
 }
 
