@@ -31,7 +31,8 @@ export function ReportsPage() {
     const loadSummary = async () => {
       try {
         setLoading(true);
-        const data = await getFinancialSummary();
+        setError(null);
+        const data = await getFinancialSummary(period);
         setSummary(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load financial summary');
@@ -40,7 +41,7 @@ export function ReportsPage() {
       }
     };
     loadSummary();
-  }, []);
+  }, [period]);
 
   return (
     <>

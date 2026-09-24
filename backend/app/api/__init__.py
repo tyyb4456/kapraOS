@@ -10,5 +10,6 @@ from app.api import products
 from app.api import reporting
 from app.api import returns
 from app.api import sales
+from app.api import shops
 from app.api import suppliers
 from app.api import purchases

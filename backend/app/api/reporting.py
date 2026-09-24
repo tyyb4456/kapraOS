@@ -1,11 +1,12 @@
 """Reporting endpoints (Step 9) - read-only financial statements.
 
-Four focused read-only routes over `app.services.reporting`:
+Five focused read-only routes over `app.services.reporting`:
 
     GET /reports/trial-balance
     GET /reports/profit-and-loss
     GET /reports/balance-sheet
     GET /reports/dashboard
+    GET /reports/financial-summary
 
 There are deliberately no mutation endpoints. The shop is always resolved
 server-side (see `app.api.dependencies`), so a report can never aggregate
@@ -21,6 +22,7 @@ from app.api.dependencies import DbSession, ShopId
 from app.schemas.reporting import (
     BalanceSheetResponse,
     DashboardResponse,
+    FinancialSummaryResponse,
     ProfitAndLossResponse,
     TrialBalanceResponse,
 )
@@ -28,6 +30,12 @@ from app.services import reporting as reporting_service
 from app.services.reporting import InvalidReportRangeError
 
 router = APIRouter(prefix="/reports", tags=["reporting"])
+
+# Legacy alias: an early frontend called `/reporting/financial-summary`
+# (singular) before the backend contract settled on `/reports/*`.
+# Keeping this compat router avoids a 404 for stale clients; new code
+# should use `/reports/financial-summary`.
+compat_router = APIRouter(prefix="/reporting", tags=["reporting"])
 
 StartDate = Annotated[
     datetime | None, Query(description="Inclusive lower bound.")
@@ -110,3 +118,61 @@ async def read_dashboard(
 ) -> DashboardResponse:
     report = await reporting_service.get_dashboard_summary(db, shop_id=shop_id)
     return DashboardResponse.model_validate(report)
+
+
+async def _financial_summary(
+    shop_id: ShopId,
+    db: DbSession,
+    period: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> FinancialSummaryResponse:
+    try:
+        report = await reporting_service.get_financial_summary(
+            db,
+            shop_id=shop_id,
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except InvalidReportRangeError as exc:
+        raise _unprocessable(exc) from exc
+    return FinancialSummaryResponse.model_validate(report)
+
+
+@router.get(
+    "/financial-summary",
+    response_model=FinancialSummaryResponse,
+    summary="Financial summary for the Reports page",
+)
+async def read_financial_summary(
+    shop_id: ShopId,
+    db: DbSession,
+    period: str | None = Query(
+        default=None,
+        description="today | this_week | this_month | this_year | all",
+    ),
+    start_date: StartDate = None,
+    end_date: EndDate = None,
+) -> FinancialSummaryResponse:
+    return await _financial_summary(
+        shop_id, db, period=period, start_date=start_date, end_date=end_date
+    )
+
+
+@compat_router.get(
+    "/financial-summary",
+    response_model=FinancialSummaryResponse,
+    summary="Financial summary (legacy alias)",
+    include_in_schema=False,
+)
+async def read_financial_summary_compat(
+    shop_id: ShopId,
+    db: DbSession,
+    period: str | None = Query(default=None),
+    start_date: StartDate = None,
+    end_date: EndDate = None,
+) -> FinancialSummaryResponse:
+    return await _financial_summary(
+        shop_id, db, period=period, start_date=start_date, end_date=end_date
+    )

@@ -111,3 +111,19 @@ class DashboardResponse(BaseModel):
     low_stock_variant_count: int | None = None
     low_stock_available: bool
     notes: list[str]
+
+
+class FinancialSummaryResponse(BaseModel):
+    """Period P&L plus Khata balances for the Reports page."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    total_sales: Decimal
+    total_cogs: Decimal
+    gross_profit: Decimal
+    total_expenses: Decimal
+    net_profit: Decimal
+    receivables: Decimal
+    payables: Decimal

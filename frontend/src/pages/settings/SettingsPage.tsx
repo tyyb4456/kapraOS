@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Save, Store, Printer, Shield } from 'lucide-react';
 import {
   PageContainer,
@@ -14,12 +14,84 @@ import {
   CardTitle,
   CardDescription,
   Alert,
+  Skeleton,
 } from '../../components/ui/index.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { getShopSettings, updateShopSettings } from '../../lib/api/shops.ts';
 
 export function SettingsPage() {
   const { user, isClerkConfigured } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [taxId, setTaxId] = useState('');
+  const [defaultUnit, setDefaultUnit] = useState('meters');
+  const [currency, setCurrency] = useState('PKR');
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await getShopSettings();
+        if (cancelled) return;
+        setName(data.name ?? '');
+        setAddress(data.address ?? '');
+        setPhone(data.phone ?? '');
+        setTaxId(data.tax_id ?? '');
+        setDefaultUnit(data.default_unit ?? 'meters');
+        setCurrency(data.currency ?? 'PKR');
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load shop settings');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      setError('Store / Shop Name must not be blank.');
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      setSaved(false);
+      const data = await updateShopSettings({
+        name: name.trim(),
+        address: address.trim(),
+        phone: phone.trim(),
+        tax_id: taxId.trim(),
+        default_unit: defaultUnit,
+        currency,
+      });
+      setName(data.name ?? '');
+      setAddress(data.address ?? '');
+      setPhone(data.phone ?? '');
+      setTaxId(data.tax_id ?? '');
+      setDefaultUnit(data.default_unit ?? 'meters');
+      setCurrency(data.currency ?? 'PKR');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save shop settings');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <PageContainer maxWidth="narrow">
@@ -34,15 +106,19 @@ export function SettingsPage() {
             variant="primary"
             size="sm"
             leftIcon={<Save className="w-4 h-4" />}
-            onClick={() => {
-              setSaved(true);
-              setTimeout(() => setSaved(false), 3000);
-            }}
+            onClick={handleSave}
+            disabled={loading || saving}
           >
-            Save Changes
+            {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         }
       />
+
+      {error && (
+        <Alert variant="danger" title="Could not save settings">
+          {error}
+        </Alert>
+      )}
 
       {saved && (
         <Alert variant="success" title="Settings Updated">
@@ -62,12 +138,45 @@ export function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3.5">
-          <Input label="Store / Shop Name" defaultValue="KapraOS Fabrics & Suiting" />
-          <Input label="Physical Address" defaultValue="Shop #14, Cloth Market, Faisalabad" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input label="Phone / WhatsApp Contact" defaultValue="0300-8765432" />
-            <Input label="NTN / Tax ID (Optional)" placeholder="e.g. 1234567-8" />
-          </div>
+          {loading ? (
+            <>
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-9 w-full" />
+              </div>
+            </>
+          ) : (
+            <>
+              <Input
+                label="Store / Shop Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="KapraOS Fabrics & Suiting"
+              />
+              <Input
+                label="Physical Address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Shop #14, Cloth Market, Faisalabad"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Phone / WhatsApp Contact"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="0300-8765432"
+                />
+                <Input
+                  label="NTN / Tax ID (Optional)"
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
+                  placeholder="e.g. 1234567-8"
+                />
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -83,16 +192,31 @@ export function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3.5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Select label="Primary Fabric Unit" defaultValue="meters">
-              <option value="meters">Meters (m)</option>
-              <option value="yards">Yards (gazz)</option>
-              <option value="pieces">Pieces / Suits</option>
-            </Select>
-            <Select label="Operational Currency" defaultValue="PKR">
-              <option value="PKR">Pakistani Rupee (PKR - Rs.)</option>
-            </Select>
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Select
+                label="Primary Fabric Unit"
+                value={defaultUnit}
+                onChange={(e) => setDefaultUnit(e.target.value)}
+              >
+                <option value="meters">Meters (m)</option>
+                <option value="yards">Yards (gazz)</option>
+                <option value="pieces">Pieces / Suits</option>
+              </Select>
+              <Select
+                label="Operational Currency"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+              >
+                <option value="PKR">Pakistani Rupee (PKR - Rs.)</option>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -165,6 +165,74 @@ class DashboardSummary:
     notes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class FinancialSummary:
+    """Period P&L plus current Khata balances for the Reports page.
+
+    `total_sales` / `total_cogs` / `gross_profit` / `total_expenses` /
+    `net_profit` cover `[period_start, period_end]` and come straight from
+    the ledger via :func:`get_profit_and_loss`, so this summary can never
+    disagree with the Income Statement tab. `receivables` / `payables` are
+    point-in-time Khata totals (not period-filtered) reused from the Step
+    6/7 services, so they match Customer Khata / Supplier Khata exactly.
+    """
+
+    period_start: datetime | None
+    period_end: datetime | None
+    total_sales: Decimal
+    total_cogs: Decimal
+    gross_profit: Decimal
+    total_expenses: Decimal
+    net_profit: Decimal
+    receivables: Decimal
+    payables: Decimal
+
+
+def resolve_period_bounds(
+    period: str | None, *, now: datetime | None = None
+) -> tuple[datetime | None, datetime | None]:
+    """Map a Reports-page period key to an inclusive ``(start, end)`` window.
+
+    Supported keys (all in UTC, end is always ``now``):
+
+    * ``today``      -> today's 00:00 UTC to now
+    * ``this_week``  -> Monday 00:00 UTC to now
+    * ``this_month`` -> 1st of month 00:00 UTC to now
+    * ``this_year``  -> Pakistan fiscal year (1 July 00:00 UTC) to now
+    * ``all`` / ``None`` -> ``(None, None)`` (entire history)
+
+    Unknown keys fall back to ``this_month`` so a stale client can never
+    trigger a 422 - it just gets the default window.
+    """
+
+    if period is None or period == "all":
+        return None, None
+
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+
+    if period == "today":
+        start = datetime.combine(current.date(), time.min, tzinfo=timezone.utc)
+        return start, current
+    if period == "this_week":
+        monday = current.date() - timedelta(days=current.weekday())
+        start = datetime.combine(monday, time.min, tzinfo=timezone.utc)
+        return start, current
+    if period == "this_year":
+        # Pakistan fiscal year runs 1 July - 30 June.
+        fiscal_start_year = (
+            current.year if current.month >= 7 else current.year - 1
+        )
+        start = datetime(
+            fiscal_start_year, 7, 1, 0, 0, tzinfo=timezone.utc
+        )
+        return start, current
+    # Default: "this_month" (and any unknown key for forward-compat).
+    start = datetime(current.year, current.month, 1, 0, 0, tzinfo=timezone.utc)
+    return start, current
+
+
 def _money(value: Decimal | int | None) -> Decimal:
     if value is None:
         return _ZERO
@@ -601,4 +669,52 @@ async def get_dashboard_summary(
             "Low-stock reporting is unavailable: inventory has no "
             "reorder/minimum-stock field.",
         ),
+    )
+
+
+async def get_financial_summary(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    period: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> FinancialSummary:
+    """Period P&L plus Khata balances for the Reports page.
+
+    Explicit ``start_date`` / ``end_date`` win when provided; otherwise the
+    ``period`` key (``today`` / ``this_week`` / ``this_month`` / ``this_year``
+    / ``all``) is resolved to a window via :func:`resolve_period_bounds`.
+    P&L figures are ledger-derived through :func:`get_profit_and_loss` and
+    Khata totals reuse the Step 6/7 services, so every number agrees with the
+    dedicated reports and Khata pages.
+    """
+
+    if start_date is None and end_date is None:
+        start_date, end_date = resolve_period_bounds(period or "this_month")
+    _validate_range(start_date, end_date)
+
+    pnl = await get_profit_and_loss(
+        session, shop_id=shop_id, start_date=start_date, end_date=end_date
+    )
+    receivables = await receivables_service.get_total_outstanding(
+        session, shop_id=shop_id
+    )
+    payables = await payables_service.get_total_outstanding(
+        session, shop_id=shop_id
+    )
+
+    expenses = pnl.expenses if pnl.expenses is not None else _ZERO
+    net_profit = pnl.net_profit if pnl.net_profit is not None else _ZERO
+
+    return FinancialSummary(
+        period_start=start_date,
+        period_end=end_date,
+        total_sales=pnl.revenue,
+        total_cogs=pnl.cogs,
+        gross_profit=pnl.gross_profit,
+        total_expenses=expenses,
+        net_profit=net_profit,
+        receivables=receivables,
+        payables=payables,
     )

@@ -50,6 +50,15 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         server_default="PKR",
     )
 
+    tax_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    default_unit: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="meters",
+        server_default="meters",
+    )
+
     users: Mapped[list["User"]] = relationship(
         "User",
         back_populates="shop",

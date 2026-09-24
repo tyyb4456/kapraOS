@@ -221,3 +221,25 @@ export interface FinancialSummary {
   receivables: number;
   payables: number;
 }
+
+// Shop Settings
+export interface ShopSettings {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  currency: string;
+  tax_id: string | null;
+  default_unit: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateShopSettingsRequest {
+  name?: string;
+  phone?: string | null;
+  address?: string | null;
+  currency?: string;
+  tax_id?: string | null;
+  default_unit?: string;
+}
