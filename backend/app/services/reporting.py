@@ -34,6 +34,7 @@ from datetime import datetime, time, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account, AccountType
@@ -717,4 +718,258 @@ async def get_financial_summary(
         net_profit=net_profit,
         receivables=receivables,
         payables=payables,
+    )
+
+
+@dataclass(frozen=True)
+class TrendBucket:
+    """One time bucket of ledger-derived P&L plus order counts."""
+
+    bucket_start: datetime
+    revenue: Decimal
+    cogs: Decimal
+    gross_profit: Decimal
+    expenses: Decimal
+    net_profit: Decimal
+    sales_count: int
+    sales_total: Decimal
+
+
+@dataclass(frozen=True)
+class SalesTrend:
+    """Revenue/profit/order time series for the Analytics page.
+
+    Money buckets come from the same ledger accounts as
+    :func:`get_profit_and_loss` (REVENUE credits, COGS debits, remaining
+    EXPENSE debits), so a trend summed across buckets always agrees with the
+    P&L for the same window. Order counts come from qualifying sales.
+    """
+
+    start_date: datetime
+    end_date: datetime
+    granularity: str
+    buckets: tuple[TrendBucket, ...]
+    total_revenue: Decimal
+    total_cogs: Decimal
+    total_gross_profit: Decimal
+    total_expenses: Decimal
+    total_net_profit: Decimal
+    total_sales_count: int
+
+
+_MAX_TREND_DAYS = 400
+
+
+def _resolve_trend_granularity(span_days: int, granularity: str | None) -> str:
+    requested = (granularity or "auto").strip().lower()
+    if requested == "auto":
+        return "day" if span_days <= 62 else "week"
+    if requested in ("day", "week", "month"):
+        return requested
+    raise InvalidReportRangeError(
+        f"granularity {granularity!r} is not supported: "
+        "expected day, week, month or auto"
+    )
+
+
+def _trend_bucket_starts(
+    start: datetime, end: datetime, granularity: str
+) -> list[datetime]:
+    """UTC-aligned bucket boundaries covering `[start, end]`."""
+
+    if granularity == "day":
+        current = datetime.combine(start.date(), time.min, tzinfo=timezone.utc)
+        step = timedelta(days=1)
+        starts = []
+        while current <= end:
+            starts.append(current)
+            current += step
+        return starts
+    if granularity == "week":
+        monday = start.date() - timedelta(days=start.weekday())
+        current = datetime.combine(monday, time.min, tzinfo=timezone.utc)
+        starts = []
+        while current <= end:
+            starts.append(current)
+            current += timedelta(days=7)
+        return starts
+    # month
+    current = datetime(start.year, start.month, 1, 0, 0, tzinfo=timezone.utc)
+    starts = []
+    while current <= end:
+        starts.append(current)
+        year, month = current.year, current.month
+        if month == 12:
+            year, month = year + 1, 1
+        else:
+            month += 1
+        current = datetime(year, month, 1, 0, 0, tzinfo=timezone.utc)
+    return starts
+
+
+async def get_sales_trend(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    granularity: str | None = None,
+) -> SalesTrend:
+    """Bucketed revenue/COGS/expenses/profit plus order counts.
+
+    Defaults to the last 30 UTC days when no dates are given. Bucketing is
+    done in UTC with ``date_trunc`` so every row lands in exactly one bucket;
+    empty buckets are returned as zeros so charts never have gaps.
+    """
+
+    now = datetime.now(timezone.utc)
+    end = end_date or now
+    start = start_date or (now - timedelta(days=29)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    _validate_range(start, end)
+    if (end - start).days > _MAX_TREND_DAYS:
+        raise InvalidReportRangeError(
+            f"Trend window is too wide ({(end - start).days} days); "
+            f"max is {_MAX_TREND_DAYS} days"
+        )
+
+    gran = _resolve_trend_granularity((end - start).days, granularity)
+    bucket_starts = _trend_bucket_starts(start, end, gran)
+    bucket_keys = {b: b for b in bucket_starts}
+
+    # `created_at` is timestamptz; convert to a UTC wall-clock timestamp
+    # before truncating so buckets are stable regardless of DB timezone.
+    utc_ts = LedgerEntry.created_at.op("AT TIME ZONE")(sa_text("'UTC'"))
+    bucket_expr = func.date_trunc(gran, utc_ts)
+
+    async def _money_by_bucket(
+        account_filter,
+        *,
+        revenue_style: bool,
+    ) -> dict[datetime, Decimal]:
+        statement = (
+            select(
+                bucket_expr,
+                func.coalesce(func.sum(LedgerEntry.credit), 0),
+                func.coalesce(func.sum(LedgerEntry.debit), 0),
+            )
+            .select_from(LedgerEntry)
+            .join(Account, Account.id == LedgerEntry.account_id)
+            .where(
+                LedgerEntry.shop_id == shop_id,
+                LedgerEntry.created_at >= start,
+                LedgerEntry.created_at <= end,
+                account_filter,
+            )
+            .group_by(bucket_expr)
+        )
+        out: dict[datetime, Decimal] = {}
+        for row in (await session.execute(statement)).all():
+            naive, credit, debit = row[0], _money(row[1]), _money(row[2])
+            key = naive.replace(tzinfo=timezone.utc)
+            amount = _money(credit - debit) if revenue_style else _money(
+                debit - credit
+            )
+            out[key] = amount
+        return out
+
+    revenue_map = await _money_by_bucket(
+        Account.account_type == AccountType.REVENUE, revenue_style=True
+    )
+    cogs_map = await _money_by_bucket(
+        (Account.account_type == AccountType.EXPENSE)
+        & (Account.code == COST_OF_GOODS_SOLD),
+        revenue_style=False,
+    )
+    expenses_map = await _money_by_bucket(
+        (Account.account_type == AccountType.EXPENSE)
+        & (Account.code != COST_OF_GOODS_SOLD),
+        revenue_style=False,
+    )
+
+    sale_utc_ts = Sale.created_at.op("AT TIME ZONE")(sa_text("'UTC'"))
+    # One shared expression object: Postgres matches SELECT and GROUP BY
+    # positionally, and two separately-built `date_trunc` calls get distinct
+    # bind params ($1 vs $6) which breaks the GROUP BY.
+    sale_bucket_expr = func.date_trunc(gran, sale_utc_ts)
+    sale_statement = (
+        select(
+            sale_bucket_expr,
+            func.count(Sale.id),
+            func.coalesce(func.sum(Sale.total), 0),
+        )
+        .where(
+            Sale.shop_id == shop_id,
+            Sale.status.in_(QUALIFYING_SALE_STATUSES),
+            Sale.created_at >= start,
+            Sale.created_at <= end,
+        )
+        .group_by(sale_bucket_expr)
+    )
+    sales_map: dict[datetime, tuple[int, Decimal]] = {}
+    for row in (await session.execute(sale_statement)).all():
+        key = row[0].replace(tzinfo=timezone.utc)
+        sales_map[key] = (int(row[1]), _money(row[2]))
+
+    buckets: list[TrendBucket] = []
+    total_revenue = _ZERO
+    total_cogs = _ZERO
+    total_expenses = _ZERO
+    total_sales_count = 0
+
+    for bucket_start in bucket_starts:
+        # Bucket starts are aligned backwards (midnight / Monday / 1st), so
+        # every truncated key matches exactly one bucket; missing keys are
+        # empty buckets (zeros, no chart gaps).
+        revenue = revenue_map.get(bucket_start, _ZERO)
+        cogs = cogs_map.get(bucket_start, _ZERO)
+        expenses = expenses_map.get(bucket_start, _ZERO)
+        count, sales_total = sales_map.get(bucket_start, (0, _ZERO))
+        revenue, cogs, expenses = (
+            _money(revenue),
+            _money(cogs),
+            _money(expenses),
+        )
+        sales_total = _money(sales_total)
+        gross = _money(revenue - cogs)
+        net = _money(gross - expenses)
+        total_revenue += revenue
+        total_cogs += cogs
+        total_expenses += expenses
+        total_sales_count += count
+        buckets.append(
+            TrendBucket(
+                bucket_start=bucket_keys[bucket_start],
+                revenue=revenue,
+                cogs=cogs,
+                gross_profit=gross,
+                expenses=expenses,
+                net_profit=net,
+                sales_count=count,
+                sales_total=sales_total,
+            )
+        )
+
+    total_revenue, total_cogs, total_expenses = (
+        _money(total_revenue),
+        _money(total_cogs),
+        _money(total_expenses),
+    )
+    total_gross = _money(total_revenue - total_cogs)
+    return SalesTrend(
+        start_date=start,
+        end_date=end,
+        granularity=gran,
+        buckets=tuple(buckets),
+        total_revenue=total_revenue,
+        total_cogs=total_cogs,
+        total_gross_profit=total_gross,
+        total_expenses=total_expenses,
+        total_net_profit=_money(total_gross - total_expenses),
+        total_sales_count=total_sales_count,
     )

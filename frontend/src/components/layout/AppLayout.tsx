@@ -19,6 +19,7 @@ const routeTitleMap: Record<string, string> = {
   '/suppliers/khata': 'Supplier Khata (Payables)',
   '/expenses': 'Shop Expenses',
   '/reports': 'Financial & Operational Reports',
+  '/analytics': 'Sales Analytics',
   '/settings': 'Shop Settings',
 };
 

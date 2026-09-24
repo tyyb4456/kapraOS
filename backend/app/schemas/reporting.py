@@ -127,3 +127,35 @@ class FinancialSummaryResponse(BaseModel):
     net_profit: Decimal
     receivables: Decimal
     payables: Decimal
+
+
+class TrendBucketResponse(BaseModel):
+    """One time bucket of ledger-derived P&L plus order counts."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    bucket_start: datetime
+    revenue: Decimal
+    cogs: Decimal
+    gross_profit: Decimal
+    expenses: Decimal
+    net_profit: Decimal
+    sales_count: int
+    sales_total: Decimal
+
+
+class SalesTrendResponse(BaseModel):
+    """Revenue/profit/order time series for the Analytics page."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    start_date: datetime
+    end_date: datetime
+    granularity: str
+    buckets: list[TrendBucketResponse]
+    total_revenue: Decimal
+    total_cogs: Decimal
+    total_gross_profit: Decimal
+    total_expenses: Decimal
+    total_net_profit: Decimal
+    total_sales_count: int

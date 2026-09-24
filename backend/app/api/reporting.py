@@ -1,12 +1,13 @@
 """Reporting endpoints (Step 9) - read-only financial statements.
 
-Five focused read-only routes over `app.services.reporting`:
+Six focused read-only routes over `app.services.reporting`:
 
     GET /reports/trial-balance
     GET /reports/profit-and-loss
     GET /reports/balance-sheet
     GET /reports/dashboard
     GET /reports/financial-summary
+    GET /reports/sales-trend
 
 There are deliberately no mutation endpoints. The shop is always resolved
 server-side (see `app.api.dependencies`), so a report can never aggregate
@@ -24,6 +25,7 @@ from app.schemas.reporting import (
     DashboardResponse,
     FinancialSummaryResponse,
     ProfitAndLossResponse,
+    SalesTrendResponse,
     TrialBalanceResponse,
 )
 from app.services import reporting as reporting_service
@@ -158,6 +160,34 @@ async def read_financial_summary(
     return await _financial_summary(
         shop_id, db, period=period, start_date=start_date, end_date=end_date
     )
+
+
+@router.get(
+    "/sales-trend",
+    response_model=SalesTrendResponse,
+    summary="Revenue/profit/order time series",
+)
+async def read_sales_trend(
+    shop_id: ShopId,
+    db: DbSession,
+    granularity: str | None = Query(
+        default=None,
+        description="day | week | month | auto (default: auto)",
+    ),
+    start_date: StartDate = None,
+    end_date: EndDate = None,
+) -> SalesTrendResponse:
+    try:
+        report = await reporting_service.get_sales_trend(
+            db,
+            shop_id=shop_id,
+            start_date=start_date,
+            end_date=end_date,
+            granularity=granularity,
+        )
+    except InvalidReportRangeError as exc:
+        raise _unprocessable(exc) from exc
+    return SalesTrendResponse.model_validate(report)
 
 
 @compat_router.get(

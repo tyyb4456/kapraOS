@@ -16,6 +16,7 @@ import {
   Building2,
   Wallet,
   ChartNoAxesCombined,
+  TrendingUp,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -91,6 +92,7 @@ const navigationGroups: NavGroup[] = [
     items: [
       { label: 'Expenses', path: '/expenses', icon: Wallet },
       { label: 'Reports', path: '/reports', icon: ChartNoAxesCombined },
+      { label: 'Analytics', path: '/analytics', icon: TrendingUp },
     ],
   },
   {

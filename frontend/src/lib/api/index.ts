@@ -10,3 +10,4 @@ export * from './expenses.ts';
 export * from './reports.ts';
 export * from './shops.ts';
 export * from './dashboard.ts';
+export * from './analytics.ts';

@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout.tsx';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute.tsx';
@@ -17,6 +18,11 @@ import { SuppliersPage } from '../pages/relationships/SuppliersPage.tsx';
 import { SupplierKhataPage } from '../pages/relationships/SupplierKhataPage.tsx';
 import { ExpensesPage } from '../pages/finance/ExpensesPage.tsx';
 import { ReportsPage } from '../pages/finance/ReportsPage.tsx';
+
+// Heavy charting lib lives only here - lazy-load so the initial bundle stays lean.
+const AnalyticsPage = lazy(() =>
+  import('../pages/analytics/AnalyticsPage.tsx').then((m) => ({ default: m.AnalyticsPage })),
+);
 import { SettingsPage } from '../pages/settings/SettingsPage.tsx';
 import { LoginPage } from '../pages/auth/LoginPage.tsx';
 import { SignUpPage } from '../pages/auth/SignUpPage.tsx';
@@ -69,6 +75,14 @@ export function AppRouter() {
         {/* Finance */}
         <Route path="/expenses" element={<ExpensesPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route
+          path="/analytics"
+          element={
+            <Suspense fallback={<div className="p-6 text-xs text-zinc-500">Loading analytics…</div>}>
+              <AnalyticsPage />
+            </Suspense>
+          }
+        />
 
         {/* Settings */}
         <Route path="/settings" element={<SettingsPage />} />

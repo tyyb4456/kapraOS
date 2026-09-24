@@ -244,6 +244,31 @@ export interface UpdateShopSettingsRequest {
   default_unit?: string;
 }
 
+// Analytics - sales trend (GET /reports/sales-trend)
+export interface TrendBucket {
+  bucket_start: string;
+  revenue: number;
+  cogs: number;
+  gross_profit: number;
+  expenses: number;
+  net_profit: number;
+  sales_count: number;
+  sales_total: number;
+}
+
+export interface SalesTrend {
+  start_date: string;
+  end_date: string;
+  granularity: 'day' | 'week' | 'month' | string;
+  buckets: TrendBucket[];
+  total_revenue: number;
+  total_cogs: number;
+  total_gross_profit: number;
+  total_expenses: number;
+  total_net_profit: number;
+  total_sales_count: number;
+}
+
 // Dashboard (GET /reports/dashboard)
 export interface DashboardSummary {
   as_of: string;
