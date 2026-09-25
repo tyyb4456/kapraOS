@@ -41,13 +41,19 @@ export function ExpensesPage() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Must match backend ExpenseCategory enum (rent, salary, utilities,
+  // transport, marketing, maintenance, supplies, other). Labels stay
+  // shop-friendly: tea/staff meals is booked as `other`, bags/packaging as
+  // `supplies` so the POST /expenses 422 goes away without a DB migration.
   const categories = [
-    { value: 'utilities', label: 'Electricity & Utilities' },
-    { value: 'refreshment', label: 'Tea / Staff Meals' },
-    { value: 'packaging', label: 'Bags & Packaging' },
     { value: 'rent', label: 'Shop Rent' },
+    { value: 'salary', label: 'Staff Salary' },
+    { value: 'utilities', label: 'Electricity & Utilities' },
     { value: 'transport', label: 'Freight / Transport' },
-    { value: 'other', label: 'Other' },
+    { value: 'marketing', label: 'Marketing' },
+    { value: 'maintenance', label: 'Maintenance' },
+    { value: 'supplies', label: 'Bags & Packaging / Supplies' },
+    { value: 'other', label: 'Tea / Staff Meals / Other' },
   ];
 
   useEffect(() => {
@@ -66,16 +72,21 @@ export function ExpensesPage() {
   }, []);
 
   const filteredExpenses = expenses.filter((expense) => {
+    const desc = expense.description ?? '';
+    const catLabel =
+      categories.find((c) => c.value === expense.category)?.label ?? expense.category;
+    const q = searchTerm.trim().toLowerCase();
     const matchesSearch =
-      expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.receipt_ref?.toLowerCase().includes(searchTerm.toLowerCase());
+      !q ||
+      desc.toLowerCase().includes(q) ||
+      catLabel.toLowerCase().includes(q);
     const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.amount || !formData.description) {
+    if (!formData.amount || !formData.description.trim()) {
       setError('Amount and description are required');
       return;
     }
@@ -84,13 +95,17 @@ export function ExpensesPage() {
     setError(null);
 
     try {
+      // Backend has no `receipt_ref` column, so fold it into the description
+      // to avoid data loss. Backend expects `expense_date`, not `date`.
+      const description = formData.receipt_ref.trim()
+        ? `${formData.description.trim()} [Ref: ${formData.receipt_ref.trim()}]`
+        : formData.description.trim();
       await createExpense({
         category: formData.category,
         amount: formData.amount,
-        description: formData.description,
+        description,
         payment_method: formData.payment_method,
-        date: formData.date,
-        receipt_ref: formData.receipt_ref || undefined,
+        expense_date: formData.date ? new Date(formData.date).toISOString() : undefined,
       });
       setIsAddModalOpen(false);
       setFormData({
@@ -137,7 +152,7 @@ export function ExpensesPage() {
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="flex-1 w-full">
               <Input
-                placeholder="Search by description or receipt reference..."
+                placeholder="Search by description or category..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 leftIcon={<Search className="w-4 h-4" />}
@@ -195,7 +210,7 @@ export function ExpensesPage() {
               filteredExpenses.map((expense) => (
                 <TableRow key={expense.id}>
                   <TableCell className="text-xs text-zinc-600">
-                    {formatDate(expense.date, true)}
+                    {formatDate(expense.expense_date ?? expense.date, true)}
                   </TableCell>
                   <TableCell>
                     <Badge variant="neutral" size="sm">
@@ -203,13 +218,16 @@ export function ExpensesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="font-medium text-zinc-900">
-                    {expense.description}
+                    {expense.description || '—'}
                   </TableCell>
                   <TableCell className="capitalize text-zinc-600">
-                    {expense.payment_method === 'cash' ? 'Cash' : 'Bank'}
+                    {expense.payment_method
+                      ? expense.payment_method.charAt(0).toUpperCase() +
+                        expense.payment_method.slice(1)
+                      : '—'}
                   </TableCell>
                   <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-                    {formatCurrency(expense.amount)}
+                    {formatCurrency(Number(expense.amount))}
                   </TableCell>
                 </TableRow>
               ))

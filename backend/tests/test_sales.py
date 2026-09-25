@@ -1216,12 +1216,15 @@ async def test_invoice_number_is_unique_per_shop_only(
 
 
 @pytest.mark.asyncio
-async def test_sale_without_invoice_number_can_repeat(
+async def test_sale_without_invoice_number_auto_generates_unique_numbers(
     db_session: AsyncSession,
 ) -> None:
+    """Every sale leaves with an invoice number, even when none is supplied."""
+
     fixture = await _make_shop_with_variant(db_session)
     await _seed_stock(db_session, fixture, quantity="10", unit_cost="800")
 
+    invoices: list[str | None] = []
     for _ in range(2):
         sale = await create_sale(
             db_session,
@@ -1234,7 +1237,12 @@ async def test_sale_without_invoice_number_can_repeat(
                 )
             ],
         )
-        assert sale.invoice_number is None
+        assert sale.invoice_number is not None
+        assert sale.invoice_number.startswith("INV-")
+        invoices.append(sale.invoice_number)
+
+    assert invoices[0] != invoices[1]
+    assert invoices == ["INV-000001", "INV-000002"]
 
 
 @pytest.mark.asyncio

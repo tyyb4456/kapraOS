@@ -155,8 +155,11 @@ class Sale(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
-    # Optional at the schema level (a shop may not pre-print invoice numbers),
-    # unique per shop when present - exactly like `purchases.invoice_number`.
+    # Every sale carries an invoice number. The service auto-allocates
+    # `INV-000001`-style numbers from the shop's existing sales when the
+    # caller does not supply one (see app.services.sales), so new rows are
+    # never NULL in practice. The column stays nullable only for legacy rows;
+    # the 0013 migration backfills those. Unique per shop when present.
     invoice_number: Mapped[str | None] = mapped_column(String(50))
 
     # Money - always NUMERIC(14,2), never Float.

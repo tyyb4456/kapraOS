@@ -196,17 +196,21 @@ export interface Purchase {
   created_at: string;
 }
 
-// Expenses
+// Expenses (matches backend ExpenseResponse: id, shop_id, category,
+// description, amount, payment_method, expense_date, created_at, updated_at)
 export interface Expense {
   id: string;
   shop_id: string;
   category: string;
-  amount: number;
+  amount: number | string;
   payment_method: string;
-  description: string;
-  date: string;
-  receipt_ref?: string | null;
+  description: string | null;
+  expense_date: string;
   created_at: string;
+  updated_at?: string;
+  // Legacy frontend fields kept optional for backwards-compat; do not use in new code.
+  date?: string;
+  receipt_ref?: string | null;
 }
 
 // Reports & Financial Summary

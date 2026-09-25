@@ -72,7 +72,26 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       errorData = await response.json();
       if (errorData && typeof errorData === 'object' && 'detail' in errorData) {
         const detail = (errorData as Record<string, unknown>).detail;
-        errorDetail = typeof detail === 'string' ? detail : JSON.stringify(detail);
+        if (typeof detail === 'string') {
+          errorDetail = detail;
+        } else if (Array.isArray(detail)) {
+          // FastAPI/Pydantic validation errors: [{loc, msg, ...}, ...]
+          // Format as "field: message" instead of raw JSON.
+          const parts = detail.map((item) => {
+            if (item && typeof item === 'object' && 'msg' in (item as Record<string, unknown>)) {
+              const rec = item as Record<string, unknown>;
+              const loc = Array.isArray(rec.loc)
+                ? (rec.loc as unknown[]).filter((p) => p !== 'body').join('.')
+                : '';
+              const msg = String(rec.msg);
+              return loc ? `${loc}: ${msg}` : msg;
+            }
+            return JSON.stringify(item);
+          });
+          errorDetail = parts.join('; ');
+        } else {
+          errorDetail = JSON.stringify(detail);
+        }
       }
     } catch {
       // non-JSON response body

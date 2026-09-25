@@ -32,7 +32,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
@@ -263,6 +263,79 @@ def _normalise_payments(payments: list[PaymentInput]) -> list[PaymentInput]:
     return normalised
 
 
+def _format_invoice_number(seq: int) -> str:
+    """Format a sequential sale invoice number: `INV-000001`."""
+    return f"INV-{seq:06d}"
+
+
+async def _allocate_invoice_number(
+    session: AsyncSession, shop_id: uuid.UUID
+) -> str:
+    """Allocate the next free invoice number for a shop.
+
+    Every sale must carry an invoice number. When the caller does not supply
+    one, the next `INV-000001`-style number is derived from the existing
+    sales of that shop (max numeric suffix + 1, skipping collisions).
+
+    Concurrency: the shop row is locked with `SELECT id ... FOR UPDATE`
+    (raw SQL on `id` only, so it works whether or not older/newer schema
+    extras exist) which serializes concurrent POS checkouts for the same
+    shop. The partial unique index `uq_sales_shop_invoice_number` remains
+    the final guard - on the rare race that still slips through, the
+    surrounding transaction fails with an IntegrityError and the caller
+    can retry.
+    """
+
+    import re
+
+    # Serialize per shop without depending on any extra shops columns.
+    shop_row = (
+        await session.execute(
+            text("SELECT id FROM shops WHERE id = :shop_id FOR UPDATE"),
+            {"shop_id": shop_id},
+        )
+    ).first()
+    if shop_row is None:
+        raise ShopNotFoundError(f"Shop {shop_id} not found")
+
+    rows = (
+        await session.execute(
+            select(Sale.invoice_number).where(
+                Sale.shop_id == shop_id,
+                Sale.invoice_number.is_not(None),
+            )
+        )
+    ).all()
+    existing = {r[0] for r in rows if r[0]}
+    max_seq = 0
+    pattern = re.compile(r"^INV-(\d+)$")
+    for inv in existing:
+        m = pattern.match(inv or "")
+        if m:
+            try:
+                max_seq = max(max_seq, int(m.group(1)))
+            except ValueError:
+                pass
+
+    seq = max_seq + 1 if max_seq else 1
+    while True:
+        candidate = _format_invoice_number(seq)
+        if candidate not in existing:
+            # Double-check against uncommitted / concurrent rows visible
+            # in this transaction.
+            exists = await session.execute(
+                select(Sale.id)
+                .where(
+                    Sale.shop_id == shop_id,
+                    Sale.invoice_number == candidate,
+                )
+                .limit(1)
+            )
+            if exists.scalar_one_or_none() is None:
+                return candidate
+        seq += 1
+
+
 async def create_sale(
     session: AsyncSession,
     *,
@@ -286,6 +359,11 @@ async def create_sale(
     `cost_price` on each line is the variant's current weighted-average
     inventory cost, snapshotted at this moment and never recalculated.
 
+    Every sale gets an invoice number: when `invoice_number` is None or blank
+    the next `INV-000001`-style number is allocated from the shop's existing
+    sales (see `_allocate_invoice_number`). An explicit value is kept as-is
+    so pre-printed books still work.
+
     The caller owns the transaction: this function flushes but never commits,
     so it composes into a larger transaction. On success the returned `Sale`
     has its `items` and `payments` populated.
@@ -297,6 +375,14 @@ async def create_sale(
 
     if not items:
         raise EmptySaleError("a sale must contain at least one item")
+
+    # Normalise the invoice number up front: blank/whitespace means "auto".
+    if invoice_number is not None:
+        invoice_number = invoice_number.strip() or None
+        if invoice_number is not None and len(invoice_number) > 50:
+            raise InvalidSaleTotalsError(
+                "invoice_number must be at most 50 characters"
+            )
 
     # 1. Validate the shop and (optional) customer before touching anything.
     await _get_shop(session, shop_id)
@@ -331,6 +417,13 @@ async def create_sale(
         )
 
     status = SaleStatus.COMPLETED if paid_amount >= total else SaleStatus.PARTIAL
+
+    # 4b. Every sale leaves with an invoice number. Auto-allocate when the
+    # caller did not supply one, after validation but before any rows are
+    # written so a failure still rolls back the counter bump with everything
+    # else (the caller owns the transaction).
+    if invoice_number is None:
+        invoice_number = await _allocate_invoice_number(session, shop_id)
 
     # 5. Sale header. The UUID is assigned here (not left to the flush) so the
     # inventory movements and child rows can reference it immediately, and the
