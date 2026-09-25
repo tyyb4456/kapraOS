@@ -35,7 +35,7 @@ export function Tabs({ defaultValue, value, onValueChange, children, className =
 
 export function TabList({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`h-9 inline-flex items-center rounded-lg bg-zinc-100 p-1 text-zinc-500 ${className}`}>
+    <div className={`h-9 inline-flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1 text-zinc-500 dark:text-zinc-400 ${className}`}>
       {children}
     </div>
   );
@@ -60,7 +60,7 @@ export function TabTrigger({
       type="button"
       onClick={() => context.setActiveTab(value)}
       className={`inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
-        isActive ? 'bg-white text-zinc-900 shadow-xs' : 'text-zinc-600 hover:text-zinc-900'
+        isActive ? 'bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 shadow-xs' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
       } ${className}`}
     >
       {children}

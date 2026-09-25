@@ -35,6 +35,7 @@ import {
 } from '../../components/ui/index.ts';
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
 import { getSalesTrend } from '../../lib/api/analytics.ts';
+import { useTheme } from '../../context/ThemeContext.tsx';
 import type { SalesTrend } from '../../types/index.ts';
 
 type PresetKey = '7d' | '30d' | '90d' | '12m' | 'custom';
@@ -75,6 +76,7 @@ const compactMoney = (v: number | string): string => {
 const moneyTooltip = (value: unknown): string => formatCurrency(Number(value ?? 0));
 
 export function AnalyticsPage() {
+  const { isDark } = useTheme();
   const [preset, setPreset] = useState<PresetKey>('30d');
   const [customStart, setCustomStart] = useState(() => {
     const d = startOfDayUTC(new Date());
@@ -164,6 +166,24 @@ export function AnalyticsPage() {
 
   const hasData = (trend?.total_sales_count ?? 0) > 0 || (trend?.total_revenue ?? 0) > 0;
 
+  // Recharts renders raw SVG with hardcoded paints — derive them from the
+  // active theme so grids, ticks, tooltips and dark-on-dark series stay
+  // readable in both modes.
+  const chartTheme = useMemo(
+    () => ({
+      grid: isDark ? '#27272a' : '#e4e4e7',
+      tick: isDark ? '#a1a1aa' : '#71717a',
+      axisLine: isDark ? '#3f3f46' : '#d4d4d8',
+      netProfit: isDark ? '#fafafa' : '#18181b',
+      bar: isDark ? '#e4e4e7' : '#18181b',
+      tooltipBg: isDark ? '#18181b' : '#ffffff',
+      tooltipBorder: isDark ? '#52525b' : '#e4e4e7',
+      tooltipText: isDark ? '#f4f4f5' : '#18181b',
+      tooltipMuted: isDark ? '#a1a1aa' : '#71717a',
+    }),
+    [isDark],
+  );
+
   return (
     <PageContainer>
       <PageHeader
@@ -239,19 +259,19 @@ export function AnalyticsPage() {
         ].map((c) => (
           <Card key={c.title}>
             <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-xs font-medium text-zinc-500">{c.title}</CardTitle>
+              <CardTitle className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{c.title}</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               {loading ? (
                 <Skeleton className="h-8 w-32" />
               ) : (
                 <>
-                  <div className="text-xl font-bold font-tabular text-zinc-900">
+                  <div className="text-xl font-bold font-tabular text-zinc-900 dark:text-zinc-50">
                     {c.money === false
                       ? `${c.value ?? 0}`
                       : formatCurrency(c.value ?? 0)}
                   </div>
-                  <p className="text-[11px] text-zinc-400 mt-1">{c.hint}</p>
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">{c.hint}</p>
                 </>
               )}
             </CardContent>
@@ -271,21 +291,46 @@ export function AnalyticsPage() {
           {loading ? (
             <Skeleton className="h-64 w-full" />
           ) : !hasData ? (
-            <p className="text-center text-zinc-500 text-xs py-10">
+            <p className="text-center text-zinc-500 dark:text-zinc-400 text-xs py-10">
               No sales in this window yet — record a sale and the trend will appear here.
             </p>
           ) : (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} tickMargin={8} minTickGap={24} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={compactMoney} width={52} />
-                  <Tooltip formatter={moneyTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ''} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#059669" fill="#059669" fillOpacity={0.14} strokeWidth={2} />
-                  <Area type="monotone" dataKey="gross_profit" name="Gross profit" stroke="#0284c7" fill="#0284c7" fillOpacity={0.1} strokeWidth={2} />
-                  <Area type="monotone" dataKey="net_profit" name="Net profit" stroke="#18181b" fill="#18181b" fillOpacity={0.08} strokeWidth={2} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: chartTheme.tick }}
+                    tickLine={{ stroke: chartTheme.axisLine }}
+                    axisLine={{ stroke: chartTheme.axisLine }}
+                    tickMargin={8}
+                    minTickGap={24}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: chartTheme.tick }}
+                    tickLine={{ stroke: chartTheme.axisLine }}
+                    axisLine={{ stroke: chartTheme.axisLine }}
+                    tickFormatter={compactMoney}
+                    width={52}
+                  />
+                  <Tooltip
+                    formatter={moneyTooltip}
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ''}
+                    contentStyle={{
+                      backgroundColor: chartTheme.tooltipBg,
+                      borderColor: chartTheme.tooltipBorder,
+                      borderRadius: 8,
+                      fontSize: 12,
+                      color: chartTheme.tooltipText,
+                    }}
+                    labelStyle={{ color: chartTheme.tooltipText, fontWeight: 600 }}
+                    itemStyle={{ color: chartTheme.tooltipText }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, color: chartTheme.tick }} />
+                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#059669" fill="#059669" fillOpacity={isDark ? 0.22 : 0.14} strokeWidth={2} />
+                  <Area type="monotone" dataKey="gross_profit" name="Gross profit" stroke="#0284c7" fill="#0284c7" fillOpacity={isDark ? 0.18 : 0.1} strokeWidth={2} />
+                  <Area type="monotone" dataKey="net_profit" name="Net profit" stroke={chartTheme.netProfit} fill={chartTheme.netProfit} fillOpacity={isDark ? 0.14 : 0.08} strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -303,18 +348,43 @@ export function AnalyticsPage() {
           {loading ? (
             <Skeleton className="h-48 w-full" />
           ) : !hasData ? (
-            <p className="text-center text-zinc-500 text-xs py-10">
+            <p className="text-center text-zinc-500 dark:text-zinc-400 text-xs py-10">
               No orders in this window.
             </p>
           ) : (
             <div className="h-48 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} tickMargin={8} minTickGap={24} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={36} />
-                  <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ''} />
-                  <Bar dataKey="sales_count" name="Orders" fill="#18181b" radius={[3, 3, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: chartTheme.tick }}
+                    tickLine={{ stroke: chartTheme.axisLine }}
+                    axisLine={{ stroke: chartTheme.axisLine }}
+                    tickMargin={8}
+                    minTickGap={24}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: chartTheme.tick }}
+                    tickLine={{ stroke: chartTheme.axisLine }}
+                    axisLine={{ stroke: chartTheme.axisLine }}
+                    allowDecimals={false}
+                    width={36}
+                  />
+                  <Tooltip
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ''}
+                    contentStyle={{
+                      backgroundColor: chartTheme.tooltipBg,
+                      borderColor: chartTheme.tooltipBorder,
+                      borderRadius: 8,
+                      fontSize: 12,
+                      color: chartTheme.tooltipText,
+                    }}
+                    labelStyle={{ color: chartTheme.tooltipText, fontWeight: 600 }}
+                    itemStyle={{ color: chartTheme.tooltipText }}
+                    cursor={{ fill: isDark ? '#27272a' : '#f4f4f5' }}
+                  />
+                  <Bar dataKey="sales_count" name="Orders" fill={chartTheme.bar} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -336,7 +406,7 @@ export function AnalyticsPage() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : tableRows.length === 0 ? (
-            <p className="text-center text-zinc-500 text-xs p-6">No data available</p>
+            <p className="text-center text-zinc-500 dark:text-zinc-400 text-xs p-6">No data available</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -358,8 +428,8 @@ export function AnalyticsPage() {
                       <TableCell align="right" className="font-tabular">{formatCurrency(b.revenue)}</TableCell>
                       <TableCell align="right" className="font-tabular">{formatCurrency(b.cogs)}</TableCell>
                       <TableCell align="right" className="font-tabular">{formatCurrency(b.expenses)}</TableCell>
-                      <TableCell align="right" className="font-tabular text-emerald-700">{formatCurrency(b.gross_profit)}</TableCell>
-                      <TableCell align="right" className={`font-tabular font-medium ${b.net_profit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      <TableCell align="right" className="font-tabular text-emerald-700 dark:text-emerald-300">{formatCurrency(b.gross_profit)}</TableCell>
+                      <TableCell align="right" className={`font-tabular font-medium ${b.net_profit >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
                         {formatCurrency(b.net_profit)}
                       </TableCell>
                       <TableCell align="right" className="font-tabular">{b.sales_count}</TableCell>

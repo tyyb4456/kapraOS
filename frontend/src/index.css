@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
 }
 
 html,
@@ -20,6 +27,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+.dark body {
+  background-color: #09090b;
+  color: #f4f4f5;
 }
 
 .font-tabular {
@@ -43,3 +55,139 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark-mode safety net: remap the most common light-only utilities    */
+/* used across pages so hardcoded `text-zinc-*` / `bg-*` / borders    */
+/* stay readable when `.dark` is active. Shared components also carry */
+/* explicit `dark:` variants — this just covers page-level markup.     */
+/* ------------------------------------------------------------------ */
+
+.dark .bg-white {
+  background-color: var(--color-zinc-900);
+}
+
+.dark .bg-white\/50 {
+  background-color: color-mix(in srgb, var(--color-zinc-900) 50%, transparent);
+}
+
+.dark .bg-zinc-50 {
+  background-color: var(--color-zinc-900);
+}
+
+.dark .bg-zinc-50\/60 {
+  background-color: color-mix(in srgb, var(--color-zinc-900) 60%, transparent);
+}
+
+.dark .bg-zinc-50\/80 {
+  background-color: color-mix(in srgb, var(--color-zinc-900) 80%, transparent);
+}
+
+.dark .bg-zinc-100 {
+  background-color: var(--color-zinc-800);
+}
+
+.dark .bg-zinc-100\/80 {
+  background-color: color-mix(in srgb, var(--color-zinc-800) 80%, transparent);
+}
+
+.dark .bg-zinc-200 {
+  background-color: var(--color-zinc-700);
+}
+
+.dark .text-zinc-900 {
+  color: var(--color-zinc-100);
+}
+
+.dark .text-zinc-800 {
+  color: var(--color-zinc-200);
+}
+
+.dark .text-zinc-700 {
+  color: var(--color-zinc-300);
+}
+
+.dark .text-zinc-600 {
+  color: var(--color-zinc-400);
+}
+
+.dark .text-zinc-500 {
+  color: var(--color-zinc-400);
+}
+
+.dark .text-zinc-400 {
+  color: var(--color-zinc-500);
+}
+
+.dark .border-zinc-200,
+.dark .border-zinc-200\/80 {
+  border-color: var(--color-zinc-800);
+}
+
+.dark .border-zinc-100 {
+  border-color: var(--color-zinc-800);
+}
+
+.dark .border-zinc-300 {
+  border-color: var(--color-zinc-700);
+}
+
+.dark .divide-zinc-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-zinc-200\/75 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--color-zinc-800);
+}
+
+.dark .hover\:bg-zinc-50\/60:hover,
+.dark .hover\:bg-zinc-50\/80:hover,
+.dark .hover\:bg-zinc-50:hover {
+  background-color: color-mix(in srgb, var(--color-zinc-800) 60%, transparent);
+}
+
+.dark .hover\:bg-zinc-100:hover,
+.dark .hover\:bg-zinc-100\/80:hover {
+  background-color: var(--color-zinc-800);
+}
+
+.dark .hover\:text-zinc-900:hover {
+  color: var(--color-zinc-100);
+}
+
+.dark .hover\:border-zinc-300:hover {
+  border-color: var(--color-zinc-700);
+}
+
+/* Pastel accent chips stay soft but readable on dark surfaces */
+.dark .bg-emerald-50 { background-color: color-mix(in srgb, var(--color-emerald-500) 15%, transparent); }
+.dark .text-emerald-600 { color: var(--color-emerald-400); }
+.dark .text-emerald-700,
+.dark .text-emerald-800 { color: var(--color-emerald-300); }
+.dark .border-emerald-200 { border-color: color-mix(in srgb, var(--color-emerald-500) 30%, transparent); }
+
+.dark .bg-sky-50 { background-color: color-mix(in srgb, var(--color-sky-500) 15%, transparent); }
+.dark .text-sky-600 { color: var(--color-sky-400); }
+.dark .text-sky-700,
+.dark .text-sky-800 { color: var(--color-sky-300); }
+.dark .border-sky-200 { border-color: color-mix(in srgb, var(--color-sky-500) 30%, transparent); }
+
+.dark .bg-amber-50 { background-color: color-mix(in srgb, var(--color-amber-500) 15%, transparent); }
+.dark .text-amber-600 { color: var(--color-amber-400); }
+.dark .text-amber-700,
+.dark .text-amber-800 { color: var(--color-amber-300); }
+.dark .border-amber-200 { border-color: color-mix(in srgb, var(--color-amber-500) 30%, transparent); }
+
+.dark .bg-rose-50,
+.dark .bg-rose-50\/50,
+.dark .bg-rose-100 { background-color: color-mix(in srgb, var(--color-rose-500) 15%, transparent); }
+.dark .text-rose-600 { color: var(--color-rose-400); }
+.dark .text-rose-700 { color: var(--color-rose-300); }
+.dark .text-rose-900 { color: var(--color-rose-200); }
+.dark .border-rose-200,
+.dark .border-rose-300 { border-color: color-mix(in srgb, var(--color-rose-500) 30%, transparent); }

@@ -11,10 +11,10 @@ export function LoadingState({
 }: LoadingStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center p-12 text-center text-zinc-500 space-y-3 ${className}`}
+      className={`flex flex-col items-center justify-center p-12 text-center text-zinc-500 dark:text-zinc-400 space-y-3 ${className}`}
     >
-      <Loader2 className="w-6 h-6 animate-spin text-zinc-600" />
-      <p className="text-xs font-medium text-zinc-600">{message}</p>
+      <Loader2 className="w-6 h-6 animate-spin text-zinc-600 dark:text-zinc-400" />
+      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{message}</p>
     </div>
   );
 }

@@ -50,12 +50,12 @@ export function Dialog({
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative w-full ${getWidthClass(maxWidth)} rounded-lg border border-zinc-200 bg-white p-6 shadow-xl transition-all z-10`}
+        className={`relative w-full ${getWidthClass(maxWidth)} rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-xl transition-all z-10`}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-md p-1 text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+          className="absolute right-4 top-4 rounded-md p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
@@ -63,15 +63,15 @@ export function Dialog({
 
         {(title || description) && (
           <div className="mb-4 space-y-1">
-            {title && <h2 className="text-base font-semibold text-zinc-900">{title}</h2>}
-            {description && <p className="text-xs text-zinc-500">{description}</p>}
+            {title && <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>}
+            {description && <p className="text-xs text-zinc-500 dark:text-zinc-400">{description}</p>}
           </div>
         )}
 
-        <div className="py-2 text-sm text-zinc-800">{children}</div>
+        <div className="py-2 text-sm text-zinc-800 dark:text-zinc-200">{children}</div>
 
         {footer && (
-          <div className="mt-5 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4">
+          <div className="mt-5 flex items-center justify-end gap-2 border-t border-zinc-100 dark:border-zinc-800 pt-4">
             {footer}
           </div>
         )}

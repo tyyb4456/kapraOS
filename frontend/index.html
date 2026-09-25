@@ -4,7 +4,28 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>KapraOS — Retail Management System</title>
+    <script>
+      // Apply persisted theme before first paint to avoid light-flash
+      (function () {
+        try {
+          var stored = localStorage.getItem('kapraos-theme');
+          var theme = stored === 'light' || stored === 'dark' ? stored : null;
+          if (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            theme = 'dark';
+          }
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      html { background-color: #f8f9fa; }
+      html.dark { background-color: #09090b; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
