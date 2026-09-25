@@ -279,9 +279,18 @@ export function NewSalePage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-zinc-100 text-xs">
+                    {/* Column headers — so shopkeeper knows what each value is */}
+                    <div className="hidden sm:flex items-center gap-3 px-4 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                      <div className="flex-1 min-w-0">Item</div>
+                      <div className="w-24 text-center">Quantity</div>
+                      <div className="w-28 text-center">Price (Rs)</div>
+                      <div className="w-24 text-center">Discount (Rs)</div>
+                      <div className="w-24 text-right">Total</div>
+                      <div className="w-7" />
+                    </div>
                     {items.map((item) => (
-                      <div key={item.id} className="p-4 flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
+                      <div key={item.id} className="p-4 flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0 pt-5">
                           <h4 className="font-semibold text-zinc-900 truncate">
                             {item.product_name}
                           </h4>
@@ -289,42 +298,68 @@ export function NewSalePage() {
                             {item.sku} • {item.unit}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <div className="flex flex-col gap-1 w-20 sm:w-24">
+                            <label className="text-[11px] font-medium text-zinc-600 text-center leading-none">
+                              Qty
+                              <span className="block font-normal text-zinc-400">
+                                {item.unit || 'qty'}
+                              </span>
+                            </label>
                             <Input
                               type="number"
                               step="0.01"
                               min="0.01"
                               value={item.quantity}
                               onChange={e => handleUpdateQuantity(item.id, parseFloat(e.target.value) || 0)}
-                              className="w-20 text-center text-xs"
+                              className="w-full text-center text-xs"
+                              placeholder="Qty"
+                              aria-label={`Quantity in ${item.unit || 'units'}`}
                             />
+                          </div>
+                          <div className="flex flex-col gap-1 w-24 sm:w-28">
+                            <label className="text-[11px] font-medium text-zinc-600 text-center leading-none">
+                              Price
+                              <span className="block font-normal text-zinc-400">Rs</span>
+                            </label>
                             <Input
                               type="number"
                               step="1"
                               min="0"
                               value={item.unit_price}
                               onChange={e => handleUpdatePrice(item.id, parseFloat(e.target.value) || 0)}
-                              className="w-24 text-center text-xs"
+                              className="w-full text-center text-xs"
                               placeholder="Price"
+                              aria-label="Unit price in Rs"
                             />
+                          </div>
+                          <div className="flex flex-col gap-1 w-20 sm:w-24">
+                            <label className="text-[11px] font-medium text-zinc-600 text-center leading-none">
+                              Discount
+                              <span className="block font-normal text-zinc-400">Rs</span>
+                            </label>
                             <Input
                               type="number"
                               step="1"
                               min="0"
                               value={item.discount}
                               onChange={e => handleUpdateDiscount(item.id, parseFloat(e.target.value) || 0)}
-                              className="w-20 text-center text-xs"
+                              className="w-full text-center text-xs"
                               placeholder="Disc."
+                              aria-label="Discount in Rs"
                             />
                           </div>
-                          <div className="text-right font-semibold text-zinc-900 font-tabular w-24">
+                        </div>
+                        <div className="flex items-start gap-1 pt-5">
+                          <div className="text-right font-semibold text-zinc-900 font-tabular w-20 sm:w-24">
+                            <span className="block sm:hidden text-[10px] font-normal text-zinc-400 uppercase">Total</span>
                             {formatCurrency(item.quantity * item.unit_price - item.discount)}
                           </div>
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(item.id)}
                             className="text-zinc-400 hover:text-rose-600 p-1 rounded"
+                            title="Remove item"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
