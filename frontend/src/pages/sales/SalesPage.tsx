@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -19,23 +19,39 @@ import {
   TableCell,
   Badge,
   Skeleton,
+  Dialog,
 } from '../../components/ui/index.ts';
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
-import { getSales } from '../../lib/api/sales.ts';
-import type { Sale } from '../../types/index.ts';
+import { getSales, updateSale, deleteSale } from '../../lib/api/sales.ts';
+import { getCustomers } from '../../lib/api/customers.ts';
+import type { Sale, Customer } from '../../types/index.ts';
 
 export function SalesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [editing, setEditing] = useState<Sale | null>(null);
+  const [editData, setEditData] = useState({ customer_id: '', invoice_number: '', discount: 0 });
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const reload = async () => {
+    const data = await getSales();
+    setSales(data);
+  };
 
   useEffect(() => {
     const loadSales = async () => {
       try {
         setLoading(true);
-        const data = await getSales();
-        setSales(data);
+        const [salesData, customersData] = await Promise.all([
+          getSales(),
+          getCustomers().catch(() => [] as Customer[]),
+        ]);
+        setSales(salesData);
+        setCustomers(customersData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load sales');
       } finally {
@@ -88,6 +104,55 @@ export function SalesPage() {
         return <Badge variant="secondary" size="sm">Returned</Badge>;
       default:
         return <Badge variant="neutral" size="sm">{status}</Badge>;
+    }
+  };
+
+  const openEdit = (sale: Sale) => {
+    setEditing(sale);
+    setEditData({
+      customer_id: sale.customer_id ?? '',
+      invoice_number: sale.invoice_number ?? '',
+      discount: sale.discount ?? 0,
+    });
+    setError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateSale(editing.id, {
+        customer_id: editData.customer_id || null,
+        invoice_number: editData.invoice_number || null,
+        discount: editData.discount || 0,
+      });
+      setEditing(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update sale');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (sale: Sale) => {
+    if (!window.confirm(
+      `Void sale ${sale.invoice_number || sale.id}? Stock will be put back and its ledger posting removed. ` +
+      `Allocated payments on this sale are voided too. This cannot be undone.`
+    )) {
+      return;
+    }
+    setDeletingId(sale.id);
+    setError(null);
+    try {
+      await deleteSale(sale.id);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete sale');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -198,9 +263,30 @@ export function SalesPage() {
                   </TableCell>
                   <TableCell>{getStatusBadge(sale.status)}</TableCell>
                   <TableCell align="right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                      Print Bill
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+                        Print Bill
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0"
+                        title="Edit sale (customer / invoice / discount)"
+                        onClick={() => openEdit(sale)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                        title="Void sale"
+                        disabled={deletingId === sale.id}
+                        onClick={() => handleDelete(sale)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -208,6 +294,51 @@ export function SalesPage() {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit Sale"
+        description="Fix customer, invoice number or bill discount. Stock and ledger are reposted automatically. To change items or quantities, void and re-enter the sale."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-3.5">
+          <Select
+            label="Customer (empty = walk-in)"
+            value={editData.customer_id}
+            onChange={(e) => setEditData({ ...editData, customer_id: e.target.value })}
+          >
+            <option value="">Walk-in Customer</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          <Input
+            label="Invoice Number"
+            value={editData.invoice_number}
+            onChange={(e) => setEditData({ ...editData, invoice_number: e.target.value })}
+          />
+          <Input
+            label="Bill Discount (PKR)"
+            type="number"
+            step="0.01"
+            min="0"
+            value={editData.discount}
+            onChange={(e) => setEditData({ ...editData, discount: parseFloat(e.target.value) || 0 })}
+          />
+        </form>
+      </Dialog>
     </PageContainer>
   );
 }

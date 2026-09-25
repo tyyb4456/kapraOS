@@ -134,3 +134,12 @@ class CreateSupplierRequest(BaseModel):
     phone: str | None = None
     address: str | None = None
     notes: str | None = None
+
+
+class UpdateSupplierRequest(BaseModel):
+    """Partial update for a supplier - only provided fields change."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    phone: str | None = Field(default=None, max_length=30)
+    address: str | None = Field(default=None, max_length=300)
+    notes: str | None = Field(default=None, max_length=500)

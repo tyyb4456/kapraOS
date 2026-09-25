@@ -76,6 +76,10 @@ class DuplicatePurchaseItemError(PurchaseError):
     """
 
 
+class PurchaseNotFoundError(PurchaseError):
+    """The purchase does not exist in the caller's shop."""
+
+
 @dataclass(frozen=True)
 class PurchaseItemInput:
     """One requested purchase line before the service normalises it."""
@@ -307,3 +311,226 @@ async def create_purchase(
     await accounting_service.post_purchase(session, purchase=purchase)
 
     return purchase
+
+
+async def _get_purchase_for_update(
+    session: AsyncSession, shop_id: uuid.UUID, purchase_id: uuid.UUID
+) -> Purchase:
+    """Load a purchase with its items + payments, enforcing tenant ownership."""
+
+    result = await session.execute(
+        select(Purchase).where(
+            Purchase.id == purchase_id, Purchase.shop_id == shop_id
+        )
+    )
+    purchase = result.scalar_one_or_none()
+    if purchase is None:
+        raise PurchaseNotFoundError(
+            f"Purchase {purchase_id} not found for shop {shop_id}"
+        )
+    await session.refresh(purchase, attribute_names=["items", "payments"])
+    return purchase
+
+
+async def update_purchase(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    purchase_id: uuid.UUID,
+    items: list[PurchaseItemInput] | None = None,
+    supplier_id: uuid.UUID | None = None,
+    invoice_number: str | None | object = ...,
+    discount: Decimal | None = None,
+) -> Purchase:
+    """Edit a purchase's supplier/invoice/discount and/or lines.
+
+    `items`, when given, fully replaces the purchase's lines: only the per
+    variant quantity deltas go through the inventory service (extra receipts
+    via `add_stock` with the line's cost, put-backs via `remove_stock`),
+    so a concurrent sale sees a correct quantity. A put-back that would
+    drive stock negative (the goods were already sold) is rejected instead
+    of silently creating negative inventory.
+
+    Totals are recomputed server-side like `create_purchase`. The update is
+    rejected when the already-recorded `paid_amount` exceeds the new total.
+    The PURCHASE ledger group is deleted and reposted in the same
+    transaction. Changing the supplier re-points the purchase; allocated
+    supplier payments move with it (their purchase_id stays, supplier_id is
+    updated to keep fk_payments_purchase_same_supplier valid).
+    """
+
+    purchase = await _get_purchase_for_update(session, shop_id, purchase_id)
+
+    new_supplier_id = purchase.supplier_id if supplier_id is None else supplier_id
+    if supplier_id is not None:
+        await _get_supplier(session, shop_id, supplier_id)
+
+    new_invoice = purchase.invoice_number
+    if invoice_number is not ...:
+        raw = invoice_number
+        if raw is not None:
+            raw = str(raw).strip() or None
+            if raw is not None and len(raw) > 50:
+                raise InvalidPurchaseTotalsError(
+                    "invoice_number must be at most 50 characters"
+                )
+        if raw is not None and raw != purchase.invoice_number:
+            clash = await session.execute(
+                select(Purchase.id).where(
+                    Purchase.shop_id == shop_id,
+                    Purchase.invoice_number == raw,
+                    Purchase.id != purchase.id,
+                ).limit(1)
+            )
+            if clash.scalar_one_or_none() is not None:
+                raise InvalidPurchaseTotalsError(
+                    f"invoice_number {raw!r} is already used"
+                )
+        new_invoice = raw  # type: ignore[assignment]
+
+    if items is None:
+        combined: OrderedDict[uuid.UUID, _NormalisedItem] | None = None
+    else:
+        if not items:
+            raise EmptyPurchaseError("a purchase must contain at least one item")
+        combined = _combine_items(items)
+        await _validate_variants(session, shop_id, list(combined.keys()))
+
+    new_discount = purchase.discount if discount is None else _normalise_money(discount)
+
+    if combined is None:
+        new_subtotal = purchase.subtotal
+    else:
+        new_subtotal = sum(
+            (line.total for line in combined.values()), start=Decimal("0.00")
+        ).quantize(_MONEY_SCALE, rounding=ROUND_HALF_UP)
+
+    if new_discount < 0 or new_discount > new_subtotal:
+        raise InvalidPurchaseTotalsError(
+            f"discount {new_discount} must be between 0 and subtotal {new_subtotal}"
+        )
+    new_total = (new_subtotal - new_discount).quantize(
+        _MONEY_SCALE, rounding=ROUND_HALF_UP
+    )
+    if purchase.paid_amount > new_total:
+        raise InvalidPurchaseTotalsError(
+            f"paid_amount {purchase.paid_amount} already recorded exceeds new "
+            f"total {new_total}; void the payments first"
+        )
+
+    if combined is not None:
+        old_qty: dict[uuid.UUID, Decimal] = {}
+        old_cost: dict[uuid.UUID, Decimal] = {}
+        for row in purchase.items:
+            old_qty[row.variant_id] = old_qty.get(row.variant_id, Decimal("0")) + row.quantity
+            old_cost[row.variant_id] = row.unit_cost
+        new_map: dict[uuid.UUID, _NormalisedItem] = dict(combined)
+
+        for variant_id in sorted(set(old_qty) | set(new_map), key=str):
+            old = old_qty.get(variant_id, Decimal("0"))
+            new_item = new_map.get(variant_id)
+            new = new_item.quantity if new_item is not None else Decimal("0")
+            delta = new - old
+            if delta > 0:
+                cost = new_item.unit_cost if new_item is not None else old_cost.get(variant_id, Decimal("0"))
+                await inventory_service.add_stock(
+                    session,
+                    shop_id=shop_id,
+                    variant_id=variant_id,
+                    quantity=delta,
+                    movement_type=InventoryMovementType.PURCHASE,
+                    unit_cost=cost,
+                    reference_type="PURCHASE_EDIT",
+                    reference_id=purchase.id,
+                )
+            elif delta < 0:
+                await inventory_service.remove_stock(
+                    session,
+                    shop_id=shop_id,
+                    variant_id=variant_id,
+                    quantity=-delta,
+                    movement_type=InventoryMovementType.ADJUSTMENT,
+                    unit_cost=None,
+                    reference_type="PURCHASE_EDIT",
+                    reference_id=purchase.id,
+                )
+
+        for row in list(purchase.items):
+            await session.delete(row)
+        await session.flush()
+        purchase.items = []
+        for line in combined.values():
+            purchase.items.append(
+                PurchaseItem(
+                    purchase_id=purchase.id,
+                    variant_id=line.variant_id,
+                    quantity=line.quantity,
+                    unit_cost=line.unit_cost,
+                    total=line.total,
+                )
+            )
+
+    purchase.supplier_id = new_supplier_id
+    purchase.invoice_number = new_invoice
+    purchase.subtotal = new_subtotal
+    purchase.discount = new_discount
+    purchase.total = new_total
+    await session.flush()
+    if supplier_id is not None:
+        # Re-point allocated payments after the purchase row itself, so
+        # fk_payments_purchase_same_supplier always sees the new pair.
+        for payment in purchase.payments:
+            payment.supplier_id = new_supplier_id
+        await session.flush()
+
+    await accounting_service.delete_postings_for_reference(
+        session,
+        shop_id=shop_id,
+        reference_id=purchase.id,
+        reference_types=[accounting_service.REFERENCE_PURCHASE],
+    )
+    await accounting_service.post_purchase(session, purchase=purchase)
+
+    return purchase
+
+
+async def delete_purchase(
+    session: AsyncSession, *, shop_id: uuid.UUID, purchase_id: uuid.UUID
+) -> None:
+    """Void a purchase: pull its stock back out, drop ledger + payments, delete.
+
+    The original PURCHASE movements stay for the audit trail; a compensating
+    ADJUSTMENT movement (reference PURCHASE_VOID) removes each line again.
+    When the goods were already sold and stock is insufficient, the void is
+    rejected with `InsufficientStockError` rather than driving inventory
+    negative. Ledger groups PURCHASE plus SUPPLIER_PAYMENT groups for every
+    allocated payment are removed, then the payments, items and header.
+    """
+
+    purchase = await _get_purchase_for_update(session, shop_id, purchase_id)
+
+    for item in purchase.items:
+        await inventory_service.remove_stock(
+            session,
+            shop_id=shop_id,
+            variant_id=item.variant_id,
+            quantity=item.quantity,
+            movement_type=InventoryMovementType.ADJUSTMENT,
+            unit_cost=None,
+            reference_type="PURCHASE_VOID",
+            reference_id=purchase.id,
+        )
+
+    payment_ids = [p.id for p in purchase.payments]
+    await accounting_service.delete_postings_for_reference(
+        session, shop_id=shop_id, reference_id=purchase.id
+    )
+    for payment_id in payment_ids:
+        await accounting_service.delete_postings_for_reference(
+            session, shop_id=shop_id, reference_id=payment_id
+        )
+    for payment in list(purchase.payments):
+        await session.delete(payment)
+    await session.flush()
+    await session.delete(purchase)
+    await session.flush()

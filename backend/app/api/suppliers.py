@@ -1,8 +1,10 @@
-"""Supplier Khata endpoints.
+"""Supplier directory + Khata endpoints.
 
-Four focused routes over the Step 7 payables service - deliberately not a
-supplier CRUD surface, which belongs to its own step:
-
+    GET  /suppliers                         list all suppliers
+    POST /suppliers                         create a new supplier
+    GET  /suppliers/{supplier_id}           read one supplier
+    PATCH /suppliers/{supplier_id}          update name/phone/address/notes
+    DELETE /suppliers/{supplier_id}         delete a supplier with no history
     GET  /suppliers/{supplier_id}/balance     how much do we owe them?
     GET  /suppliers/{supplier_id}/statement   why do we owe it?
     GET  /suppliers/{supplier_id}/summary     dashboard line for one supplier
@@ -13,7 +15,7 @@ supplier id belonging to another tenant returns 404 rather than reading
 anything. Domain errors are translated here and nowhere else - the service
 raises `PayablesError` subclasses and stays free of HTTP concerns.
 
-`get_db` does not commit, so the one write route commits explicitly (the read
+`get_db` does not commit, so the write routes commit explicitly (the read
 routes never need to).
 """
 
@@ -22,10 +24,12 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
+from app.models.payment import Payment
+from app.models.purchase import Purchase
 from app.models.supplier import Supplier
 from app.schemas.payables import (
     CreateSupplierRequest,
@@ -36,6 +40,7 @@ from app.schemas.payables import (
     SupplierResponse,
     SupplierStatementResponse,
     SupplierSummaryResponse,
+    UpdateSupplierRequest,
 )
 from app.services import payables as payables_service
 from app.services.payables import (
@@ -88,9 +93,14 @@ async def create_supplier(
     db: DbSession,
     body: CreateSupplierRequest,
 ) -> SupplierResponse:
+    if not body.name or not body.name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Supplier name must not be blank",
+        )
     supplier = Supplier(
         shop_id=shop_id,
-        name=body.name,
+        name=body.name.strip(),
         phone=body.phone,
         address=body.address,
         notes=body.notes,
@@ -109,6 +119,134 @@ async def create_supplier(
         current_balance=0.0,
         created_at=supplier.created_at,
     )
+
+
+@router.get(
+    "/{supplier_id}",
+    response_model=SupplierResponse,
+    summary="Read one supplier",
+)
+async def read_supplier(
+    supplier_id: SupplierId,
+    shop_id: ShopId,
+    db: DbSession,
+) -> SupplierResponse:
+    supplier = (await db.execute(
+        select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.shop_id == shop_id,
+        )
+    )).scalar_one_or_none()
+    if supplier is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found")
+    balance = await payables_service.get_supplier_balance(
+        db, shop_id=shop_id, supplier_id=supplier.id
+    )
+    return SupplierResponse(
+        id=supplier.id,
+        shop_id=supplier.shop_id,
+        name=supplier.name,
+        phone=supplier.phone,
+        address=supplier.address,
+        notes=supplier.notes,
+        current_balance=float(balance.outstanding_balance),
+        created_at=supplier.created_at,
+    )
+
+
+@router.patch(
+    "/{supplier_id}",
+    response_model=SupplierResponse,
+    summary="Update a supplier",
+)
+async def update_supplier(
+    supplier_id: SupplierId,
+    shop_id: ShopId,
+    db: DbSession,
+    body: UpdateSupplierRequest,
+) -> SupplierResponse:
+    supplier = (await db.execute(
+        select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.shop_id == shop_id,
+        )
+    )).scalar_one_or_none()
+    if supplier is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found")
+    updates = body.model_dump(exclude_unset=True)
+    if "name" in updates and updates["name"] is not None:
+        name = updates["name"].strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Supplier name must not be blank",
+            )
+        supplier.name = name
+    if "phone" in updates:
+        supplier.phone = updates["phone"]
+    if "address" in updates:
+        supplier.address = updates["address"]
+    if "notes" in updates:
+        supplier.notes = updates["notes"]
+    await db.flush()
+    await db.commit()
+    await db.refresh(supplier)
+    balance = await payables_service.get_supplier_balance(
+        db, shop_id=shop_id, supplier_id=supplier.id
+    )
+    return SupplierResponse(
+        id=supplier.id,
+        shop_id=supplier.shop_id,
+        name=supplier.name,
+        phone=supplier.phone,
+        address=supplier.address,
+        notes=supplier.notes,
+        current_balance=float(balance.outstanding_balance),
+        created_at=supplier.created_at,
+    )
+
+
+@router.delete(
+    "/{supplier_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a supplier with no history",
+)
+async def delete_supplier(
+    supplier_id: SupplierId,
+    shop_id: ShopId,
+    db: DbSession,
+) -> None:
+    supplier = (await db.execute(
+        select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.shop_id == shop_id,
+        )
+    )).scalar_one_or_none()
+    if supplier is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found")
+    purchases_count = (await db.execute(
+        select(func.count(Purchase.id)).where(
+            Purchase.shop_id == shop_id,
+            Purchase.supplier_id == supplier_id,
+        )
+    )).scalar_one()
+    payments_count = (await db.execute(
+        select(func.count(Payment.id)).where(
+            Payment.shop_id == shop_id,
+            Payment.supplier_id == supplier_id,
+        )
+    )).scalar_one()
+    if (purchases_count or 0) > 0 or (payments_count or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot delete supplier with history "
+                f"({purchases_count} purchase(s), {payments_count} payment(s)). "
+                "Keep the record for the Khata audit trail instead."
+            ),
+        )
+    await db.delete(supplier)
+    await db.commit()
 
 
 def _not_found(exc: Exception) -> HTTPException:

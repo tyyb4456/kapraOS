@@ -25,6 +25,7 @@ class CategoryResponse(BaseModel):
     parent_id: UUID | None = None
     shop_id: UUID
     created_at: datetime
+    products_count: int = 0
 
 
 class CategoryTreeResponse(BaseModel):
@@ -154,6 +155,7 @@ class CreateAttributeValueRequest(BaseModel):
 
 
 class CreateProductVariantRequest(BaseModel):
+    product_id: UUID | None = None
     sku: str
     barcode: str | None = None
     purchase_price: float
@@ -177,3 +179,35 @@ class UpdateProductVariantRequest(BaseModel):
     selling_price: float | None = None
     purchase_price: float | None = None
     is_active: bool | None = None
+    sku: str | None = None
+    barcode: str | None = None
+    unit: str | None = None
+
+
+class UpdateProductRequest(BaseModel):
+    """Partial edit for a product - omitted keys are left alone."""
+
+    name: str | None = None
+    code: str | None = None
+    product_type: str | None = None
+    description: str | None = None
+    category_id: UUID | None = None
+    brand_id: UUID | None = None
+    unit: str | None = None
+
+
+class UpdateCategoryRequest(BaseModel):
+    name: str | None = None
+    parent_id: UUID | None = None
+
+
+class UpdateBrandRequest(BaseModel):
+    name: str | None = None
+
+
+class UpdateAttributeRequest(BaseModel):
+    name: str | None = None
+
+
+class UpdateAttributeValueRequest(BaseModel):
+    value: str | None = None

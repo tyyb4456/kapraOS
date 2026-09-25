@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -19,23 +19,39 @@ import {
   TableCell,
   Badge,
   Skeleton,
+  Dialog,
 } from '../../components/ui/index.ts';
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
-import { getPurchases } from '../../lib/api/purchases.ts';
-import type { Purchase } from '../../types/index.ts';
+import { getPurchases, updatePurchase, deletePurchase } from '../../lib/api/purchases.ts';
+import { getSuppliers } from '../../lib/api/suppliers.ts';
+import type { Purchase, Supplier } from '../../types/index.ts';
 
 export function PurchasesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [editing, setEditing] = useState<Purchase | null>(null);
+  const [editData, setEditData] = useState({ supplier_id: '', invoice_number: '', discount: 0 });
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const reload = async () => {
+    const data = await getPurchases();
+    setPurchases(data);
+  };
 
   useEffect(() => {
     const loadPurchases = async () => {
       try {
         setLoading(true);
-        const data = await getPurchases();
-        setPurchases(data);
+        const [purchasesData, suppliersData] = await Promise.all([
+          getPurchases(),
+          getSuppliers().catch(() => [] as Supplier[]),
+        ]);
+        setPurchases(purchasesData);
+        setSuppliers(suppliersData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load purchases');
       } finally {
@@ -63,6 +79,55 @@ export function PurchasesPage() {
         return <Badge variant="destructive" size="sm">Cancelled</Badge>;
       default:
         return <Badge variant="neutral" size="sm">{status}</Badge>;
+    }
+  };
+
+  const openEdit = (purchase: Purchase) => {
+    setEditing(purchase);
+    setEditData({
+      supplier_id: purchase.supplier_id ?? '',
+      invoice_number: purchase.order_number ?? '',
+      discount: 0,
+    });
+    setError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updatePurchase(editing.id, {
+        supplier_id: editData.supplier_id || undefined,
+        invoice_number: editData.invoice_number || null,
+        discount: editData.discount || 0,
+      });
+      setEditing(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update purchase');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (purchase: Purchase) => {
+    if (!window.confirm(
+      `Void purchase ${purchase.order_number || purchase.id}? Stock will be pulled back out and its ledger posting removed. ` +
+      `Fails if the goods were already sold. This cannot be undone.`
+    )) {
+      return;
+    }
+    setDeletingId(purchase.id);
+    setError(null);
+    try {
+      await deletePurchase(purchase.id);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete purchase');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -168,9 +233,30 @@ export function PurchasesPage() {
                   </TableCell>
                   <TableCell>{getStatusBadge(purchase.status)}</TableCell>
                   <TableCell align="right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                      Details
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+                        Details
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0"
+                        title="Edit purchase (supplier / invoice / discount)"
+                        onClick={() => openEdit(purchase)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                        title="Void purchase"
+                        disabled={deletingId === purchase.id}
+                        onClick={() => handleDelete(purchase)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -178,6 +264,51 @@ export function PurchasesPage() {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit Purchase"
+        description="Fix supplier, invoice number or discount. Stock and ledger are reposted automatically. To change items or quantities, void and re-enter the purchase."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-3.5">
+          <Select
+            label="Supplier"
+            value={editData.supplier_id}
+            onChange={(e) => setEditData({ ...editData, supplier_id: e.target.value })}
+          >
+            <option value="">Keep current supplier</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+          <Input
+            label="Invoice Number"
+            value={editData.invoice_number}
+            onChange={(e) => setEditData({ ...editData, invoice_number: e.target.value })}
+          />
+          <Input
+            label="Discount (PKR)"
+            type="number"
+            step="0.01"
+            min="0"
+            value={editData.discount}
+            onChange={(e) => setEditData({ ...editData, discount: parseFloat(e.target.value) || 0 })}
+          />
+        </form>
+      </Dialog>
     </PageContainer>
   );
 }

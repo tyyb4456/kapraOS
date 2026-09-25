@@ -1,22 +1,18 @@
-"""Expense endpoints (Step 10).
-
-Three focused routes over the expense service - deliberately not a CRUD surface:
+"""Expense endpoints.
 
     POST /expenses          record an immediate-payment expense
     GET  /expenses          list them, filtered by date
     GET  /expenses/{id}     read one
-
-There is deliberately **no** update or delete route: a posted expense already
-has ledger entries, and V1 has no reversal/void workflow, so a posted expense is
-immutable (`step_10_desc.md` sections 16 and 37). A correction workflow belongs
-to a future accounting-reversal step.
+    PATCH /expenses/{id}    edit description/category/amount/method/date
+                            (financial changes repost the EXPENSE ledger group)
+    DELETE /expenses/{id}   void an expense and drop its ledger posting
 
 The shop is always resolved server-side (see `app.api.dependencies`), so an
 expense id from another tenant returns 404 rather than reading anything, and the
 request body can never choose a shop. Domain errors are translated here and
 nowhere else.
 
-`get_db` does not commit, so the one write route commits explicitly.
+`get_db` does not commit, so the write routes commit explicitly.
 """
 
 import uuid
@@ -26,7 +22,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
 from app.api.dependencies import DbSession, ShopId
-from app.schemas.expenses import CreateExpenseRequest, ExpenseResponse
+from app.schemas.expenses import CreateExpenseRequest, ExpenseResponse, UpdateExpenseRequest
 from app.services import expenses as expenses_service
 from app.services.expenses import (
     ExpenseNotFoundError,
@@ -136,3 +132,61 @@ async def read_expense(
     except ExpenseNotFoundError as exc:
         raise _not_found(exc) from exc
     return ExpenseResponse.model_validate(expense)
+
+
+@router.patch(
+    "/{expense_id}",
+    response_model=ExpenseResponse,
+    summary="Edit an expense",
+)
+async def update_expense(
+    expense_id: ExpenseId,
+    shop_id: ShopId,
+    db: DbSession,
+    body: UpdateExpenseRequest,
+) -> ExpenseResponse:
+    fields_set = body.model_fields_set
+    description_sentinel: object = ...
+    if "description" in fields_set:
+        description_sentinel = body.description
+    try:
+        expense = await expenses_service.update_expense(
+            db,
+            shop_id=shop_id,
+            expense_id=expense_id,
+            category=body.category,
+            amount=body.amount,
+            payment_method=body.payment_method,
+            description=description_sentinel,
+            expense_date=body.expense_date,
+        )
+    except ExpenseNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except (
+        InvalidExpenseAmountError,
+        InvalidExpenseCategoryError,
+        InvalidExpensePaymentMethodError,
+    ) as exc:
+        raise _unprocessable(exc) from exc
+    await db.commit()
+    await db.refresh(expense)
+    return ExpenseResponse.model_validate(expense)
+
+
+@router.delete(
+    "/{expense_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Void an expense",
+)
+async def delete_expense(
+    expense_id: ExpenseId,
+    shop_id: ShopId,
+    db: DbSession,
+) -> None:
+    try:
+        await expenses_service.delete_expense(
+            db, shop_id=shop_id, expense_id=expense_id
+        )
+    except ExpenseNotFoundError as exc:
+        raise _not_found(exc) from exc
+    await db.commit()

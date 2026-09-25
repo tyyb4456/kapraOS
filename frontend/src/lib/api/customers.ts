@@ -39,7 +39,9 @@ export async function getCustomerKhata(customerId: string): Promise<KhataEntry[]
     : [];
 
   return rawList.map((entry: any, index: number) => ({
-    id: entry.id || entry.sale_id || entry.payment_id || `entry-${index}`,
+    id: entry.payment_id || entry.sale_id || entry.id || `entry-${index}`,
+    payment_id: entry.payment_id ?? null,
+    sale_id: entry.sale_id ?? null,
     party_id: customerId,
     party_name: '',
     entry_date: entry.entry_date || entry.date,
@@ -68,6 +70,27 @@ export interface CreateCustomerRequest {
 
 export async function createCustomer(data: CreateCustomerRequest): Promise<Customer> {
   return apiClient.post<Customer>('/customers', data);
+}
+
+export async function getCustomer(customerId: string): Promise<Customer> {
+  return apiClient.get<Customer>(`/customers/${customerId}`);
+}
+
+export interface UpdateCustomerRequest {
+  name?: string;
+  phone?: string | null;
+  email?: string | null;
+  credit_limit?: number | null;
+  address?: string | null;
+  notes?: string | null;
+}
+
+export async function updateCustomer(customerId: string, data: UpdateCustomerRequest): Promise<Customer> {
+  return apiClient.patch<Customer>(`/customers/${customerId}`, data);
+}
+
+export async function deleteCustomer(customerId: string): Promise<void> {
+  await apiClient.delete(`/customers/${customerId}`);
 }
 
 export interface RecordCustomerPaymentRequest {

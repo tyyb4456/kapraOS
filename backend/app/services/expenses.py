@@ -223,3 +223,73 @@ async def list_expenses(
 
     rows = (await session.execute(page)).scalars().all()
     return ExpenseList(total=int(total), expenses=tuple(rows))
+
+
+async def update_expense(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    category: ExpenseCategory | str | None = None,
+    amount: Decimal | None = None,
+    payment_method: PaymentMethod | str | None = None,
+    description: str | None | object = ...,
+    expense_date: datetime | None = None,
+) -> Expense:
+    """Edit an expense, reposting its ledger group when money moves.
+
+    Description/expense_date edits only touch the row. A category, amount or
+    payment-method change deletes the old EXPENSE posting and writes a new
+    one in the same transaction, so the P&L never shows a half-edited
+    expense. `description` uses a sentinel: omit it to leave it alone, pass
+    None to clear it.
+    """
+
+    expense = await get_expense(session, shop_id=shop_id, expense_id=expense_id)
+
+    repost = False
+    if category is not None:
+        new_category = _normalise_category(category)
+        if new_category != expense.category:
+            expense.category = new_category
+            repost = True
+    if amount is not None:
+        new_amount = _normalise_amount(amount)
+        if new_amount != expense.amount:
+            expense.amount = new_amount
+            repost = True
+    if payment_method is not None:
+        new_method = _normalise_method(payment_method)
+        if new_method != expense.payment_method:
+            expense.payment_method = new_method
+            repost = True
+    if description is not ...:
+        expense.description = description  # type: ignore[assignment]
+    if expense_date is not None:
+        expense.expense_date = expense_date
+
+    await session.flush()
+
+    if repost:
+        await accounting_service.delete_postings_for_reference(
+            session,
+            shop_id=shop_id,
+            reference_id=expense.id,
+            reference_types=[accounting_service.REFERENCE_EXPENSE],
+        )
+        await accounting_service.post_expense(session, expense=expense)
+
+    return expense
+
+
+async def delete_expense(
+    session: AsyncSession, *, shop_id: uuid.UUID, expense_id: uuid.UUID
+) -> None:
+    """Void an expense: drop its EXPENSE ledger group and delete the row."""
+
+    expense = await get_expense(session, shop_id=shop_id, expense_id=expense_id)
+    await accounting_service.delete_postings_for_reference(
+        session, shop_id=shop_id, reference_id=expense.id
+    )
+    await session.delete(expense)
+    await session.flush()

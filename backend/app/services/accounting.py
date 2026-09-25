@@ -725,6 +725,65 @@ async def post_supplier_payment(
     )
 
 
+async def delete_posting(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    reference_type: str,
+    reference_id: uuid.UUID,
+) -> int:
+    """Delete one posting group (all its ledger lines).
+
+    Used by update/delete flows: an edit deletes the old group and reposts,
+    a void deletes every group belonging to the voided document. Returns the
+    number of rows removed. Tenant-scoped by `shop_id`, so a shop can never
+    delete another shop's ledger lines.
+    """
+
+    rows = (
+        await session.execute(
+            select(LedgerEntry).where(
+                LedgerEntry.shop_id == shop_id,
+                LedgerEntry.reference_type == reference_type,
+                LedgerEntry.reference_id == reference_id,
+            )
+        )
+    ).scalars().all()
+    for entry in rows:
+        await session.delete(entry)
+    if rows:
+        await session.flush()
+    return len(rows)
+
+
+async def delete_postings_for_reference(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    reference_id: uuid.UUID,
+    reference_types: list[str] | None = None,
+) -> int:
+    """Delete every ledger group that points at `reference_id`.
+
+    Used when voiding a sale/purchase/payment: the document id may own
+    several groups (e.g. SALE + SALE_COGS + SALE_RETURN). When
+    `reference_types` is given only those groups are removed.
+    """
+
+    stmt = select(LedgerEntry).where(
+        LedgerEntry.shop_id == shop_id,
+        LedgerEntry.reference_id == reference_id,
+    )
+    if reference_types:
+        stmt = stmt.where(LedgerEntry.reference_type.in_(reference_types))
+    rows = (await session.execute(stmt)).scalars().all()
+    for entry in rows:
+        await session.delete(entry)
+    if rows:
+        await session.flush()
+    return len(rows)
+
+
 async def list_accounts(
     session: AsyncSession, *, shop_id: uuid.UUID
 ) -> list[Account]:

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -21,7 +21,7 @@ import {
   Skeleton,
 } from '../../components/ui/index.ts';
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
-import { getExpenses, createExpense } from '../../lib/api/expenses.ts';
+import { getExpenses, createExpense, updateExpense, deleteExpense } from '../../lib/api/expenses.ts';
 import type { Expense } from '../../types/index.ts';
 
 export function ExpensesPage() {
@@ -40,6 +40,9 @@ export function ExpensesPage() {
     receipt_ref: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
+  const [editData, setEditData] = useState({ category: 'utilities', amount: 0, description: '', payment_method: 'cash' as string, date: '' });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Must match backend ExpenseCategory enum (rent, salary, utilities,
   // transport, marketing, maintenance, supplies, other). Labels stay
@@ -126,6 +129,65 @@ export function ExpensesPage() {
     }
   };
 
+  const reload = async () => {
+    const data = await getExpenses();
+    setExpenses(data);
+  };
+
+  const openEdit = (expense: Expense) => {
+    setEditing(expense);
+    const rawDate = expense.expense_date ?? expense.date ?? '';
+    setEditData({
+      category: expense.category,
+      amount: Number(expense.amount),
+      description: expense.description ?? '',
+      payment_method: expense.payment_method,
+      date: rawDate ? new Date(rawDate).toISOString().split('T')[0] : '',
+    });
+    setError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing || !editData.amount || !editData.description.trim()) {
+      setError('Amount and description are required');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateExpense(editing.id, {
+        category: editData.category,
+        amount: editData.amount,
+        description: editData.description.trim(),
+        payment_method: editData.payment_method as 'cash' | 'bank' | 'card' | 'jazzcash' | 'easypaisa' | 'other',
+        expense_date: editData.date ? new Date(editData.date).toISOString() : undefined,
+      });
+      setEditing(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update expense');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (expense: Expense) => {
+    if (!window.confirm(`Void expense "${expense.description || expense.category}" of ${expense.amount}? Its ledger posting will be removed too.`)) {
+      return;
+    }
+    setDeletingId(expense.id);
+    setError(null);
+    try {
+      await deleteExpense(expense.id);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete expense');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <PageContainer>
       <PageHeader
@@ -187,6 +249,7 @@ export function ExpensesPage() {
               <TableHead>Description</TableHead>
               <TableHead>Payment Method</TableHead>
               <TableHead align="right">Amount</TableHead>
+              <TableHead align="right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -198,11 +261,12 @@ export function ExpensesPage() {
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell align="right"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell align="right"><Skeleton className="h-4 w-16" /></TableCell>
                 </TableRow>
               ))
             ) : filteredExpenses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-zinc-500">
+                <TableCell colSpan={6} className="text-center py-8 text-zinc-500">
                   {searchTerm ? 'No matching expenses found' : 'No expenses recorded yet'}
                 </TableCell>
               </TableRow>
@@ -228,6 +292,29 @@ export function ExpensesPage() {
                   </TableCell>
                   <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
                     {formatCurrency(Number(expense.amount))}
+                  </TableCell>
+                  <TableCell align="right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0"
+                        title="Edit expense"
+                        onClick={() => openEdit(expense)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                        title="Void expense"
+                        disabled={deletingId === expense.id}
+                        onClick={() => handleDelete(expense)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -298,6 +385,68 @@ export function ExpensesPage() {
           >
             <option value="cash">Shop Cash Drawer</option>
             <option value="bank">Bank Account</option>
+          </Select>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit Expense"
+        description="Fix a wrongly entered expense. Financial changes repost the ledger."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-3.5">
+          <Select
+            label="Expense Category"
+            value={editData.category}
+            onChange={(e) => setEditData({ ...editData, category: e.target.value })}
+          >
+            {categories.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </Select>
+          <Input
+            label="Amount (PKR) *"
+            type="number"
+            step="0.01"
+            min="0"
+            value={editData.amount}
+            onChange={(e) => setEditData({ ...editData, amount: parseFloat(e.target.value) || 0 })}
+          />
+          <Input
+            label="Description *"
+            value={editData.description}
+            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+          />
+          <Input
+            label="Date *"
+            type="date"
+            value={editData.date}
+            onChange={(e) => setEditData({ ...editData, date: e.target.value })}
+          />
+          <Select
+            label="Payment Source"
+            value={editData.payment_method}
+            onChange={(e) => setEditData({ ...editData, payment_method: e.target.value })}
+          >
+            <option value="cash">Shop Cash Drawer</option>
+            <option value="bank">Bank Account</option>
+            <option value="card">Card</option>
+            <option value="jazzcash">JazzCash</option>
+            <option value="easypaisa">Easypaisa</option>
+            <option value="other">Other</option>
           </Select>
         </form>
       </Dialog>

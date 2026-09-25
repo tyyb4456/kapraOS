@@ -7,6 +7,7 @@ export * from './purchases.ts';
 export * from './customers.ts';
 export * from './suppliers.ts';
 export * from './expenses.ts';
+export * from './payments.ts';
 export * from './reports.ts';
 export * from './shops.ts';
 export * from './dashboard.ts';

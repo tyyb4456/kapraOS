@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Download } from 'lucide-react';
+import { Plus, Download, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -26,6 +26,7 @@ import {
   getCustomerKhata,
   recordCustomerPayment,
 } from '../../lib/api/customers.ts';
+import { voidPayment } from '../../lib/api/payments.ts';
 import type { Customer, KhataEntry, PaymentMethod } from '../../types/index.ts';
 
 export function CustomerKhataPage() {
@@ -122,6 +123,28 @@ export function CustomerKhataPage() {
     window.print();
   };
 
+  const reloadKhata = async () => {
+    const [updatedCustomers, updatedKhata] = await Promise.all([
+      getCustomers(),
+      getCustomerKhata(selectedCustomer),
+    ]);
+    setCustomers(updatedCustomers);
+    setKhataEntries(updatedKhata);
+  };
+
+  const handleVoidPayment = async (entry: KhataEntry) => {
+    if (!window.confirm(`Void this payment of ${formatCurrency(entry.credit)}? The Khata balance will be restored.`)) {
+      return;
+    }
+    try {
+      setError(null);
+      await voidPayment(entry.id);
+      await reloadKhata();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to void payment');
+    }
+  };
+
   return (
     <>
       {error && (
@@ -216,6 +239,7 @@ export function CustomerKhataPage() {
                 <TableHead align="right">Debit (Sale +)</TableHead>
                 <TableHead align="right">Credit (Payment -)</TableHead>
                 <TableHead align="right">Running Balance</TableHead>
+                <TableHead align="right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -228,11 +252,12 @@ export function CustomerKhataPage() {
                     <TableCell align="right"><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell align="right"><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell align="right"><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell align="right"><Skeleton className="h-4 w-16" /></TableCell>
                   </TableRow>
                 ))
               ) : khataEntries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-zinc-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-zinc-500">
                     No khata entries for this customer
                   </TableCell>
                 </TableRow>
@@ -256,6 +281,21 @@ export function CustomerKhataPage() {
                     </TableCell>
                     <TableCell align="right" className="font-tabular font-bold text-zinc-900">
                       {formatCurrency(entry.balance_after)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {entry.entry_type === 'payment' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                          title="Void this payment"
+                          onClick={() => handleVoidPayment(entry)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-zinc-300">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

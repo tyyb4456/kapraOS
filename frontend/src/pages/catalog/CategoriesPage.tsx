@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit } from 'lucide-react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -19,7 +19,8 @@ import {
   Select,
   Card,
 } from '../../components/ui/index.ts';
-import { getCategories, createCategory } from '../../lib/api/products.ts';
+import { getCategories, createCategory, updateCategory, deleteCategory } from '../../lib/api/products.ts';
+import { ApiError } from '../../lib/api/client.ts';
 import type { Category } from '../../types/index.ts';
 
 export function CategoriesPage() {
@@ -29,6 +30,14 @@ export function CategoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '', parent_id: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState<Category | null>(null);
+  const [editName, setEditName] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const reload = async () => {
+    const data = await getCategories();
+    setCategories(data);
+  };
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -70,6 +79,68 @@ export function CategoriesPage() {
       setError(err instanceof Error ? err.message : 'Failed to create category');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEdit = (category: Category) => {
+    setEditing(category);
+    setEditName(category.name);
+    setError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing || !editName.trim()) {
+      setError('Category name is required');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateCategory(editing.id, { name: editName.trim() });
+      setEditing(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update category');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (category: Category) => {
+    if (!window.confirm(`Delete category "${category.name}"? Categories with sub-categories or products cannot be deleted.`)) {
+      return;
+    }
+    setDeletingId(category.id);
+    setError(null);
+    try {
+      await deleteCategory(category.id);
+      await reload();
+    } catch (err) {
+      // A category holding products blocks a plain delete - offer to
+      // permanently delete the products (and their stock history) with it.
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        /product/i.test(err.message) &&
+        window.confirm(
+          `${err.message}\n\n` +
+          `Permanently delete category "${category.name}" INCLUDING its products ` +
+          `and their stock movement history? This cannot be undone.`
+        )
+      ) {
+        try {
+          await deleteCategory(category.id, true);
+          await reload();
+          return;
+        } catch (retryErr) {
+          setError(retryErr instanceof Error ? retryErr.message : 'Failed to delete category');
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to delete category');
+      }
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -142,13 +213,27 @@ export function CategoriesPage() {
                   </TableCell>
                   <TableCell align="center">
                     <Badge variant="neutral" size="sm">
-                      {category.variants_count ? `${category.variants_count} products` : '0 products'}
+                      {(category.products_count ?? category.variants_count ?? 0) > 0
+                        ? `${category.products_count ?? category.variants_count} products`
+                        : '0 products'}
                     </Badge>
                   </TableCell>
                   <TableCell align="right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 px-0" title="Edit category" onClick={() => openEdit(category)}>
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                        title="Delete category"
+                        disabled={deletingId === category.id}
+                        onClick={() => handleDelete(category)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -198,6 +283,31 @@ export function CategoriesPage() {
               {submitting ? 'Saving...' : 'Save Category'}
             </Button>
           </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit Category"
+        description="Rename the category."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-3.5">
+          <Input
+            label="Category Name *"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+          />
         </form>
       </Dialog>
     </PageContainer>

@@ -39,7 +39,9 @@ export async function getSupplierKhata(supplierId: string): Promise<KhataEntry[]
     : [];
 
   return rawList.map((entry: any, index: number) => ({
-    id: entry.id || entry.purchase_id || entry.payment_id || `entry-${index}`,
+    id: entry.payment_id || entry.purchase_id || entry.id || `entry-${index}`,
+    payment_id: entry.payment_id ?? null,
+    purchase_id: entry.purchase_id ?? null,
     party_id: supplierId,
     party_name: '',
     entry_date: entry.entry_date || entry.date,
@@ -68,6 +70,21 @@ export interface CreateSupplierRequest {
 
 export async function createSupplier(data: CreateSupplierRequest): Promise<Supplier> {
   return apiClient.post<Supplier>('/suppliers', data);
+}
+
+export interface UpdateSupplierRequest {
+  name?: string;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+}
+
+export async function updateSupplier(supplierId: string, data: UpdateSupplierRequest): Promise<Supplier> {
+  return apiClient.patch<Supplier>(`/suppliers/${supplierId}`, data);
+}
+
+export async function deleteSupplier(supplierId: string): Promise<void> {
+  await apiClient.delete(`/suppliers/${supplierId}`);
 }
 
 export interface RecordSupplierPaymentRequest {

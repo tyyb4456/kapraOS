@@ -17,8 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
 from app.services import sales as sales_service
+from app.services.inventory import InsufficientStockError
 from app.services.sales import (
     SaleError,
+    SaleNotFoundError,
+    SaleNotEditableError,
     ShopNotFoundError,
     CustomerNotFoundError,
     VariantNotFoundError,
@@ -29,6 +32,7 @@ from app.services.sales import (
 )
 from app.schemas.sales import (
     CreateSaleRequest,
+    UpdateSaleRequest,
     SaleResponse,
     SaleListItemResponse,
     SaleSummaryResponse,
@@ -191,6 +195,79 @@ async def get_sale(
     if sale.customer:
         response.customer_name = sale.customer.name
     return response
+
+
+@router.patch("/{sale_id}", response_model=SaleResponse)
+async def update_sale(
+    sale_id: UUID,
+    shop_id: ShopId,
+    db: DbSession,
+    body: UpdateSaleRequest,
+) -> SaleResponse:
+    fields_set = body.model_fields_set
+    items = None
+    if "items" in fields_set and body.items is not None:
+        items = [
+            sales_service.SaleItemInput(
+                variant_id=item.variant_id,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                discount=item.discount,
+            )
+            for item in body.items
+        ]
+    customer_sentinel: object = ...
+    if "customer_id" in fields_set:
+        customer_sentinel = body.customer_id
+    invoice_sentinel: object = ...
+    if "invoice_number" in fields_set:
+        invoice_sentinel = body.invoice_number
+    try:
+        sale = await sales_service.update_sale(
+            db,
+            shop_id=shop_id,
+            sale_id=sale_id,
+            items=items,
+            customer_id=customer_sentinel,  # type: ignore[arg-type]
+            invoice_number=invoice_sentinel,  # type: ignore[arg-type]
+            discount=body.discount,
+        )
+    except SaleNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except (ShopNotFoundError, CustomerNotFoundError, VariantNotFoundError) as exc:
+        raise _not_found(exc) from exc
+    except (
+        EmptySaleError,
+        InvalidSaleItemError,
+        InvalidSaleTotalsError,
+        DuplicateSaleItemError,
+        SaleNotEditableError,
+        InsufficientStockError,
+    ) as exc:
+        raise _unprocessable(exc) from exc
+    await db.commit()
+    await db.refresh(sale, attribute_names=["items", "payments"])
+    response = SaleResponse.model_validate(sale)
+    if sale.customer_id is not None:
+        customer = await db.get(Customer, sale.customer_id)
+        if customer:
+            response.customer_name = customer.name
+    return response
+
+
+@router.delete("/{sale_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_sale(
+    sale_id: UUID,
+    shop_id: ShopId,
+    db: DbSession,
+) -> None:
+    try:
+        await sales_service.delete_sale(db, shop_id=shop_id, sale_id=sale_id)
+    except SaleNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except InsufficientStockError as exc:
+        raise _unprocessable(exc) from exc
+    await db.commit()
 
 
 @router.get("/summary", response_model=SaleSummaryResponse)

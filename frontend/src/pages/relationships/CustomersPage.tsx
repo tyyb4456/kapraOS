@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, BookOpen } from 'lucide-react';
+import { Plus, Search, BookOpen, Pencil, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -21,7 +21,7 @@ import {
   Dialog,
 } from '../../components/ui/index.ts';
 import { formatCurrency } from '../../lib/formatters.ts';
-import { getCustomers, createCustomer } from '../../lib/api/customers.ts';
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from '../../lib/api/customers.ts';
 import type { Customer } from '../../types/index.ts';
 
 export function CustomersPage() {
@@ -32,6 +32,9 @@ export function CustomersPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', credit_limit: 0 });
   const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [editData, setEditData] = useState({ name: '', phone: '', email: '', credit_limit: 0 });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCustomers = async () => {
@@ -91,6 +94,62 @@ export function CustomersPage() {
       return <Badge variant="destructive" size="sm">Over Limit</Badge>;
     }
     return <Badge variant="warning" size="sm">Receivable</Badge>;
+  };
+
+  const reload = async () => {
+    const data = await getCustomers();
+    setCustomers(data);
+  };
+
+  const openEdit = (customer: Customer) => {
+    setEditing(customer);
+    setEditData({
+      name: customer.name,
+      phone: customer.phone ?? '',
+      email: (customer as { email?: string | null }).email ?? '',
+      credit_limit: customer.credit_limit ?? 0,
+    });
+    setError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing || !editData.name.trim()) {
+      setError('Customer name is required');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateCustomer(editing.id, {
+        name: editData.name.trim(),
+        phone: editData.phone || null,
+        email: editData.email || null,
+        credit_limit: editData.credit_limit || null,
+      });
+      setEditing(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update customer');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (customer: Customer) => {
+    if (!window.confirm(`Delete customer "${customer.name}"? Only customers with no sales or payments can be deleted.`)) {
+      return;
+    }
+    setDeletingId(customer.id);
+    setError(null);
+    try {
+      await deleteCustomer(customer.id);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete customer');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -187,11 +246,32 @@ export function CustomersPage() {
                     {getStatusBadge(customer.current_balance, customer.credit_limit)}
                   </TableCell>
                   <TableCell align="right">
-                    <Link to={`/customers/khata/${customer.id}`}>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                        View Khata
+                    <div className="flex items-center justify-end gap-1">
+                      <Link to={`/customers/khata/${customer.id}`}>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+                          View Khata
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0"
+                        title="Edit customer"
+                        onClick={() => openEdit(customer)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                    </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                        title="Delete customer"
+                        disabled={deletingId === customer.id}
+                        onClick={() => handleDelete(customer)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -245,6 +325,51 @@ export function CustomersPage() {
             min="0"
             value={formData.credit_limit}
             onChange={(e) => setFormData({ ...formData, credit_limit: parseFloat(e.target.value) || 0 })}
+          />
+        </form>
+      </Dialog>
+
+      {/* Edit Customer Modal */}
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit Customer"
+        description="Update contact details or credit limit."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-3.5">
+          <Input
+            label="Customer Name *"
+            value={editData.name}
+            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+          />
+          <Input
+            label="Phone Number"
+            value={editData.phone}
+            onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+          />
+          <Input
+            label="Email (Optional)"
+            type="email"
+            value={editData.email}
+            onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+          />
+          <Input
+            label="Credit Limit (PKR) - Optional"
+            type="number"
+            step="0.01"
+            min="0"
+            value={editData.credit_limit}
+            onChange={(e) => setEditData({ ...editData, credit_limit: parseFloat(e.target.value) || 0 })}
           />
         </form>
       </Dialog>

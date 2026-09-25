@@ -504,3 +504,264 @@ async def create_sale(
     await accounting_service.post_cogs(session, sale=sale)
 
     return sale
+
+
+class SaleNotFoundError(SaleError):
+    """The sale does not exist in the caller's shop."""
+
+
+class SaleNotEditableError(SaleError):
+    """The sale is in a status that cannot be edited (cancelled/returned)."""
+
+
+async def _get_sale_for_update(
+    session: AsyncSession, shop_id: uuid.UUID, sale_id: uuid.UUID
+) -> Sale:
+    """Load a sale with its items + payments, enforcing tenant ownership."""
+
+    result = await session.execute(
+        select(Sale).where(Sale.id == sale_id, Sale.shop_id == shop_id)
+    )
+    sale = result.scalar_one_or_none()
+    if sale is None:
+        raise SaleNotFoundError(f"Sale {sale_id} not found for shop {shop_id}")
+    # Touch collections while we hold the session so later appends never
+    # trigger an async lazy-load inside a sync context.
+    await session.refresh(sale, attribute_names=["items", "payments"])
+    return sale
+
+
+async def update_sale(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    sale_id: uuid.UUID,
+    items: list[SaleItemInput] | None = None,
+    customer_id: uuid.UUID | None | object = ...,
+    invoice_number: str | None | object = ...,
+    discount: Decimal | None = None,
+) -> Sale:
+    """Edit a sale's header and/or lines, keeping stock + ledger consistent.
+
+    Only COMPLETED/PARTIAL sales are editable - a CANCELLED/RETURNED sale is
+    a closed document (use the returns workflow instead). `items`, when
+    given, fully replaces the sale's lines: the service diffs old vs new
+    quantities per variant and pushes only the delta through the inventory
+    service (extra take-out via `remove_stock`, put-back via `add_stock`
+    with an ADJUSTMENT movement), so concurrent stock stays correct.
+
+    Totals are recomputed server-side exactly like `create_sale`. The update
+    is rejected when the already-recorded `paid_amount` would exceed the new
+    total - settle/void the payments first. Ledger groups SALE + SALE_COGS
+    are deleted and reposted from the new figures in the same transaction,
+    so the statements never show a half-edited sale.
+
+    `customer_id` / `invoice_number` use a sentinel: omit them to leave the
+    field alone, pass None to clear it (walk-in / auto invoice stays as-is
+    for None invoice - it is kept, not re-allocated).
+    """
+
+    sale = await _get_sale_for_update(session, shop_id, sale_id)
+    if sale.status not in (SaleStatus.COMPLETED, SaleStatus.PARTIAL):
+        raise SaleNotEditableError(
+            f"Sale {sale_id} is {sale.status.value}; only completed/partial sales can be edited"
+        )
+
+    # Resolve the new customer (sentinel `...` means "leave alone").
+    new_customer_id = sale.customer_id
+    if customer_id is not ...:
+        new_customer_id = customer_id  # type: ignore[assignment]
+        if new_customer_id is not None:
+            await _get_customer(session, shop_id, new_customer_id)
+
+    # Resolve the new invoice number.
+    new_invoice = sale.invoice_number
+    if invoice_number is not ...:
+        raw = invoice_number
+        if raw is not None:
+            raw = str(raw).strip() or None
+            if raw is not None and len(raw) > 50:
+                raise InvalidSaleTotalsError(
+                    "invoice_number must be at most 50 characters"
+                )
+        if raw is not None and raw != sale.invoice_number:
+            clash = await session.execute(
+                select(Sale.id).where(
+                    Sale.shop_id == shop_id,
+                    Sale.invoice_number == raw,
+                    Sale.id != sale.id,
+                ).limit(1)
+            )
+            if clash.scalar_one_or_none() is not None:
+                raise InvalidSaleTotalsError(
+                    f"invoice_number {raw!r} is already used"
+                )
+        if raw is not None:
+            new_invoice = raw
+
+    # Resolve the new lines.
+    if items is None:
+        combined: OrderedDict[uuid.UUID, _NormalisedItem] | None = None
+    else:
+        if not items:
+            raise EmptySaleError("a sale must contain at least one item")
+        combined = _combine_items(items)
+        await _validate_variants(session, shop_id, list(combined.keys()))
+
+    new_discount = sale.discount if discount is None else _normalise_money(discount)
+
+    if combined is None:
+        new_subtotal = sale.subtotal
+    else:
+        new_subtotal = sum(
+            (line.total for line in combined.values()), start=Decimal("0.00")
+        ).quantize(_MONEY_SCALE, rounding=ROUND_HALF_UP)
+
+    if new_discount < 0 or new_discount > new_subtotal:
+        raise InvalidSaleTotalsError(
+            f"discount {new_discount} must be between 0 and subtotal {new_subtotal}"
+        )
+    new_total = (new_subtotal - new_discount).quantize(
+        _MONEY_SCALE, rounding=ROUND_HALF_UP
+    )
+    if sale.paid_amount > new_total:
+        raise InvalidSaleTotalsError(
+            f"paid_amount {sale.paid_amount} already recorded exceeds new total "
+            f"{new_total}; void the payments first"
+        )
+
+    # Push only the quantity deltas through inventory, under row locks.
+    if combined is not None:
+        from app.models.inventory import InventoryMovementType as _IMT
+
+        old_qty: dict[uuid.UUID, Decimal] = {}
+        for row in sale.items:
+            old_qty[row.variant_id] = old_qty.get(row.variant_id, Decimal("0")) + row.quantity
+        new_qty: dict[uuid.UUID, _NormalisedItem] = dict(combined)
+
+        for variant_id in sorted(set(old_qty) | set(new_qty), key=str):
+            old = old_qty.get(variant_id, Decimal("0"))
+            new_item = new_qty.get(variant_id)
+            new = new_item.quantity if new_item is not None else Decimal("0")
+            delta = new - old
+            if delta > 0:
+                await inventory_service.remove_stock(
+                    session,
+                    shop_id=shop_id,
+                    variant_id=variant_id,
+                    quantity=delta,
+                    movement_type=_IMT.SALE,
+                    unit_cost=None,
+                    reference_type="SALE_EDIT",
+                    reference_id=sale.id,
+                )
+            elif delta < 0:
+                await inventory_service.add_stock(
+                    session,
+                    shop_id=shop_id,
+                    variant_id=variant_id,
+                    quantity=-delta,
+                    movement_type=_IMT.ADJUSTMENT,
+                    unit_cost=None,
+                    reference_type="SALE_EDIT",
+                    reference_id=sale.id,
+                )
+
+        # Replace the lines with fresh cost snapshots at edit time.
+        for row in list(sale.items):
+            await session.delete(row)
+        await session.flush()
+        sale.items = []
+        for line in combined.values():
+            cost_price = (
+                await inventory_service.get_weighted_average_cost(
+                    session, shop_id=shop_id, variant_id=line.variant_id
+                )
+            ).quantize(_COST_SCALE, rounding=ROUND_HALF_UP)
+            sale.items.append(
+                SaleItem(
+                    variant_id=line.variant_id,
+                    quantity=line.quantity,
+                    unit_price=line.unit_price,
+                    cost_price=cost_price,
+                    discount=line.discount,
+                    total=line.total,
+                )
+            )
+
+    sale.customer_id = new_customer_id
+    sale.invoice_number = new_invoice
+    sale.subtotal = new_subtotal
+    sale.discount = new_discount
+    sale.total = new_total
+    sale.status = (
+        SaleStatus.COMPLETED if sale.paid_amount >= new_total else SaleStatus.PARTIAL
+    )
+    await session.flush()
+    # Keep khata payments pointing at the right customer after a customer
+    # change: allocated payments carry both sale_id and customer_id, guarded
+    # by fk_payments_sale_same_customer. Flushed after the sale row itself so
+    # the composite FK always sees the new (sale_id, customer_id) pair.
+    if customer_id is not ...:
+        for payment in sale.payments:
+            if payment.customer_id is not None or new_customer_id is not None:
+                # Only touch payments allocated to this sale; khata payments
+                # recorded later also live in sale.payments via sale_id.
+                payment.customer_id = new_customer_id
+        await session.flush()
+
+    # Re-post the ledger from the new figures (same transaction).
+    await accounting_service.delete_postings_for_reference(
+        session,
+        shop_id=shop_id,
+        reference_id=sale.id,
+        reference_types=[accounting_service.REFERENCE_SALE, accounting_service.REFERENCE_SALE_COGS],
+    )
+    await accounting_service.post_sale(session, sale=sale)
+    await accounting_service.post_cogs(session, sale=sale)
+
+    return sale
+
+
+async def delete_sale(
+    session: AsyncSession, *, shop_id: uuid.UUID, sale_id: uuid.UUID
+) -> None:
+    """Void a sale: put its stock back, drop its ledger + payments, delete it.
+
+    The original SALE inventory movements are kept for the audit trail and a
+    compensating ADJUSTMENT movement (reference SALE_VOID) puts each line's
+    quantity back, so the movement ledger nets to zero. Ledger groups SALE,
+    SALE_COGS and SALE_RETURN for the sale plus CUSTOMER_PAYMENT groups for
+    every payment allocated to it are removed, then the payments, items and
+    header are deleted. Unallocated khata payments (no sale_id) are untouched.
+    """
+
+    from app.models.inventory import InventoryMovementType as _IMT
+
+    sale = await _get_sale_for_update(session, shop_id, sale_id)
+
+    for item in sale.items:
+        await inventory_service.add_stock(
+            session,
+            shop_id=shop_id,
+            variant_id=item.variant_id,
+            quantity=item.quantity,
+            movement_type=_IMT.ADJUSTMENT,
+            unit_cost=None,
+            reference_type="SALE_VOID",
+            reference_id=sale.id,
+        )
+
+    payment_ids = [p.id for p in sale.payments]
+    await accounting_service.delete_postings_for_reference(
+        session, shop_id=shop_id, reference_id=sale.id
+    )
+    for payment_id in payment_ids:
+        await accounting_service.delete_postings_for_reference(
+            session, shop_id=shop_id, reference_id=payment_id
+        )
+    for payment in list(sale.payments):
+        await session.delete(payment)
+    await session.flush()
+    await session.delete(sale)
+    await session.flush()

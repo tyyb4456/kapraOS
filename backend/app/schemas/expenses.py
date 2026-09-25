@@ -44,3 +44,17 @@ class ExpenseResponse(BaseModel):
     expense_date: datetime
     created_at: datetime
     updated_at: datetime
+
+
+class UpdateExpenseRequest(BaseModel):
+    """Partial edit for an expense - omitted keys are left alone.
+
+    Pass `description: null` explicitly to clear it. A category, amount or
+    payment-method change reposts the EXPENSE ledger group.
+    """
+
+    category: ExpenseCategory | None = None
+    amount: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+    payment_method: PaymentMethod | None = None
+    description: str | None = None
+    expense_date: datetime | None = None

@@ -71,3 +71,18 @@ class PurchaseLineRequest(BaseModel):
     variant_id: UUID
     quantity: float
     unit_cost: float
+
+
+class UpdatePurchaseRequest(BaseModel):
+    """Partial edit for a purchase - omitted keys are left alone.
+
+    `items`, when present, fully replaces the purchase's lines. `supplier_id`
+    re-points the purchase (allocated payments move with it). Payments are
+    never edited here - use the Khata payment endpoints to settle or void
+    them. Pass `invoice_number: null` explicitly to clear it.
+    """
+
+    supplier_id: UUID | None = None
+    items: list["PurchaseLineRequest"] | None = None
+    invoice_number: str | None = None
+    discount: Decimal | None = None

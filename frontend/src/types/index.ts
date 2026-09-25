@@ -27,6 +27,7 @@ export interface Category {
   code?: string | null;
   parent_id?: string | null;
   variants_count?: number;
+  products_count?: number;
   created_at: string;
 }
 
@@ -121,6 +122,9 @@ export interface KhataEntry {
   balance_after: number;
   reference?: string | null;
   notes?: string | null;
+  payment_id?: string | null;
+  sale_id?: string | null;
+  purchase_id?: string | null;
 }
 
 // Supplier & Payables

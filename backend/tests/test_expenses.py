@@ -1,10 +1,10 @@
-"""Expense domain tests (Step 10).
+"""Expense domain tests (Step 10 + edit/void).
 
 Covers the expense model and its immediate-payment accounting: creation and
 validation, the category -> expense-account mapping, the Cash/Bank credit,
 double-entry balance, atomicity, tenant isolation, the read model and the
-`/expenses` API. A posted expense is immutable by design - there is no update
-or delete route to test.
+`/expenses` API. Edits repost the EXPENSE ledger group; deletes drop it, so
+the P&L never shows a half-edited expense.
 
 The invariant under test is the same one Step 8 established:
 `SUM(debits) == SUM(credits)` for every posting group, with the expense side
@@ -683,7 +683,7 @@ async def test_expense_endpoints_require_a_shop(
 
 
 @pytest.mark.asyncio
-async def test_expenses_have_no_delete_route(
+async def test_expense_can_be_edited_and_voided(
     mocked_api_client: AsyncClient, api_session: AsyncSession
 ) -> None:
     fixture = await _make_shop(api_session)
@@ -698,8 +698,22 @@ async def test_expenses_have_no_delete_route(
     api_session.add(user)
     await api_session.flush()
 
+    # Edit the description (non-financial: no ledger rewrite needed).
+    response = await mocked_api_client.patch(
+        f"/expenses/{expense.id}",
+        json={"description": "corrected"},
+        headers=_headers(fixture.shop.id),
+    )
+    assert response.status_code == 200
+    assert response.json()["description"] == "corrected"
+
+    # Void the expense entirely.
     response = await mocked_api_client.delete(
         f"/expenses/{expense.id}", headers=_headers(fixture.shop.id)
     )
+    assert response.status_code == 204
 
-    assert response.status_code == 405
+    response = await mocked_api_client.get(
+        f"/expenses/{expense.id}", headers=_headers(fixture.shop.id)
+    )
+    assert response.status_code == 404

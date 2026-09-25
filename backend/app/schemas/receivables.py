@@ -124,6 +124,8 @@ class CustomerResponse(BaseModel):
     email: str | None = None
     current_balance: float
     credit_limit: float | None = None
+    address: str | None = None
+    notes: str | None = None
     created_at: datetime
 
 
@@ -134,3 +136,16 @@ class CreateCustomerRequest(BaseModel):
     phone: str | None = None
     email: str | None = None
     credit_limit: float | None = None
+    address: str | None = None
+    notes: str | None = None
+
+
+class UpdateCustomerRequest(BaseModel):
+    """Partial update for a customer - only provided fields change."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    phone: str | None = Field(default=None, max_length=30)
+    email: str | None = Field(default=None, max_length=255)
+    credit_limit: float | None = Field(default=None, ge=0)
+    address: str | None = Field(default=None, max_length=300)
+    notes: str | None = Field(default=None, max_length=500)

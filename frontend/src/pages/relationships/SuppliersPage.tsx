@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Building2 } from 'lucide-react';
+import { Plus, Search, Building2, Pencil, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -21,7 +21,7 @@ import {
   Dialog,
 } from '../../components/ui/index.ts';
 import { formatCurrency } from '../../lib/formatters.ts';
-import { getSuppliers, createSupplier } from '../../lib/api/suppliers.ts';
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../lib/api/suppliers.ts';
 import type { Supplier } from '../../types/index.ts';
 
 export function SuppliersPage() {
@@ -32,6 +32,9 @@ export function SuppliersPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', address: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState<Supplier | null>(null);
+  const [editData, setEditData] = useState({ name: '', phone: '', address: '', notes: '' });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSuppliers = async () => {
@@ -87,6 +90,62 @@ export function SuppliersPage() {
       return <Badge variant="success" size="sm">Clear</Badge>;
     }
     return <Badge variant="neutral" size="sm">Active Supplier</Badge>;
+  };
+
+  const reload = async () => {
+    const data = await getSuppliers();
+    setSuppliers(data);
+  };
+
+  const openEdit = (supplier: Supplier) => {
+    setEditing(supplier);
+    setEditData({
+      name: supplier.name,
+      phone: supplier.phone ?? '',
+      address: supplier.address ?? '',
+      notes: supplier.notes ?? '',
+    });
+    setError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing || !editData.name.trim()) {
+      setError('Supplier name is required');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateSupplier(editing.id, {
+        name: editData.name.trim(),
+        phone: editData.phone || null,
+        address: editData.address || null,
+        notes: editData.notes || null,
+      });
+      setEditing(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update supplier');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (supplier: Supplier) => {
+    if (!window.confirm(`Delete supplier "${supplier.name}"? Only suppliers with no purchases or payments can be deleted.`)) {
+      return;
+    }
+    setDeletingId(supplier.id);
+    setError(null);
+    try {
+      await deleteSupplier(supplier.id);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete supplier');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -183,11 +242,32 @@ export function SuppliersPage() {
                     {getStatusBadge(supplier.current_balance)}
                   </TableCell>
                   <TableCell align="right">
-                    <Link to={`/suppliers/khata/${supplier.id}`}>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                        View Ledger
+                    <div className="flex items-center justify-end gap-1">
+                      <Link to={`/suppliers/khata/${supplier.id}`}>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+                          View Ledger
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0"
+                        title="Edit supplier"
+                        onClick={() => openEdit(supplier)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                    </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                        title="Delete supplier"
+                        disabled={deletingId === supplier.id}
+                        onClick={() => handleDelete(supplier)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -237,6 +317,47 @@ export function SuppliersPage() {
             placeholder="Wholesale fabric supplier, payment terms: Net 30"
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          />
+        </form>
+      </Dialog>
+
+      {/* Edit Supplier Modal */}
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit Supplier"
+        description="Update mill contact details."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-3.5">
+          <Input
+            label="Supplier / Mill Name *"
+            value={editData.name}
+            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+          />
+          <Input
+            label="Phone Number"
+            value={editData.phone}
+            onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+          />
+          <Input
+            label="Address (Optional)"
+            value={editData.address}
+            onChange={(e) => setEditData({ ...editData, address: e.target.value })}
+          />
+          <Input
+            label="Notes (Optional)"
+            value={editData.notes}
+            onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
           />
         </form>
       </Dialog>

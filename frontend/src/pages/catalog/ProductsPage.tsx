@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit } from 'lucide-react';
+import { Plus, Search, Edit, Trash2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -21,7 +21,8 @@ import {
   Skeleton,
 } from '../../components/ui/index.ts';
 import { formatCurrency } from '../../lib/formatters.ts';
-import { getProducts, createProduct, getCategories } from '../../lib/api/products.ts';
+import { getProducts, createProduct, getCategories, updateProduct, deleteProduct } from '../../lib/api/products.ts';
+import { ApiError } from '../../lib/api/client.ts';
 import type { Product, Category } from '../../types/index.ts';
 
 export function ProductsPage() {
@@ -44,6 +45,14 @@ export function ProductsPage() {
     variants: [{ sku: '', barcode: '', cost_price: 0, selling_price: 0, attributes: {} }],
   });
   const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [editData, setEditData] = useState({ name: '', code: '', description: '', unit: 'meters' });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const reloadProducts = async () => {
+    const data = await getProducts();
+    setProducts(data);
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -135,6 +144,78 @@ export function ProductsPage() {
       setError(err instanceof Error ? err.message : 'Failed to create product');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEdit = (product: Product) => {
+    setEditing(product);
+    setEditData({
+      name: product.name,
+      code: product.code ?? '',
+      description: product.description ?? '',
+      unit: product.unit,
+    });
+    setError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing || !editData.name.trim()) {
+      setError('Product name is required');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateProduct(editing.id, {
+        name: editData.name.trim(),
+        code: editData.code || null,
+        description: editData.description || null,
+        unit: editData.unit,
+      });
+      setEditing(null);
+      await reloadProducts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update product');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (product: Product) => {
+    if (!window.confirm(`Delete product "${product.name}"? Only products whose variants have no stock history can be deleted.`)) {
+      return;
+    }
+    setDeletingId(product.id);
+    setError(null);
+    try {
+      await deleteProduct(product.id);
+      await reloadProducts();
+    } catch (err) {
+      // Leftover stock ledger (voided sales/purchases leave movements behind)
+      // blocks a plain delete - offer a permanent wipe of that history.
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        /history|movement/i.test(err.message) &&
+        window.confirm(
+          `This product still has stock history:\n\n${err.message}\n\n` +
+          `Permanently delete "${product.name}" INCLUDING its stock movement history? ` +
+          `This cannot be undone.`
+        )
+      ) {
+        try {
+          await deleteProduct(product.id, true);
+          await reloadProducts();
+          return;
+        } catch (retryErr) {
+          setError(retryErr instanceof Error ? retryErr.message : 'Failed to delete product');
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to delete product');
+      }
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -260,9 +341,21 @@ export function ProductsPage() {
                     <Badge variant="success" size="sm">Active</Badge>
                   </TableCell>
                   <TableCell align="right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 px-0" title="Edit product" onClick={() => openEdit(product)}>
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                        title="Delete product"
+                        disabled={deletingId === product.id}
+                        onClick={() => handleDelete(product)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -461,6 +554,55 @@ export function ProductsPage() {
               </div>
             </div>
           </div>
+        </form>
+      </Dialog>
+
+      {/* Edit Product Modal */}
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit Product"
+        description="Rename, recode or change the base unit. Prices live on variants."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-3.5">
+          <Input
+            label="Product Title *"
+            value={editData.name}
+            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Product Code / SKU"
+              value={editData.code}
+              onChange={(e) => setEditData({ ...editData, code: e.target.value })}
+            />
+            <Select
+              label="Measurement Unit"
+              value={editData.unit}
+              onChange={(e) => setEditData({ ...editData, unit: e.target.value })}
+            >
+              <option value="meters">Meters</option>
+              <option value="yards">Yards</option>
+              <option value="pieces">Pieces</option>
+              <option value="sets">Sets</option>
+              <option value="rolls">Rolls</option>
+            </Select>
+          </div>
+          <Input
+            label="Description (Optional)"
+            value={editData.description}
+            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+          />
         </form>
       </Dialog>
     </PageContainer>

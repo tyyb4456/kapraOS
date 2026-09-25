@@ -13,8 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
 from app.services import purchases as purchases_service
+from app.services.inventory import InsufficientStockError
 from app.services.purchases import (
     PurchaseError,
+    PurchaseNotFoundError,
     SupplierNotFoundError,
     VariantNotFoundError,
     EmptyPurchaseError,
@@ -24,6 +26,7 @@ from app.services.purchases import (
 )
 from app.schemas.purchases import (
     CreatePurchaseRequest,
+    UpdatePurchaseRequest,
     PurchaseResponse,
     PurchaseItemResponse,
     PurchaseListItemResponse,
@@ -197,3 +200,96 @@ async def get_purchase(
             for item in items
         ],
     )
+
+
+def _purchase_to_response(purchase: Purchase, items: list[PurchaseItem]) -> PurchaseResponse:
+    return PurchaseResponse(
+        id=purchase.id,
+        supplier_id=purchase.supplier_id,
+        invoice_number=purchase.invoice_number,
+        subtotal=purchase.subtotal,
+        discount=purchase.discount,
+        total=purchase.total,
+        paid_amount=purchase.paid_amount,
+        due_amount=purchase.due_amount,
+        shop_id=purchase.shop_id,
+        created_at=purchase.created_at,
+        items=[
+            PurchaseItemResponse(
+                id=item.id,
+                variant_id=item.variant_id,
+                quantity=item.quantity,
+                unit_cost=item.unit_cost,
+                total=item.total,
+            )
+            for item in items
+        ],
+    )
+
+
+@router.patch("/{purchase_id}", response_model=PurchaseResponse)
+async def update_purchase(
+    purchase_id: UUID,
+    shop_id: ShopId,
+    db: DbSession,
+    body: UpdatePurchaseRequest,
+) -> PurchaseResponse:
+    fields_set = body.model_fields_set
+    items = None
+    if "items" in fields_set and body.items is not None:
+        items = [
+            purchases_service.PurchaseItemInput(
+                variant_id=item.variant_id,
+                quantity=item.quantity,
+                unit_cost=item.unit_cost,
+            )
+            for item in body.items
+        ]
+    invoice_sentinel: object = ...
+    if "invoice_number" in fields_set:
+        invoice_sentinel = body.invoice_number
+    try:
+        purchase = await purchases_service.update_purchase(
+            db,
+            shop_id=shop_id,
+            purchase_id=purchase_id,
+            items=items,
+            supplier_id=body.supplier_id,
+            invoice_number=invoice_sentinel,  # type: ignore[arg-type]
+            discount=body.discount,
+        )
+    except PurchaseNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except (SupplierNotFoundError, VariantNotFoundError) as exc:
+        raise _not_found(exc) from exc
+    except (
+        EmptyPurchaseError,
+        InvalidPurchaseItemError,
+        InvalidPurchaseTotalsError,
+        DuplicatePurchaseItemError,
+    ) as exc:
+        raise _unprocessable(exc) from exc
+    except InsufficientStockError as exc:
+        raise _unprocessable(exc) from exc
+    await db.commit()
+    rows = (await db.execute(
+        select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
+    )).scalars().all()
+    return _purchase_to_response(purchase, list(rows))
+
+
+@router.delete("/{purchase_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_purchase(
+    purchase_id: UUID,
+    shop_id: ShopId,
+    db: DbSession,
+) -> None:
+    try:
+        await purchases_service.delete_purchase(
+            db, shop_id=shop_id, purchase_id=purchase_id
+        )
+    except PurchaseNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except InsufficientStockError as exc:
+        raise _unprocessable(exc) from exc
+    await db.commit()

@@ -90,6 +90,20 @@ class PaymentRequest(BaseModel):
     reference: str | None = None
 
 
+class UpdateSaleRequest(BaseModel):
+    """Partial edit for a sale - omitted keys are left alone.
+
+    `items`, when present, fully replaces the sale's lines. `customer_id`
+    accepts null to convert the sale to walk-in. Payments are never edited
+    here - use the Khata payment endpoints to settle or void them.
+    """
+
+    items: list["SaleLineRequest"] | None = None
+    customer_id: UUID | None = None
+    invoice_number: str | None = None
+    discount: Decimal | None = None
+
+
 class SaleSummaryResponse(BaseModel):
     """Dashboard summary of sales."""
 
