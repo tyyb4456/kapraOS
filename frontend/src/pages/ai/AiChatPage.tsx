@@ -12,10 +12,12 @@ import {
   CardContent,
   Textarea,
 } from '../../components/ui/index.ts';
+import { SaleApprovalCard } from '../../components/ai/SaleApprovalCard.tsx';
 import {
   resumeAiChat,
   sendAiChat,
   type AiChatResponse,
+  type AiHitlDecision,
   type AiPendingAction,
 } from '../../lib/api/ai.ts';
 
@@ -41,6 +43,18 @@ function formatArgs(args: Record<string, unknown>): string {
   }
 }
 
+/**
+ * Whether a pending action may be answered with a given decision.
+ * Honors the backend's `allowed_decisions`; when absent, falls back to
+ * the historical approve/reject pair.
+ */
+function allowsDecision(action: AiPendingAction, decision: string): boolean {
+  if (Array.isArray(action.allowed_decisions) && action.allowed_decisions.length > 0) {
+    return action.allowed_decisions.includes(decision);
+  }
+  return decision === 'approve' || decision === 'reject';
+}
+
 export function AiChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [threadId, setThreadId] = useState<string | null>(() => {
@@ -55,6 +69,10 @@ export function AiChatPage() {
   const [pending, setPending] = useState<AiPendingAction[] | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
+  // Per-action edited args (index -> full replacement args). Set by the
+  // sale approval card when the shopkeeper corrects quantity/price; sent
+  // back as an `edit` decision which the backend re-validates.
+  const [editedByIndex, setEditedByIndex] = useState<Record<number, Record<string, unknown> | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -70,6 +88,9 @@ export function AiChatPage() {
       // private mode etc. - chat still works for this session
     }
     setThreadId(data.thread_id);
+    setEditedByIndex({});
+    setShowRejectBox(false);
+    setRejectReason('');
     if (data.status === 'paused') {
       setPending(data.interrupts ?? []);
       setMessages((prev) => [
@@ -120,12 +141,16 @@ export function AiChatPage() {
     setError(null);
     try {
       setSending(true);
-      const data = await resumeAiChat(
-        threadId,
-        pending.map(() => ({ type: 'approve' as const })),
-      );
-      setShowRejectBox(false);
-      setRejectReason('');
+      // Actions the shopkeeper corrected are sent as `edit` decisions
+      // with the full replacement args; everything else is approved as-is.
+      const decisions: AiHitlDecision[] = pending.map((action, idx) => {
+        const edited = editedByIndex[idx];
+        if (edited && allowsDecision(action, 'edit')) {
+          return { type: 'edit' as const, edited_action: { name: action.name, args: edited } };
+        }
+        return { type: 'approve' as const };
+      });
+      const data = await resumeAiChat(threadId, decisions);
       applyResponse(data);
     } catch (err) {
       handleError(err);
@@ -166,11 +191,16 @@ export function AiChatPage() {
     setThreadId(null);
     setMessages([]);
     setPending(null);
+    setEditedByIndex({});
     setShowRejectBox(false);
     setRejectReason('');
     setError(null);
     setNotConfigured(false);
   };
+
+  const canApprove = !!pending && pending.length > 0 && pending.every((a) => allowsDecision(a, 'approve'));
+  const canReject = !!pending && pending.length > 0 && pending.every((a) => allowsDecision(a, 'reject'));
+  const hasEdits = !!pending && pending.some((_, idx) => editedByIndex[idx]);
 
   return (
     <PageContainer maxWidth="narrow">
@@ -210,8 +240,9 @@ export function AiChatPage() {
                 Assalam-o-Alaikum! What can I do for your shop today?
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm">
-                Try “What is khata?”, “Kitna stock hai?” — as new capabilities land, this same
-                chat gets more powerful. Nothing here can switch shops or bypass approvals.
+                Try “Kitna stock hai?”, “Ali ka khata kitna hai?”, or “Ali ko 3 meter black
+                lawn udhaar de do” — sales pause here for your approval before anything is
+                recorded. Nothing here can switch shops or bypass approvals.
               </p>
             </div>
           )}
@@ -252,25 +283,48 @@ export function AiChatPage() {
               </div>
               {pending.map((action, idx) => (
                 <div
-                  key={idx}
+                  key={`${threadId ?? 'pending'}-${idx}`}
                   className="rounded-md border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-zinc-950 p-2.5"
                 >
-                  <div className="flex items-center gap-2 text-xs">
-                    <Badge variant="warning" size="sm">{action.name}</Badge>
-                  </div>
-                  <pre className="mt-1.5 overflow-x-auto font-mono text-[11px] leading-relaxed text-zinc-700 dark:text-zinc-300">
-                    {formatArgs(action.args)}
-                  </pre>
+                  {action.name === 'create_sale' ? (
+                    <SaleApprovalCard
+                      key={`${threadId ?? 'pending'}-${idx}-${JSON.stringify(action.args)}`}
+                      args={action.args}
+                      allowEdit={allowsDecision(action, 'edit')}
+                      disabled={sending}
+                      onEditChange={(edited) =>
+                        setEditedByIndex((prev) => ({ ...prev, [idx]: edited }))
+                      }
+                    />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 text-xs">
+                        <Badge variant="warning" size="sm">{action.name}</Badge>
+                      </div>
+                      <pre className="mt-1.5 overflow-x-auto font-mono text-[11px] leading-relaxed text-zinc-700 dark:text-zinc-300">
+                        {formatArgs(action.args)}
+                      </pre>
+                    </>
+                  )}
                 </div>
               ))}
               {!showRejectBox ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="primary" size="sm" leftIcon={<Check className="w-4 h-4" />} onClick={handleApprove} isLoading={sending}>
-                    Approve{pending.length > 1 ? ' all' : ''}
-                  </Button>
-                  <Button variant="outline" size="sm" leftIcon={<X className="w-4 h-4" />} onClick={() => setShowRejectBox(true)} disabled={sending}>
-                    Reject
-                  </Button>
+                  {canApprove && (
+                    <Button variant="primary" size="sm" leftIcon={<Check className="w-4 h-4" />} onClick={handleApprove} isLoading={sending}>
+                      {hasEdits ? 'Approve with changes' : `Approve${pending.length > 1 ? ' all' : ''}`}
+                    </Button>
+                  )}
+                  {canReject && (
+                    <Button variant="outline" size="sm" leftIcon={<X className="w-4 h-4" />} onClick={() => setShowRejectBox(true)} disabled={sending}>
+                      Reject
+                    </Button>
+                  )}
+                  {!canApprove && !canReject && (
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      These actions cannot be answered from here — start a new chat.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-2">

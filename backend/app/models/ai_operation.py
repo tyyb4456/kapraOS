@@ -1,0 +1,99 @@
+"""AI operation receipts - idempotency guard for AI-assisted mutations.
+
+Step 3 introduces exactly one AI mutation (sale creation via the
+``create_sale`` AI tool). Human-in-the-loop systems resume and retry:
+the same approved operation can be delivered twice (duplicate resume,
+network retry, model retry, frontend retry). LangGraph itself documents
+this discipline — nodes re-run from the start on resume, so side
+effects around an interrupt must be idempotent (use idempotency keys).
+
+The receipt table is the smallest safe mechanism:
+
+* The agent generates one ``operation_key`` per prepared sale (a UUID
+  hex string). The key is part of the HITL tool-call args, so it is
+  serialised through the agent checkpoint — never a live session, never
+  an ORM object.
+* The write tool checks ``(shop_id, operation_key)`` BEFORE calling
+  ``SaleService.create_sale()``. A hit returns the already-created sale
+  without mutating anything (check-before-create).
+* On a miss, the sale AND its receipt are written in the SAME database
+  transaction. A unique constraint on ``(shop_id, operation_key)`` is
+  the final guard: a concurrent duplicate rolls back and re-reads the
+  winner instead of creating a second sale.
+
+Scope is per shop: keys never collide across tenants, and a receipt
+always points at a sale owned by the same shop (composite discipline
+mirrors the sale/customer guards). ``sale_id`` is nullable with
+``SET NULL`` so deleting/voiding a sale never cascades into the
+receipt — a replay after deletion reports "already processed" instead
+of silently re-creating the sale.
+"""
+
+import uuid
+from typing import TYPE_CHECKING
+
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import Base, TimestampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from app.models.sale import Sale
+
+
+class AISaleReceipt(Base, UUIDMixin, TimestampMixin):
+    """One idempotency receipt for one approved AI-assisted sale."""
+
+    __tablename__ = "ai_sale_receipts"
+
+    __table_args__ = (
+        # At most one sale per (shop, operation key): the duplicate-sale
+        # guard. Concurrent duplicates race here; the loser gets an
+        # IntegrityError, rolls back, and returns the winner's sale.
+        UniqueConstraint(
+            "shop_id",
+            "operation_key",
+            name="uq_ai_sale_receipts_shop_operation",
+        ),
+        Index(
+            "ix_ai_sale_receipts_shop_created_at",
+            "shop_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "length(trim(operation_key)) > 0",
+            name="ck_ai_sale_receipts_key_not_blank",
+        ),
+    )
+
+    shop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("shops.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Stable operation identity supplied by the agent (UUID hex). Scoped
+    # per shop by the unique constraint above.
+    operation_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # The sale this operation created. NULL only when the sale row is
+    # gone (deleted/voided) — the key stays claimed.
+    sale_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # No back_populates on Sale: receipts are an AI-layer concern, the
+    # sales domain stays unaware of them. `overlaps` is unneeded — this
+    # is a plain many-to-one with no competing relationship path.
+    sale: Mapped["Sale | None"] = relationship("Sale")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return (
+            f"AISaleReceipt(shop_id={self.shop_id!r}, "
+            f"operation_key={self.operation_key!r})"
+        )

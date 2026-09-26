@@ -28,6 +28,7 @@ from app.ai.config import get_ai_settings
 from app.ai.subagents.analytics import build_analytics_subagent_spec
 from app.ai.tools.business_reads import READ_TOOL_NAMES
 from app.ai.tools.registry import demo_side_effect, get_master_tools
+from app.ai.tools.sales_write import CREATE_SALE_TOOL_NAME
 
 MASTER_SYSTEM_PROMPT = """You are the KapraOS shop assistant. You help shopkeepers operate and understand their business using natural language.
 
@@ -65,12 +66,55 @@ MASTER_TOOL_NAMES: tuple[str, ...] = (
 # Step 2 business read tools (re-exported for a single obvious boundary).
 READ_MASTER_TOOL_NAMES: tuple[str, ...] = READ_TOOL_NAMES
 
+# Step 3 sale write tool (exactly one mutation: sale creation).
+WRITE_MASTER_TOOL_NAMES: tuple[str, ...] = (CREATE_SALE_TOOL_NAME,)
+
 # HITL: the fake side-effect demo pauses for human review.
 # ``True`` = approve / edit / reject / respond allowed (docs default).
 # A real checkpointer is REQUIRED for this to pause/resume.
 HITL_INTERRUPT_CONFIG: dict[str, bool] = {
     "demo_side_effect": True,
 }
+
+# HITL for the single Step 3 mutation. Same documented mechanism as the
+# demo (``interrupt_on`` + checkpointer + ``Command(resume=...)`` on the
+# same thread with ``version="v2"``). ``True`` keeps all four decisions;
+# an edit simply re-runs the tool with the edited args, which the tool
+# re-validates against the shop before any mutation.
+SALE_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
+    CREATE_SALE_TOOL_NAME: True,
+}
+
+# Appended to the system prompt ONLY when sale write tools are attached,
+# so runs without the mutation capability never learn a tool that is not
+# present (and cannot hallucinate sale tool calls).
+SALE_SYSTEM_ADDENDUM = """
+Sale recording (Step 3 — single mutation `create_sale`, always HITL-approved):
+1. Understand: customer name, product name, quantity, price if stated, cash vs udhaar.
+2. Resolve with the read tools first (customer account summary, catalog/inventory lookup).
+   If a name matches several customers/products/variants, ASK which one — never guess.
+3. In the SAME turn: write a short preview to the shopkeeper (customer, product,
+   quantity + unit, total, cash/udhaar) AND THEN IMMEDIATELY call `create_sale`.
+   Never end your turn after the preview without calling the tool — the tool call
+   is what raises the approval card, and without it nothing can be approved.
+4. Never ask "should I record it?" / "kya yeh theek hai?" in text and stop. The
+   approval card IS the confirmation question; your text preview is only the summary.
+5. If the shopkeeper is confirming a preview from the previous turn (haan, theek hai,
+   kar do, yes, ok), skip the preview and call `create_sale` directly.
+6. Call `create_sale` ONCE per sale with a FRESH idempotency_key (a UUID hex string,
+   generated once per new sale request; reuse the same key only when retrying the SAME
+   operation). The pending call pauses for the shopkeeper's approval — never claim the
+   sale is recorded before the approved result comes back.
+7. Pricing: omit unit_price to use the catalog selling price. If the shopkeeper states a
+   TOTAL for N units (e.g. '1800 mein 2 meter'), divide to a per-unit price and say so.
+8. Units: never convert — quantity is recorded in the variant's own unit. If the
+   shopkeeper says 'gaz' but the variant is sold per 'meter', say so in the preview.
+9. Payment: cash/nagad = cash (full now); udhaar/khata/baqi = credit (nothing now);
+   a stated partial (jama) = cash + paid_amount.
+10. After the result: report sale_id/invoice, total, paid/due in plain shopkeeper
+    language. On ambiguous/not_found/error results, explain and ask — never invent.
+11. Never pass shop_id (no such argument exists), never invent customer/product IDs.
+"""
 
 # Allowed resume decision types (per HITL docs).
 HITL_ALLOWED_DECISIONS: tuple[str, ...] = ("approve", "edit", "reject", "respond")
@@ -137,6 +181,7 @@ def build_master_agent(
     backend: Any = "auto",
     include_hitl_demo: bool = True,
     extra_tools: list[Any] | None = None,
+    write_tools: list[Any] | None = None,
 ) -> Any:
     """Construct the master Deep Agent using the current supported API.
 
@@ -161,6 +206,12 @@ def build_master_agent(
         extra_tools: Step 2 tenant-bound business read tools
             (``build_read_tools(session, tenant)``). Appended after the
             demo tools; read tools never require HITL approval.
+        write_tools: Step 3 tenant-bound business write tools
+            (``build_sale_write_tools(session, tenant)`` — exactly one
+            tool, ``create_sale``). Appended last; every write tool
+            pauses for HITL approval via ``interrupt_on`` and therefore
+            requires a checkpointer. Each request rebuilds these over
+            its own DB session, so no transaction ever spans the pause.
 
     Returns the compiled LangGraph ``CompiledStateGraph``.
     """
@@ -172,11 +223,20 @@ def build_master_agent(
         tools = [t for t in tools if t.name != demo_side_effect.name]
     if extra_tools:
         tools = [*tools, *extra_tools]
+    if write_tools:
+        tools = [*tools, *write_tools]
 
     interrupt_on: dict[str, Any] | None = None
     resolved_checkpointer: Any = None
+    needs_hitl = include_hitl_demo or bool(write_tools)
     if include_hitl_demo:
         interrupt_on = dict(HITL_INTERRUPT_CONFIG)
+    if write_tools:
+        interrupt_on = {
+            **(interrupt_on or {}),
+            **{t.name: True for t in write_tools},
+        }
+    if needs_hitl:
         resolved_checkpointer = (
             create_checkpointer() if checkpointer == "auto" else checkpointer
         )
@@ -190,10 +250,14 @@ def build_master_agent(
 
     resolved_backend = create_backend() if backend == "auto" else backend
 
+    system_prompt = MASTER_SYSTEM_PROMPT
+    if write_tools:
+        system_prompt = system_prompt + SALE_SYSTEM_ADDENDUM
+
     return create_deep_agent(
         model=resolved_model,
         tools=tools,
-        system_prompt=MASTER_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         subagents=[build_analytics_subagent_spec()],
         backend=resolved_backend,
         skills=list(SKILLS_SOURCE_PATHS),
@@ -238,7 +302,10 @@ __all__ = [
     "MASTER_SYSTEM_PROMPT",
     "MASTER_TOOL_NAMES",
     "READ_MASTER_TOOL_NAMES",
+    "SALE_HITL_INTERRUPT_CONFIG",
+    "SALE_SYSTEM_ADDENDUM",
     "SKILLS_SOURCE_PATHS",
+    "WRITE_MASTER_TOOL_NAMES",
     "approve_decision",
     "build_master_agent",
     "create_backend",

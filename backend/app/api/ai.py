@@ -3,11 +3,25 @@
 Runs the master Deep Agent on the xKiro-backed model. Step 2 attaches
 tenant-bound business read tools (real shop data, read-only) built from
 the request's DB session and authenticated tenant — the model never
-supplies ``shop_id``. Side-effecting tool calls pause with an interrupt;
-the frontend approves/rejects and resumes. Conversation state lives in a
-process-local checkpointer keyed by a thread id that is always namespaced
-with the authenticated shop + user, so one tenant can never resume
-another's thread.
+supplies ``shop_id``. Step 3 additionally attaches the single
+tenant-bound write tool (``create_sale``), which pauses with an
+interrupt; the frontend approves/rejects and resumes. Conversation state
+lives in a process-local checkpointer keyed by a thread id that is
+always namespaced with the authenticated shop + user, so one tenant can
+never resume another's thread.
+
+Transaction ownership: the sale write tool only flushes — this module
+commits after a finished (``done``) agent run, so an approved sale
+(rows + stock + payments + ledger + idempotency receipt) commits
+atomically. A run that pauses for approval is left untouched: the
+interrupt fires BEFORE the tool executes, so nothing was mutated and
+there is nothing to undo. No transaction ever spans the HITL pause:
+each request builds the agent over its own fresh session.
+
+Authorization: any authenticated member of the shop (owner or staff) may
+record sales through the assistant — exactly the same rule as
+``POST /sales``, which requires authentication + shop scope and no
+owner role. No new authorization system is introduced here.
 
 Every route requires authentication; tenant context always comes from
 the verified Clerk token via ``CurrentUserDep``.
@@ -25,6 +39,7 @@ from app.ai.agent import build_master_agent, create_checkpointer, resolve_model
 from app.ai.llm import MissingXKiroKeyError
 from app.ai.state import tenant_context_from_user
 from app.ai.tools.business_reads import build_read_tools
+from app.ai.tools.sales_write import build_sale_write_tools
 from app.api.dependencies import CurrentUserDep, DbSession
 from app.models.user import User
 
@@ -197,10 +212,12 @@ async def ai_chat(
     tenant = tenant_context_from_user(current_user)
     client_thread_id, namespaced = _namespaced_thread(current_user, body.thread_id)
     read_tools = build_read_tools(db, tenant)
+    sale_tools = build_sale_write_tools(db, tenant)
     agent = build_master_agent(
         model=model,
         checkpointer=get_shared_checkpointer(),
         extra_tools=read_tools,
+        write_tools=sale_tools,
     )
     first_message = (
         f"[tenant shop_id={tenant.shop_id} user_id={tenant.user_id}] {body.message}"
@@ -216,7 +233,9 @@ async def ai_chat(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI provider error: {exc}",
         ) from exc
-    return _chat_response(result, client_thread_id)
+    response = _chat_response(result, client_thread_id)
+    await _settle_transaction(db, response["status"])
+    return response
 
 
 @router.post("/chat/resume")
@@ -231,10 +250,12 @@ async def ai_chat_resume(
     tenant = tenant_context_from_user(current_user)
     _, namespaced = _namespaced_thread(current_user, body.thread_id)
     read_tools = build_read_tools(db, tenant)
+    sale_tools = build_sale_write_tools(db, tenant)
     agent = build_master_agent(
         model=model,
         checkpointer=get_shared_checkpointer(),
         extra_tools=read_tools,
+        write_tools=sale_tools,
     )
     try:
         result = await agent.ainvoke(
@@ -252,4 +273,27 @@ async def ai_chat_resume(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI provider error: {exc}",
         ) from exc
-    return _chat_response(result, body.thread_id)
+    response = _chat_response(result, body.thread_id)
+    await _settle_transaction(db, response["status"])
+    return response
+
+
+async def _settle_transaction(db: DbSession, run_status: str) -> None:
+    """Commit a finished run; leave a paused run untouched.
+
+    The write tool flushes but never commits, so the commit here is what
+    makes an approved sale durable — sale, stock, payments, ledger, and
+    idempotency receipt together, or nothing at all. A ``paused`` run
+    performed no approved mutation (the interrupt fires before the tool
+    executes), so its session is deliberately left alone.
+    """
+    if run_status != "done":
+        return
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI provider error: {exc}",
+        ) from exc
