@@ -26,6 +26,7 @@ from typing import Any
 
 from app.ai.config import get_ai_settings
 from app.ai.subagents.analytics import build_analytics_subagent_spec
+from app.ai.tools.business_reads import READ_TOOL_NAMES
 from app.ai.tools.registry import demo_side_effect, get_master_tools
 
 MASTER_SYSTEM_PROMPT = """You are the KapraOS shop assistant. You help shopkeepers operate and understand their business using natural language.
@@ -44,14 +45,25 @@ Core rules:
 11. Never expose data belonging to another shop.
 12. When information is ambiguous, resolve it through safe read operations or request clarification.
 13. Prefer existing backend services over duplicating business logic.
+
+Step 2 read capabilities (real shop data, read-only):
+- Answer sales/stock/khata/supplier/purchase/expense/catalog questions with the typed business read tools (get_sales_summary, get_inventory_status, get_customer_account_summary, get_supplier_account_summary, get_purchase_summary, get_expense_summary, get_product_or_catalog_info, get_dashboard_summary).
+- Understand fabric-retail language: khata, udhaar, cash, jama, baqi, gaz, meter, thaan, jora, suit, kapra, maal, bikri, kharid, supplier, customer.
+- Use concrete UTC date boundaries (YYYY-MM-DD) for ranges like today/yesterday/this week/this month/last month.
+- When a tool reports ambiguity (multiple Ahmeds, multiple Black Lawn products), ask the shopkeeper which one they mean instead of guessing.
+- Explain results in plain shopkeeper language with Rs. amounts; never describe backend services, SQL, shop_id, or implementation details.
 """
 
 # Master tools are the Step 1 demo registry only (safe, tiny).
+# Step 2 read tools are per-request via `extra_tools` (see build_master_agent).
 MASTER_TOOL_NAMES: tuple[str, ...] = (
     "kapraos_demo_info",
     "demo_prepare_operation",
     "demo_side_effect",
 )
+
+# Step 2 business read tools (re-exported for a single obvious boundary).
+READ_MASTER_TOOL_NAMES: tuple[str, ...] = READ_TOOL_NAMES
 
 # HITL: the fake side-effect demo pauses for human review.
 # ``True`` = approve / edit / reject / respond allowed (docs default).
@@ -124,6 +136,7 @@ def build_master_agent(
     checkpointer: Any = "auto",
     backend: Any = "auto",
     include_hitl_demo: bool = True,
+    extra_tools: list[Any] | None = None,
 ) -> Any:
     """Construct the master Deep Agent using the current supported API.
 
@@ -145,6 +158,9 @@ def build_master_agent(
         include_hitl_demo: Attach the harmless ``demo_side_effect`` tool
             with ``interrupt_on`` approval. Always True in Step 1 unless
             the caller explicitly opts out.
+        extra_tools: Step 2 tenant-bound business read tools
+            (``build_read_tools(session, tenant)``). Appended after the
+            demo tools; read tools never require HITL approval.
 
     Returns the compiled LangGraph ``CompiledStateGraph``.
     """
@@ -154,6 +170,8 @@ def build_master_agent(
     tools = get_master_tools()
     if not include_hitl_demo:
         tools = [t for t in tools if t.name != demo_side_effect.name]
+    if extra_tools:
+        tools = [*tools, *extra_tools]
 
     interrupt_on: dict[str, Any] | None = None
     resolved_checkpointer: Any = None
@@ -219,6 +237,7 @@ __all__ = [
     "HITL_INTERRUPT_CONFIG",
     "MASTER_SYSTEM_PROMPT",
     "MASTER_TOOL_NAMES",
+    "READ_MASTER_TOOL_NAMES",
     "SKILLS_SOURCE_PATHS",
     "approve_decision",
     "build_master_agent",

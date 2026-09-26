@@ -1,25 +1,22 @@
-"""Tiny Step 1 tool registry — boundary/interface only.
+"""Tool registry — Step 1 demos plus Step 2 business reads.
 
-Deliberately NOT a giant CRUD registry. Future tools will represent safe
-*business operations* (sales operation, purchase operation, ...) calling
-the existing deterministic services. For Step 1 the registry exposes only:
-
-* ``kapraos_demo_info`` — safe read-only POC capability (no DB).
-* ``demo_prepare_operation`` — PREPARE demo (no side effect).
-* ``demo_side_effect`` — harmless fake EXECUTE demo used to verify the
-  documented HITL ``interrupt_on`` + checkpointer pattern. It records to
-  an in-memory log only and never touches the database.
+Deliberately NOT a giant CRUD registry. Step 1 exposes only safe demos;
+Step 2 adds a small set of business-level READ tools (see
+``app.ai.tools.business_reads``) built per request over the authenticated
+tenant. No tool takes ``shop_id`` — tenant context is always injected
+server-side (see ``app.ai.state``).
 
 Hard rules enforced here and in tests:
 
-* No tool takes ``shop_id`` as an argument — tenant context is injected
-  server-side (see ``app.ai.state``).
-* No tool performs ``session.add / session.delete / session.execute`` or
-  any raw-SQL write. ``assert_no_db_mutation_tools`` guards this.
+* No tool takes ``shop_id`` as an argument.
+* No tool performs ``session.add / session.delete`` or any raw-SQL write.
+  ``assert_no_db_mutation_tools`` guards this.
 * The analytics subagent receives zero tools (see ``app.ai.subagents``).
 """
 
 from langchain_core.tools import BaseTool, tool
+
+from app.ai.tools.business_reads import READ_TOOL_NAMES, build_read_tools
 
 # In-memory receipt log for the harmless HITL demo tool. Module-level and
 # resettable so tests stay isolated. Never a database table.
@@ -74,8 +71,32 @@ def reset_demo_side_effect_log() -> None:
 
 
 def get_master_tools() -> list[BaseTool]:
-    """Tools exposed to the master Deep Agent in Step 1 (safe demos only)."""
+    """Tools exposed to the master Deep Agent in Step 1 (safe demos only).
+
+    Kept demo-only so Step 1 architecture/tests stay intact. Step 2 read
+    tools are per-request (they close over the tenant session) — use
+    :func:`get_master_tools_with_reads`.
+    """
     return [kapraos_demo_info, demo_prepare_operation, demo_side_effect]  # type: ignore[list-item]
+
+
+def get_master_tools_with_reads(session: object, tenant: object) -> list[BaseTool]:
+    """Demo tools plus the tenant-bound Step 2 business read tools."""
+    from typing import cast
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.ai.state import TenantContext
+
+    reads = build_read_tools(
+        cast("AsyncSession", session), cast("TenantContext", tenant)
+    )
+    return [*get_master_tools(), *reads]
+
+
+def get_read_tool_names() -> tuple[str, ...]:
+    """Names of the Step 2 business read tools (explicit registry)."""
+    return READ_TOOL_NAMES
 
 
 def get_analytics_tools() -> list[BaseTool]:

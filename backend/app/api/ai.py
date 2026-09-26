@@ -1,10 +1,13 @@
 """Live shop-assistant chat (``/ai/chat``, ``/ai/chat/resume``).
 
-Runs the master Deep Agent on the xKiro-backed model. Side-effecting
-tool calls pause with an interrupt; the frontend approves/rejects and
-resumes. Conversation state lives in a process-local checkpointer keyed
-by a thread id that is always namespaced with the authenticated shop +
-user, so one tenant can never resume another's thread.
+Runs the master Deep Agent on the xKiro-backed model. Step 2 attaches
+tenant-bound business read tools (real shop data, read-only) built from
+the request's DB session and authenticated tenant — the model never
+supplies ``shop_id``. Side-effecting tool calls pause with an interrupt;
+the frontend approves/rejects and resumes. Conversation state lives in a
+process-local checkpointer keyed by a thread id that is always namespaced
+with the authenticated shop + user, so one tenant can never resume
+another's thread.
 
 Every route requires authentication; tenant context always comes from
 the verified Clerk token via ``CurrentUserDep``.
@@ -21,7 +24,8 @@ from pydantic import BaseModel, Field
 from app.ai.agent import build_master_agent, create_checkpointer, resolve_model
 from app.ai.llm import MissingXKiroKeyError
 from app.ai.state import tenant_context_from_user
-from app.api.dependencies import CurrentUserDep
+from app.ai.tools.business_reads import build_read_tools
+from app.api.dependencies import CurrentUserDep, DbSession
 from app.models.user import User
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -187,18 +191,22 @@ async def ai_chat(
     body: ChatRequest,
     current_user: CurrentUserDep,
     model: ChatModelDep,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Send a message to the shop assistant; returns reply or approval pause."""
     tenant = tenant_context_from_user(current_user)
     client_thread_id, namespaced = _namespaced_thread(current_user, body.thread_id)
+    read_tools = build_read_tools(db, tenant)
     agent = build_master_agent(
-        model=model, checkpointer=get_shared_checkpointer()
+        model=model,
+        checkpointer=get_shared_checkpointer(),
+        extra_tools=read_tools,
     )
     first_message = (
         f"[tenant shop_id={tenant.shop_id} user_id={tenant.user_id}] {body.message}"
     )
     try:
-        result = agent.invoke(
+        result = await agent.ainvoke(
             {"messages": [{"role": "user", "content": first_message}]},
             config={"configurable": {"thread_id": namespaced}},
             version="v2",
@@ -216,15 +224,20 @@ async def ai_chat_resume(
     body: ChatResumeRequest,
     current_user: CurrentUserDep,
     model: ChatModelDep,
+    db: DbSession,
 ) -> dict[str, Any]:
     """Resume a paused chat with human decisions for every pending action."""
     decisions = _validate_decisions(body.decisions)
+    tenant = tenant_context_from_user(current_user)
     _, namespaced = _namespaced_thread(current_user, body.thread_id)
+    read_tools = build_read_tools(db, tenant)
     agent = build_master_agent(
-        model=model, checkpointer=get_shared_checkpointer()
+        model=model,
+        checkpointer=get_shared_checkpointer(),
+        extra_tools=read_tools,
     )
     try:
-        result = agent.invoke(
+        result = await agent.ainvoke(
             Command(resume={"decisions": decisions}),
             config={"configurable": {"thread_id": namespaced}},
             version="v2",
