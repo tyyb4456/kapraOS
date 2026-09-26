@@ -29,6 +29,7 @@ from app.ai.subagents.analytics import build_analytics_subagent_spec
 from app.ai.tools.business_reads import READ_TOOL_NAMES
 from app.ai.tools.expenses_write import RECORD_EXPENSE_TOOL_NAME
 from app.ai.tools.payments_write import RECORD_PAYMENT_TOOL_NAME
+from app.ai.tools.purchases_write import CREATE_PURCHASE_TOOL_NAME
 from app.ai.tools.registry import demo_side_effect, get_master_tools
 from app.ai.tools.sales_write import CREATE_SALE_TOOL_NAME
 from app.ai.tools.supplier_payments_write import RECORD_SUPPLIER_PAYMENT_TOOL_NAME
@@ -69,15 +70,17 @@ MASTER_TOOL_NAMES: tuple[str, ...] = (
 # Step 2 business read tools (re-exported for a single obvious boundary).
 READ_MASTER_TOOL_NAMES: tuple[str, ...] = READ_TOOL_NAMES
 
-# Step 3 + Step 4 + Step 5 + Step 6 write tools (exactly four mutations:
-# sale creation, customer payment, supplier payment, and expense
-# recording). Each module still exposes exactly one tool; the master
-# agent orchestrates all four without any specialised sub-agent.
+# Step 3 + Step 4 + Step 5 + Step 6 + Step 7 write tools (exactly five
+# mutations: sale creation, customer payment, supplier payment, expense
+# recording, and purchase recording). Each module still exposes exactly
+# one tool; the master agent orchestrates all five without any
+# specialised sub-agent.
 WRITE_MASTER_TOOL_NAMES: tuple[str, ...] = (
     CREATE_SALE_TOOL_NAME,
     RECORD_PAYMENT_TOOL_NAME,
     RECORD_SUPPLIER_PAYMENT_TOOL_NAME,
     RECORD_EXPENSE_TOOL_NAME,
+    CREATE_PURCHASE_TOOL_NAME,
 )
 
 # HITL: the fake side-effect demo pauses for human review.
@@ -120,6 +123,15 @@ SUPPLIER_PAYMENT_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
 # re-validates (category, amount, method) before any mutation.
 EXPENSE_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
     RECORD_EXPENSE_TOOL_NAME: True,
+}
+
+# HITL for the single Step 7 mutation (purchase recording). Identical
+# mechanism: ``True`` keeps approve / edit / reject / respond; an edit
+# re-runs ``create_purchase`` with the edited args, which the tool
+# re-validates (supplier, product/variant, quantity, cost) before any
+# mutation.
+PURCHASE_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
+    CREATE_PURCHASE_TOOL_NAME: True,
 }
 
 # Appended to the system prompt ONLY when sale write tools are attached,
@@ -280,6 +292,54 @@ Expense recording (Step 6 — single mutation `record_expense`, always HITL-appr
 10. Never pass shop_id (no such argument exists), never invent ledger accounts.
 """
 
+# Appended to the system prompt ONLY when purchase write tools are
+# attached, so runs without the mutation capability never learn a tool
+# that is not present (and cannot hallucinate purchase tool calls).
+PURCHASE_SYSTEM_ADDENDUM = """
+Purchase recording (Step 7 — single mutation `create_purchase`, always HITL-approved):
+1. Understand: which supplier the goods came from, which product/variant,
+   how much (quantity), and at what rate (unit cost or total).
+   Examples: 'Bilal supplier se 20 suit 2500 per suit ke aaye' (20 x 2500),
+   'Ahmed se black lawn 30 meter 600 rupay meter mein liya' (30 x 600),
+   'Bilal se 10 suits 30000 mein khareede' (total 30000 for 10 -> 3000 each),
+   'Bilal supplier se 5 rolls fabric aaye' (needs rate — ask).
+   Amounts may use scale words: '5 hazar' = 5000, '2 lakh' = 200000.
+2. Resolve with the read tools first (supplier account summary, catalog/inventory
+   lookup). If a supplier or product name matches several rows, ASK which one —
+   never guess. Never create a supplier or product for a purchase; a missing
+   name is a clarification, not a new row. Purchases always need a named supplier.
+3. Never invent quantity or cost. If the shopkeeper did not state them
+   ('Bilal se maal khareeda', 'Bilal se 20 suit aaye' without a rate),
+   ask what product/quantity/rate is required instead of calling the tool.
+   If it is unclear whether an amount is per-unit or total ('10 suits 30000'),
+   ask for clarification unless the wording is explicit ('per suit', 'per meter',
+   'rupay meter' = unit; 'mein khareede' alone = ask). No HITL is shown for an
+   incomplete operation.
+4. In the SAME turn: write a short preview to the shopkeeper (supplier, product,
+   quantity + unit, unit cost, preview total, credit vs paid) AND THEN IMMEDIATELY
+   call `create_purchase`. Never end your turn after the preview without calling
+   the tool — the tool call is what raises the approval card, and without it
+   nothing can be approved.
+5. Never ask "should I record it?" / "kya yeh theek hai?" in text and stop. The
+   approval card IS the confirmation question; your text preview is only the summary.
+6. If the shopkeeper is confirming a preview from the previous turn (haan, theek hai,
+   kar do, yes, ok), skip the preview and call `create_purchase` directly.
+7. Call `create_purchase` ONCE per purchase with a FRESH idempotency_key (a UUID
+   hex string, generated once per new purchase request; reuse the same key only
+   when retrying the SAME operation). The pending call pauses for the shopkeeper's
+   approval — never claim the purchase is recorded before the approved result comes back.
+8. Items are a list (1-20 lines): each line needs product_name/variant_sku/variant_id
+   plus quantity plus unit_cost OR total_cost. A purchase tracks NO payment method —
+   omit paid_amount for credit/unpaid (due = total); pass an amount for a partial
+   payment or 'cash'/'full' for fully paid. Never invent accounting (no ledger
+   accounts, no journal lines, no balances) and never call record_supplier_payment
+   from a purchase — settlement is a separate step.
+9. After the result: report purchase_id, supplier, items, authoritative total, and
+   paid/due in plain shopkeeper language. On ambiguous/not_found/error results,
+   explain and ask — never invent.
+10. Never pass shop_id (no such argument exists), never invent supplier/product IDs.
+"""
+
 # Allowed resume decision types (per HITL docs).
 HITL_ALLOWED_DECISIONS: tuple[str, ...] = ("approve", "edit", "reject", "respond")
 
@@ -370,13 +430,15 @@ def build_master_agent(
         extra_tools: Step 2 tenant-bound business read tools
             (``build_read_tools(session, tenant)``). Appended after the
             demo tools; read tools never require HITL approval.
-        write_tools: Step 3 + Step 4 + Step 5 + Step 6 tenant-bound
+        write_tools: Step 3 + Step 4 + Step 5 + Step 6 + Step 7 tenant-bound
             business write tools (``build_sale_write_tools(session,
             tenant)`` + ``build_payment_write_tools(session, tenant)`` +
             ``build_supplier_payment_write_tools(session, tenant)`` +
-            ``build_expense_write_tools(session, tenant)`` — exactly one
+            ``build_expense_write_tools(session, tenant)`` +
+            ``build_purchase_write_tools(session, tenant)`` — exactly one
             tool per module, ``create_sale``, ``record_customer_payment``,
-            ``record_supplier_payment`` and ``record_expense``).
+            ``record_supplier_payment``, ``record_expense`` and
+            ``create_purchase``).
             Appended last; every write tool
             pauses for HITL approval via ``interrupt_on`` and therefore
             requires a checkpointer. Each request rebuilds these over
@@ -430,6 +492,8 @@ def build_master_agent(
             system_prompt = system_prompt + SUPPLIER_PAYMENT_SYSTEM_ADDENDUM
         if RECORD_EXPENSE_TOOL_NAME in present:
             system_prompt = system_prompt + EXPENSE_SYSTEM_ADDENDUM
+        if CREATE_PURCHASE_TOOL_NAME in present:
+            system_prompt = system_prompt + PURCHASE_SYSTEM_ADDENDUM
 
     return create_deep_agent(
         model=resolved_model,
@@ -482,6 +546,8 @@ __all__ = [
     "MASTER_TOOL_NAMES",
     "PAYMENT_HITL_INTERRUPT_CONFIG",
     "PAYMENT_SYSTEM_ADDENDUM",
+    "PURCHASE_HITL_INTERRUPT_CONFIG",
+    "PURCHASE_SYSTEM_ADDENDUM",
     "READ_MASTER_TOOL_NAMES",
     "SALE_HITL_INTERRUPT_CONFIG",
     "SALE_SYSTEM_ADDENDUM",

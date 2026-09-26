@@ -41,6 +41,7 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.expense import Expense
     from app.models.payment import Payment
+    from app.models.purchase import Purchase
     from app.models.sale import Sale
 
 
@@ -341,5 +342,89 @@ class AIExpenseReceipt(Base, UUIDMixin, TimestampMixin):
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
         return (
             f"AIExpenseReceipt(shop_id={self.shop_id!r}, "
+            f"operation_key={self.operation_key!r})"
+        )
+
+
+class AIPurchaseReceipt(Base, UUIDMixin, TimestampMixin):
+    """One idempotency receipt for one approved AI-assisted purchase.
+
+    Step 7 mirrors the Step 3/Step 4/Step 5/Step 6 receipt pattern, but with
+    its own table: forcing purchases into ``ai_sale_receipts`` (whose
+    ``sale_id`` FK is sale-specific), into ``ai_payment_receipts``
+    (customer-payment specific), into ``ai_supplier_payment_receipts``
+    (supplier-payment specific), or into ``ai_expense_receipts``
+    (expense-specific) would distort the data model. The mechanics are
+    identical:
+
+    * The agent generates one ``operation_key`` per prepared purchase (a UUID
+      hex string). The key is part of the HITL tool-call args, so it is
+      serialised through the agent checkpoint — never a live session, never
+      an ORM object.
+    * The write tool checks ``(shop_id, operation_key)`` BEFORE calling
+      ``purchases.create_purchase()``. A hit returns the already-created
+      purchase without mutating anything.
+    * On a miss, the purchase AND its receipt are written in the SAME
+      database transaction. A unique constraint on
+      ``(shop_id, operation_key)`` is the final guard: a concurrent
+      duplicate rolls back and re-reads the winner instead of creating a
+      second purchase.
+
+    Scope is per shop. ``purchase_id`` is nullable with ``SET NULL`` so
+    voiding a purchase never cascades into the receipt — a replay after a
+    void reports "already processed" instead of silently re-creating stock
+    movement.
+    """
+
+    __tablename__ = "ai_purchase_receipts"
+
+    __table_args__ = (
+        # At most one purchase per (shop, operation key): the
+        # duplicate-purchase guard. Concurrent duplicates race here; the
+        # loser gets an IntegrityError, rolls back, and returns the
+        # winner's purchase.
+        UniqueConstraint(
+            "shop_id",
+            "operation_key",
+            name="uq_ai_purchase_receipts_shop_operation",
+        ),
+        Index(
+            "ix_ai_purchase_receipts_shop_created_at",
+            "shop_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "length(trim(operation_key)) > 0",
+            name="ck_ai_purchase_receipts_key_not_blank",
+        ),
+    )
+
+    shop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("shops.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Stable operation identity supplied by the agent (UUID hex). Scoped
+    # per shop by the unique constraint above.
+    operation_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # The purchase this operation created. NULL only when the purchase row is
+    # gone (voided) — the key stays claimed.
+    purchase_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchases.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # No back_populates on Purchase: receipts are an AI-layer concern, the
+    # purchase domain stays unaware of them.
+    purchase: Mapped["Purchase | None"] = relationship("Purchase")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return (
+            f"AIPurchaseReceipt(shop_id={self.shop_id!r}, "
             f"operation_key={self.operation_key!r})"
         )

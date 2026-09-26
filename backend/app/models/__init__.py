@@ -15,6 +15,7 @@ from app.models.account import Account, AccountType
 from app.models.ai_operation import (
     AIExpenseReceipt,
     AIPaymentReceipt,
+    AIPurchaseReceipt,
     AISaleReceipt,
     AISupplierPaymentReceipt,
 )
@@ -47,6 +48,7 @@ from app.models.user import User, UserRole
 __all__ = [
     "AIExpenseReceipt",
     "AIPaymentReceipt",
+    "AIPurchaseReceipt",
     "AISaleReceipt",
     "AISupplierPaymentReceipt",
     "Account",
