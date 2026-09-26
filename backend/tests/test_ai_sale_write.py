@@ -201,8 +201,13 @@ async def _outstanding(
 def test_write_registry_is_exactly_one_tool() -> None:
     # Sale module still exposes exactly one mutation (Step 3 invariant).
     assert WRITE_TOOL_NAMES == ("create_sale",)
-    # Master agent orchestrates Step 3 + Step 4 (sale + customer payment).
-    assert set(WRITE_MASTER_TOOL_NAMES) == {"create_sale", "record_customer_payment"}
+    # Master agent orchestrates Step 3 + Step 4 + Step 5
+    # (sale + customer payment + supplier payment).
+    assert set(WRITE_MASTER_TOOL_NAMES) == {
+        "create_sale",
+        "record_customer_payment",
+        "record_supplier_payment",
+    }
     assert SALE_HITL_INTERRUPT_CONFIG == {"create_sale": True}
 
 

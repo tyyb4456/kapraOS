@@ -178,3 +178,85 @@ class AIPaymentReceipt(Base, UUIDMixin, TimestampMixin):
             f"AIPaymentReceipt(shop_id={self.shop_id!r}, "
             f"operation_key={self.operation_key!r})"
         )
+
+
+class AISupplierPaymentReceipt(Base, UUIDMixin, TimestampMixin):
+    """One idempotency receipt for one approved AI-assisted supplier payment.
+
+    Step 5 mirrors the Step 3/Step 4 receipt pattern, but with its own table:
+    forcing supplier payments into ``ai_sale_receipts`` (whose ``sale_id`` FK
+    is sale-specific) or into ``ai_payment_receipts`` (whose name and
+    customer-payment history are customer-specific) would distort the data
+    model. The mechanics are identical:
+
+    * The agent generates one ``operation_key`` per prepared supplier payment
+      (a UUID hex string). The key is part of the HITL tool-call args, so it
+      is serialised through the agent checkpoint — never a live session,
+      never an ORM object.
+    * The write tool checks ``(shop_id, operation_key)`` BEFORE calling
+      ``payables.record_supplier_payment()``. A hit returns the
+      already-created payment without mutating anything.
+    * On a miss, the payment AND its receipt are written in the SAME
+      database transaction. A unique constraint on
+      ``(shop_id, operation_key)`` is the final guard: a concurrent
+      duplicate rolls back and re-reads the winner instead of creating a
+      second payment.
+
+    Scope is per shop. ``payment_id`` is nullable with ``SET NULL`` so
+    voiding a payment never cascades into the receipt — a replay after a
+    void reports "already processed" instead of silently re-creating money
+    movement.
+    """
+
+    __tablename__ = "ai_supplier_payment_receipts"
+
+    __table_args__ = (
+        # At most one supplier payment per (shop, operation key): the
+        # duplicate-payment guard. Concurrent duplicates race here; the
+        # loser gets an IntegrityError, rolls back, and returns the
+        # winner's payment.
+        UniqueConstraint(
+            "shop_id",
+            "operation_key",
+            name="uq_ai_supplier_payment_receipts_shop_operation",
+        ),
+        Index(
+            "ix_ai_supplier_payment_receipts_shop_created_at",
+            "shop_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "length(trim(operation_key)) > 0",
+            name="ck_ai_supplier_payment_receipts_key_not_blank",
+        ),
+    )
+
+    shop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("shops.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Stable operation identity supplied by the agent (UUID hex). Scoped
+    # per shop by the unique constraint above.
+    operation_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # The supplier payment this operation created. NULL only when the payment
+    # row is gone (voided) — the key stays claimed.
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # No back_populates on Payment: receipts are an AI-layer concern, the
+    # payables domain stays unaware of them.
+    payment: Mapped["Payment | None"] = relationship("Payment")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return (
+            f"AISupplierPaymentReceipt(shop_id={self.shop_id!r}, "
+            f"operation_key={self.operation_key!r})"
+        )
