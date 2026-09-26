@@ -27,11 +27,15 @@ import { SettingsPage } from '../pages/settings/SettingsPage.tsx';
 import { AiChatPage } from '../pages/ai/AiChatPage.tsx';
 import { LoginPage } from '../pages/auth/LoginPage.tsx';
 import { SignUpPage } from '../pages/auth/SignUpPage.tsx';
+import { LandingPage } from '../pages/LandingPage.tsx';
 import { NotFoundPage } from '../pages/NotFoundPage.tsx';
 
 export function AppRouter() {
   return (
     <Routes>
+      {/* Public marketing landing — entry point of the app */}
+      <Route path="/" element={<LandingPage />} />
+
       {/* Public / Auth Routes (Wildcards required for Clerk SSO callbacks & sub-flows) */}
       <Route path="/login/*" element={<LoginPage />} />
       <Route path="/signup/*" element={<SignUpPage />} />
@@ -46,7 +50,6 @@ export function AppRouter() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
 
         {/* Catalog */}

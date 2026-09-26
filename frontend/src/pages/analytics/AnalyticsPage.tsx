@@ -171,13 +171,13 @@ export function AnalyticsPage() {
   // readable in both modes.
   const chartTheme = useMemo(
     () => ({
-      grid: isDark ? '#27272a' : '#e4e4e7',
+      grid: isDark ? '#353c4a' : '#e4e4e7',
       tick: isDark ? '#a1a1aa' : '#71717a',
-      axisLine: isDark ? '#3f3f46' : '#d4d4d8',
+      axisLine: isDark ? '#4b5468' : '#d4d4d8',
       netProfit: isDark ? '#fafafa' : '#18181b',
       bar: isDark ? '#e4e4e7' : '#18181b',
-      tooltipBg: isDark ? '#18181b' : '#ffffff',
-      tooltipBorder: isDark ? '#52525b' : '#e4e4e7',
+      tooltipBg: isDark ? '#282e38' : '#ffffff',
+      tooltipBorder: isDark ? '#4b5468' : '#e4e4e7',
       tooltipText: isDark ? '#f4f4f5' : '#18181b',
       tooltipMuted: isDark ? '#a1a1aa' : '#71717a',
     }),
@@ -382,7 +382,7 @@ export function AnalyticsPage() {
                     }}
                     labelStyle={{ color: chartTheme.tooltipText, fontWeight: 600 }}
                     itemStyle={{ color: chartTheme.tooltipText }}
-                    cursor={{ fill: isDark ? '#27272a' : '#f4f4f5' }}
+                    cursor={{ fill: isDark ? '#353c4a' : '#f4f4f5' }}
                   />
                   <Bar dataKey="sales_count" name="Orders" fill={chartTheme.bar} radius={[3, 3, 0, 0]} />
                 </BarChart>

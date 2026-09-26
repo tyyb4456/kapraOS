@@ -10,6 +10,15 @@
 
 .dark {
   color-scheme: dark;
+  /* Soft charcoal gray scale — replaces near-black zinc so dark mode
+     feels like dark gray, not pure black. These override Tailwind v4's
+     --color-zinc-* tokens only while `.dark` is active, so every
+     dark:bg-zinc-* / dark:border-zinc-* utility across the app follows
+     automatically (layouts, cards, inputs, landing page). */
+  --color-zinc-950: #1e222b;
+  --color-zinc-900: #282e38;
+  --color-zinc-800: #353c4a;
+  --color-zinc-700: #4b5468;
 }
 
 html,
@@ -30,7 +39,7 @@ body {
 }
 
 .dark body {
-  background-color: #09090b;
+  background-color: #1e222b;
   color: #f4f4f5;
 }
 
@@ -57,11 +66,11 @@ body {
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: #4b5468;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: #5b6579;
 }
 
 /* ------------------------------------------------------------------ */

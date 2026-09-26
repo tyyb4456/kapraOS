@@ -373,14 +373,14 @@ export function NewSalePage() {
 
             {/* Product Picker Modal */}
             {showProductPicker && (
-              <Card className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[70vh] flex flex-col">
+              <div className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[70vh] flex flex-col">
                   <CardHeader className="p-4 border-b border-zinc-100 flex items-center justify-between">
                     <CardTitle className="text-sm font-semibold text-zinc-900">Select Product</CardTitle>
                     <button
                       type="button"
                       onClick={() => setShowProductPicker(false)}
-                      className="text-zinc-400 hover:text-zinc-600"
+                      className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
                     >
                       ✕
                     </button>
@@ -402,10 +402,10 @@ export function NewSalePage() {
                             key={variant.id}
                             type="button"
                             onClick={() => handleAddItem(variant)}
-                            className="w-full p-3 text-left hover:bg-zinc-50 rounded-md border border-zinc-200 transition-colors flex items-center justify-between group cursor-pointer"
+                            className="w-full p-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md border border-zinc-200 dark:border-zinc-800 transition-colors flex items-center justify-between group cursor-pointer"
                           >
                             <div>
-                              <div className="font-medium text-zinc-900 group-hover:text-zinc-950">{variant.product_name}</div>
+                              <div className="font-medium text-zinc-900 dark:text-zinc-100 group-hover:text-zinc-950 dark:group-hover:text-white">{variant.product_name}</div>
                               <div className="text-xs text-zinc-500 font-mono mt-0.5">SKU: {variant.sku}</div>
                             </div>
                             <div className="text-right">
@@ -418,7 +418,7 @@ export function NewSalePage() {
                     )}
                   </CardContent>
                 </div>
-              </Card>
+              </div>
             )}
           </div>
 
@@ -470,8 +470,8 @@ export function NewSalePage() {
                       onClick={() => setPaymentMethod('cash')}
                       className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
                         paymentMethod === 'cash'
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                          ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xs'
+                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                       }`}
                     >
                       Cash
@@ -481,8 +481,8 @@ export function NewSalePage() {
                       onClick={() => setPaymentMethod('khata')}
                       className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
                         paymentMethod === 'khata'
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                          ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xs'
+                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                       }`}
                     >
                       Customer Khata
@@ -492,8 +492,8 @@ export function NewSalePage() {
                       onClick={() => setPaymentMethod('card')}
                       className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
                         paymentMethod === 'card'
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                          ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xs'
+                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                       }`}
                     >
                       Card
@@ -503,8 +503,8 @@ export function NewSalePage() {
                       onClick={() => setPaymentMethod('bank')}
                       className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
                         paymentMethod === 'bank'
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                          ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xs'
+                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                       }`}
                     >
                       Bank Transfer
@@ -514,8 +514,8 @@ export function NewSalePage() {
                       onClick={() => setPaymentMethod('jazzcash')}
                       className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
                         paymentMethod === 'jazzcash'
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                          ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xs'
+                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                       }`}
                     >
                       JazzCash
@@ -525,8 +525,8 @@ export function NewSalePage() {
                       onClick={() => setPaymentMethod('easypaisa')}
                       className={`p-2.5 rounded-md border text-xs font-medium text-center transition-colors cursor-pointer ${
                         paymentMethod === 'easypaisa'
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                          ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xs'
+                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                       }`}
                     >
                       EasyPaisa
