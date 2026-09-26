@@ -24,6 +24,7 @@ const AnalyticsPage = lazy(() =>
   import('../pages/analytics/AnalyticsPage.tsx').then((m) => ({ default: m.AnalyticsPage })),
 );
 import { SettingsPage } from '../pages/settings/SettingsPage.tsx';
+import { AiChatPage } from '../pages/ai/AiChatPage.tsx';
 import { LoginPage } from '../pages/auth/LoginPage.tsx';
 import { SignUpPage } from '../pages/auth/SignUpPage.tsx';
 import { NotFoundPage } from '../pages/NotFoundPage.tsx';
@@ -86,6 +87,9 @@ export function AppRouter() {
 
         {/* Settings */}
         <Route path="/settings" element={<SettingsPage />} />
+
+        {/* AI Assistant (live shop-assistant chat) */}
+        <Route path="/ai-chat" element={<AiChatPage />} />
       </Route>
 
       {/* 404 Catch-all */}

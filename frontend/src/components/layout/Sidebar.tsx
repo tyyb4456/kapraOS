@@ -18,6 +18,7 @@ import {
   ChartNoAxesCombined,
   TrendingUp,
   Settings,
+  Sparkles,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -93,6 +94,12 @@ const navigationGroups: NavGroup[] = [
       { label: 'Expenses', path: '/expenses', icon: Wallet },
       { label: 'Reports', path: '/reports', icon: ChartNoAxesCombined },
       { label: 'Analytics', path: '/analytics', icon: TrendingUp },
+    ],
+  },
+  {
+    groupTitle: 'AI',
+    items: [
+      { label: 'AI Assistant', path: '/ai-chat', icon: Sparkles },
     ],
   },
   {

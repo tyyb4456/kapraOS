@@ -12,3 +12,4 @@ export * from './reports.ts';
 export * from './shops.ts';
 export * from './dashboard.ts';
 export * from './analytics.ts';
+export * from './ai.ts';

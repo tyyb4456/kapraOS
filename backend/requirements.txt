@@ -8,3 +8,5 @@ pydantic_settings
 alembic
 httpx
 pytest
+deepagents
+langchain
