@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   Receipt,
-  Ruler,
   MessageCircleQuestion,
   ShieldCheck,
 } from 'lucide-react';
@@ -47,7 +46,7 @@ function AuthButtons({ mobile = false }: { mobile?: boolean }) {
         )}
         <button
           onClick={() => navigate('/dashboard')}
-          className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-gradient-to-r from-rose-600 to-orange-500 px-4 text-sm font-medium text-white shadow-sm shadow-rose-900/20 transition-all hover:from-rose-700 hover:to-orange-600 ${mobile ? 'w-full' : ''}`}
+          className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-linear-to-r from-rose-600 to-orange-500 px-4 text-sm font-medium text-white shadow-sm shadow-rose-900/20 transition-all hover:from-rose-700 hover:to-orange-600 ${mobile ? 'w-full' : ''}`}
         >
           <LayoutDashboardIcon />
           Open Dashboard
@@ -67,7 +66,7 @@ function AuthButtons({ mobile = false }: { mobile?: boolean }) {
       </Link>
       <Link
         to="/signup"
-        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-gradient-to-r from-rose-600 to-orange-500 px-4 text-sm font-medium text-white shadow-sm shadow-rose-900/20 transition-all hover:from-rose-700 hover:to-orange-600 ${mobile ? 'w-full' : ''}`}
+        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-linear-to-r from-rose-600 to-orange-500 px-4 text-sm font-medium text-white shadow-sm shadow-rose-900/20 transition-all hover:from-rose-700 hover:to-orange-600 ${mobile ? 'w-full' : ''}`}
       >
         Get started free
         <ArrowRight className="h-4 w-4" />
@@ -240,8 +239,8 @@ export function LandingPage() {
       <section className="relative overflow-hidden">
         {/* soft accent glow — single pink→orange family */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-32 right-[-10%] h-[420px] w-[520px] rounded-full bg-rose-200/40 blur-3xl dark:bg-rose-500/10" />
-          <div className="absolute top-40 left-[-12%] h-[380px] w-[460px] rounded-full bg-orange-200/40 blur-3xl dark:bg-orange-500/10" />
+          <div className="absolute -top-32 right-[-10%] h-105 w-130 rounded-full bg-rose-200/40 blur-3xl dark:bg-rose-500/10" />
+          <div className="absolute top-40 left-[-12%] h-95 w-115 rounded-full bg-orange-200/40 blur-3xl dark:bg-orange-500/10" />
         </div>
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pt-14 pb-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:px-8 lg:pt-20 lg:pb-24">
@@ -251,7 +250,7 @@ export function LandingPage() {
 
             <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.6rem]">
               Aapki poori kapra dukaan,
-              <span className="block bg-gradient-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent dark:from-rose-400 dark:to-orange-300">
+              <span className="block bg-linear-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent dark:from-rose-400 dark:to-orange-300">
                 ab ek hi screen par.
               </span>
             </h1>
@@ -265,7 +264,7 @@ export function LandingPage() {
               <button
                 onClick={primaryCta}
                 disabled={isLoading}
-                className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-rose-600 to-orange-500 px-6 text-[15px] font-semibold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-700 hover:to-orange-600 disabled:opacity-60"
+                className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-6 text-[15px] font-semibold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-700 hover:to-orange-600 disabled:opacity-60"
               >
                 {isLoading ? 'Loading…' : isAuthenticated ? 'Open Dashboard' : 'Start free — Apni dukaan joro'}
                 <ArrowRight className="h-4.5 w-4.5" />
@@ -312,10 +311,10 @@ export function LandingPage() {
               <img
                 src="/pexels-arina-dmitrieva-66352626-14440412.jpg"
                 alt="Boutique suit and woven shawl hanging in a fabric shop — managed in KapraOS"
-                className="h-[420px] w-full object-cover sm:h-[520px] lg:h-[600px]"
+                className="h-105 w-full object-cover sm:h-130 lg:h-150"
                 loading="eager"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/55 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-t from-zinc-950/55 via-transparent to-transparent" />
               <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
                 <div className="rounded-xl bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:bg-zinc-900/95">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Ready suit • Boutique</p>
@@ -342,7 +341,7 @@ export function LandingPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Aaj ka hisaab — Evening closing</p>
                   <p className="text-sm font-bold">Dashboard • Live ledger</p>
                 </div>
-                <span className="rounded-full bg-gradient-to-r from-rose-600 to-orange-500 px-3 py-1 text-[11px] font-bold text-white">Live</span>
+                <span className="rounded-full bg-linear-to-r from-rose-600 to-orange-500 px-3 py-1 text-[11px] font-bold text-white">Live</span>
               </div>
               <div className="space-y-3 p-5">
                 {[
@@ -362,16 +361,25 @@ export function LandingPage() {
                 </div>
               </div>
             </div>
-            <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <p className="text-xs font-semibold uppercase tracking-widest text-rose-700 dark:text-rose-300">Pehle — har dukaan ki kahani</p>
-              <p className="mt-1 text-sm font-medium leading-relaxed">“Maal kahan rakha tha? Kis ne udhaar liya tha? Register ka panna kahan gaya?”</p>
+            <div className="relative mt-4 overflow-hidden rounded-2xl border border-zinc-200 shadow-lg dark:border-zinc-800">
+              <img
+                src="/pexels-ron-lach-8453642.jpg"
+                alt="Kapron ke dher mein dukandaar — pehle ka haal"
+                className="h-56 w-full object-cover sm:h-64"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-linear-to-t from-zinc-950/75 via-zinc-950/15 to-transparent" />
+              <div className="absolute bottom-3 left-3 right-3">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-orange-200">Pehle — har dukaan ki kahani</p>
+                <p className="mt-1 text-sm font-medium leading-relaxed text-white">“Maal kahan rakha tha? Kis ne udhaar liya tha? Register ka panna kahan gaya?”</p>
+              </div>
             </div>
           </div>
           <div className="order-1 lg:order-2">
             <SectionEyebrow>Dher se — System tak</SectionEyebrow>
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
               Kapron ke dher mein{' '}
-              <span className="bg-gradient-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent dark:from-rose-400 dark:to-orange-300">hisaab</span>{' '}
+              <span className="bg-linear-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent dark:from-rose-400 dark:to-orange-300">hisaab</span>{' '}
               nahi dhoondna parta.
             </h2>
             <p className="mt-4 leading-relaxed text-zinc-600 dark:text-zinc-400">
@@ -394,7 +402,7 @@ export function LandingPage() {
             </ul>
             <button
               onClick={primaryCta}
-              className="mt-7 inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-r from-rose-600 to-orange-500 px-5 text-sm font-semibold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-700 hover:to-orange-600"
+              className="mt-7 inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-5 text-sm font-semibold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-700 hover:to-orange-600"
             >
               {isAuthenticated ? 'Go to Dashboard' : 'Dher khatam karo — Start free'}
               <ArrowRight className="h-4 w-4" />
@@ -433,15 +441,27 @@ export function LandingPage() {
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="relative">
-            <div className="grid grid-cols-[1fr_1fr] gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-lg dark:border-zinc-800">
                 <img
                   src="/pexels-arina-dmitrieva-66352626-14440420.jpg"
                   alt="Embroidered waistcoat with woven shawl and folded colorful thaans in a fabric store"
-                  className="h-[420px] w-full object-cover sm:h-[500px]"
+                  className="h-80 w-full object-cover sm:h-125"
                   loading="lazy"
                 />
               </div>
+              <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-lg dark:border-zinc-800">
+                <img
+                  src="/pexels-irrabagon-37507373.jpg"
+                  alt="Printed lawn fabric hanging — color and print variants"
+                  className="h-80 w-full object-cover sm:h-125"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <p className="text-xs font-semibold uppercase tracking-widest text-rose-700 dark:text-rose-300">Print • Color • Meter</p>
+              <p className="mt-1 text-sm font-medium leading-relaxed">Har print apna variant — sale par ghat-ta, purchase par barhta.</p>
             </div>
           </div>
           <div>
@@ -514,7 +534,7 @@ export function LandingPage() {
               <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-rose-600 to-orange-500 text-xs font-bold text-white">A</span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-rose-600 to-orange-500 text-xs font-bold text-white">A</span>
                     <div>
                       <p className="text-sm font-bold leading-tight">Ayesha Bibi — Khata</p>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">Balance • History • Recovery</p>
@@ -538,7 +558,7 @@ export function LandingPage() {
                   ))}
                   <div className="flex items-center justify-between gap-3 pt-1">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">Auto-posted from POS • No diary needed</p>
-                    <span className="rounded-lg bg-gradient-to-r from-rose-600 to-orange-500 px-4 py-2 text-xs font-bold text-white">Recover Rs 2,000</span>
+                    <span className="rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-4 py-2 text-xs font-bold text-white">Recover Rs 2,000</span>
                   </div>
                 </div>
               </div>
@@ -567,12 +587,11 @@ export function LandingPage() {
         <div id="ai" className="relative mt-10 overflow-hidden rounded-3xl border border-zinc-800 bg-[#1e222b] text-white dark:border-zinc-700">
           <img
             src="/pexels-teona-swift-6850486.jpg"
-            alt=""
-            aria-hidden
-            className="absolute inset-0 h-full w-full object-cover opacity-20"
+            alt="Colorful fabric texture close-up"
+            className="absolute inset-0 h-full w-full object-cover opacity-35"
             loading="lazy"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#1e222b] via-[#1e222b]/85 to-[#1e222b]/40" />
+          <div className="absolute inset-0 bg-linear-to-r from-[#1e222b] via-[#1e222b]/70 to-[#1e222b]/40" />
           <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1.1fr_0.9fr] lg:p-12">
             <div>
               <p className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
@@ -591,7 +610,7 @@ export function LandingPage() {
                 ))}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur">
+            <div className="rounded-2xl border border-white/10 bg-white/6 p-4 backdrop-blur">
               <div className="space-y-3 text-sm">
                 <div className="ml-auto w-fit max-w-[85%] rounded-xl rounded-br-sm bg-white px-3.5 py-2.5 font-medium text-zinc-900">
                   Aaj kitni sale hui?
@@ -608,7 +627,7 @@ export function LandingPage() {
               </div>
               <button
                 onClick={() => navigate(isAuthenticated ? '/ai-chat' : '/signup')}
-                className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-rose-600 to-orange-500 text-sm font-bold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-500 hover:to-orange-400"
+                className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 text-sm font-bold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-500 hover:to-orange-400"
               >
                 <Sparkles className="h-4 w-4" />
                 {isAuthenticated ? 'AI Munshi se baat karo' : 'AI Munshi try karo — free'}
@@ -636,7 +655,7 @@ export function LandingPage() {
             <div className="mt-7 flex flex-col items-center justify-center gap-3">
               <button
                 onClick={primaryCta}
-                className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-r from-rose-600 to-orange-500 px-7 text-[15px] font-bold text-white shadow-lg shadow-rose-900/30 transition-all hover:-translate-y-0.5 hover:from-rose-500 hover:to-orange-400"
+                className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-7 text-[15px] font-bold text-white shadow-lg shadow-rose-900/30 transition-all hover:-translate-y-0.5 hover:from-rose-500 hover:to-orange-400"
               >
                 {isAuthenticated ? 'Open Dashboard' : 'Create free account'}
                 <ArrowRight className="h-4.5 w-4.5" />
