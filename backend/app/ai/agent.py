@@ -27,6 +27,7 @@ from typing import Any
 from app.ai.config import get_ai_settings
 from app.ai.subagents.analytics import build_analytics_subagent_spec
 from app.ai.tools.business_reads import READ_TOOL_NAMES
+from app.ai.tools.payments_write import RECORD_PAYMENT_TOOL_NAME
 from app.ai.tools.registry import demo_side_effect, get_master_tools
 from app.ai.tools.sales_write import CREATE_SALE_TOOL_NAME
 
@@ -66,8 +67,13 @@ MASTER_TOOL_NAMES: tuple[str, ...] = (
 # Step 2 business read tools (re-exported for a single obvious boundary).
 READ_MASTER_TOOL_NAMES: tuple[str, ...] = READ_TOOL_NAMES
 
-# Step 3 sale write tool (exactly one mutation: sale creation).
-WRITE_MASTER_TOOL_NAMES: tuple[str, ...] = (CREATE_SALE_TOOL_NAME,)
+# Step 3 + Step 4 write tools (exactly two mutations: sale creation and
+# customer payment). Each module still exposes exactly one tool; the master
+# agent orchestrates both without any specialised sub-agent.
+WRITE_MASTER_TOOL_NAMES: tuple[str, ...] = (
+    CREATE_SALE_TOOL_NAME,
+    RECORD_PAYMENT_TOOL_NAME,
+)
 
 # HITL: the fake side-effect demo pauses for human review.
 # ``True`` = approve / edit / reject / respond allowed (docs default).
@@ -83,6 +89,15 @@ HITL_INTERRUPT_CONFIG: dict[str, bool] = {
 # re-validates against the shop before any mutation.
 SALE_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
     CREATE_SALE_TOOL_NAME: True,
+}
+
+# HITL for the single Step 4 mutation (customer payment / Khata
+# settlement). Identical mechanism: ``True`` keeps approve / edit /
+# reject / respond; an edit re-runs ``record_customer_payment`` with the
+# edited args, which the tool re-validates (customer, amount, method)
+# before any mutation.
+PAYMENT_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
+    RECORD_PAYMENT_TOOL_NAME: True,
 }
 
 # Appended to the system prompt ONLY when sale write tools are attached,
@@ -114,6 +129,46 @@ Sale recording (Step 3 — single mutation `create_sale`, always HITL-approved):
 10. After the result: report sale_id/invoice, total, paid/due in plain shopkeeper
     language. On ambiguous/not_found/error results, explain and ask — never invent.
 11. Never pass shop_id (no such argument exists), never invent customer/product IDs.
+"""
+
+# Appended to the system prompt ONLY when customer-payment write tools are
+# attached, so runs without the mutation capability never learn a tool that
+# is not present (and cannot hallucinate payment tool calls).
+PAYMENT_SYSTEM_ADDENDUM = """
+Customer payment recording (Step 4 — single mutation `record_customer_payment`, always HITL-approved):
+1. Understand: which customer paid, how much, and how (cash/bank/jazzcash/easypaisa).
+   Examples: 'Ali ne 3000 jama karwaye', 'Ahmed ne 5000 cash diye',
+   'Bilal ne 2000 khate mein jama karwaye'.
+2. Resolve with the read tools first (customer account summary for the outstanding
+   balance). If a name matches several customers, ASK which one — never guess.
+   Never create a customer for a payment; a missing name is a clarification, not
+   a new customer. Payments always need a named customer — never a walk-in.
+3. Never invent an amount. If the shopkeeper did not state one ('Ali ne paise jama
+   karwaye'), ask 'Kitne paise jama karwaye?' instead of calling the tool.
+   No HITL is shown for an incomplete operation.
+4. In the SAME turn: write a short preview to the shopkeeper (customer, current
+   outstanding, payment amount, method, remaining) AND THEN IMMEDIATELY call
+   `record_customer_payment`. Never end your turn after the preview without calling
+   the tool — the tool call is what raises the approval card, and without it
+   nothing can be approved.
+5. Never ask "should I record it?" / "kya yeh theek hai?" in text and stop. The
+   approval card IS the confirmation question; your text preview is only the summary.
+6. If the shopkeeper is confirming a preview from the previous turn (haan, theek hai,
+   kar do, yes, ok), skip the preview and call `record_customer_payment` directly.
+7. Call `record_customer_payment` ONCE per payment with a FRESH idempotency_key (a
+   UUID hex string, generated once per new payment request; reuse the same key only
+   when retrying the SAME operation). The pending call pauses for the shopkeeper's
+   approval — never claim the payment is recorded before the approved result comes back.
+8. Payment methods map to cash, card, bank, jazzcash, easypaisa, other
+   (naqd/nagad = cash; bank transfer = bank). An omitted method defaults to cash
+   and is always shown on the approval card for correction.
+9. Do NOT block a payment only because the preview suggests overpayment: the
+   authoritative service decides. Report overpayment errors truthfully instead of
+   inventing credit/advance rules.
+10. After the result: report payment_id, amount, and remaining balance in plain
+    shopkeeper language. On ambiguous/not_found/error results, explain and ask —
+    never invent.
+11. Never pass shop_id (no such argument exists), never invent customer IDs.
 """
 
 # Allowed resume decision types (per HITL docs).
@@ -206,9 +261,11 @@ def build_master_agent(
         extra_tools: Step 2 tenant-bound business read tools
             (``build_read_tools(session, tenant)``). Appended after the
             demo tools; read tools never require HITL approval.
-        write_tools: Step 3 tenant-bound business write tools
-            (``build_sale_write_tools(session, tenant)`` — exactly one
-            tool, ``create_sale``). Appended last; every write tool
+        write_tools: Step 3 + Step 4 tenant-bound business write tools
+            (``build_sale_write_tools(session, tenant)`` +
+            ``build_payment_write_tools(session, tenant)`` — exactly one
+            tool per module, ``create_sale`` and
+            ``record_customer_payment``). Appended last; every write tool
             pauses for HITL approval via ``interrupt_on`` and therefore
             requires a checkpointer. Each request rebuilds these over
             its own DB session, so no transaction ever spans the pause.
@@ -252,7 +309,11 @@ def build_master_agent(
 
     system_prompt = MASTER_SYSTEM_PROMPT
     if write_tools:
-        system_prompt = system_prompt + SALE_SYSTEM_ADDENDUM
+        present = {getattr(t, "name", "") for t in write_tools}
+        if CREATE_SALE_TOOL_NAME in present:
+            system_prompt = system_prompt + SALE_SYSTEM_ADDENDUM
+        if RECORD_PAYMENT_TOOL_NAME in present:
+            system_prompt = system_prompt + PAYMENT_SYSTEM_ADDENDUM
 
     return create_deep_agent(
         model=resolved_model,
@@ -301,6 +362,8 @@ __all__ = [
     "HITL_INTERRUPT_CONFIG",
     "MASTER_SYSTEM_PROMPT",
     "MASTER_TOOL_NAMES",
+    "PAYMENT_HITL_INTERRUPT_CONFIG",
+    "PAYMENT_SYSTEM_ADDENDUM",
     "READ_MASTER_TOOL_NAMES",
     "SALE_HITL_INTERRUPT_CONFIG",
     "SALE_SYSTEM_ADDENDUM",

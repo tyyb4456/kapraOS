@@ -363,7 +363,7 @@ export function LandingPage() {
             </div>
             <div className="relative mt-4 overflow-hidden rounded-2xl border border-zinc-200 shadow-lg dark:border-zinc-800">
               <img
-                src="/pexels-ron-lach-8453642.jpg"
+                src="/pexels-teona-swift-6850486.jpg"
                 alt="Kapron ke dher mein dukandaar — pehle ka haal"
                 className="h-56 w-full object-cover sm:h-64"
                 loading="lazy"
