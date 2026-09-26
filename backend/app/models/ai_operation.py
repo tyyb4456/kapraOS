@@ -39,6 +39,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.expense import Expense
     from app.models.payment import Payment
     from app.models.sale import Sale
 
@@ -258,5 +259,87 @@ class AISupplierPaymentReceipt(Base, UUIDMixin, TimestampMixin):
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
         return (
             f"AISupplierPaymentReceipt(shop_id={self.shop_id!r}, "
+            f"operation_key={self.operation_key!r})"
+        )
+
+
+class AIExpenseReceipt(Base, UUIDMixin, TimestampMixin):
+    """One idempotency receipt for one approved AI-assisted expense.
+
+    Step 6 mirrors the Step 3/Step 4/Step 5 receipt pattern, but with its own
+    table: forcing expenses into ``ai_sale_receipts`` (whose ``sale_id`` FK
+    is sale-specific), into ``ai_payment_receipts`` (customer-payment
+    specific), or into ``ai_supplier_payment_receipts`` (supplier-payment
+    specific) would distort the data model. The mechanics are identical:
+
+    * The agent generates one ``operation_key`` per prepared expense (a UUID
+      hex string). The key is part of the HITL tool-call args, so it is
+      serialised through the agent checkpoint — never a live session, never
+      an ORM object.
+    * The write tool checks ``(shop_id, operation_key)`` BEFORE calling
+      ``expenses.create_expense()``. A hit returns the already-created
+      expense without mutating anything.
+    * On a miss, the expense AND its receipt are written in the SAME
+      database transaction. A unique constraint on
+      ``(shop_id, operation_key)`` is the final guard: a concurrent
+      duplicate rolls back and re-reads the winner instead of creating a
+      second expense.
+
+    Scope is per shop. ``expense_id`` is nullable with ``SET NULL`` so
+    voiding an expense never cascades into the receipt — a replay after a
+    void reports "already processed" instead of silently re-creating money
+    movement.
+    """
+
+    __tablename__ = "ai_expense_receipts"
+
+    __table_args__ = (
+        # At most one expense per (shop, operation key): the
+        # duplicate-expense guard. Concurrent duplicates race here; the
+        # loser gets an IntegrityError, rolls back, and returns the
+        # winner's expense.
+        UniqueConstraint(
+            "shop_id",
+            "operation_key",
+            name="uq_ai_expense_receipts_shop_operation",
+        ),
+        Index(
+            "ix_ai_expense_receipts_shop_created_at",
+            "shop_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "length(trim(operation_key)) > 0",
+            name="ck_ai_expense_receipts_key_not_blank",
+        ),
+    )
+
+    shop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("shops.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Stable operation identity supplied by the agent (UUID hex). Scoped
+    # per shop by the unique constraint above.
+    operation_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # The expense this operation created. NULL only when the expense row is
+    # gone (voided) — the key stays claimed.
+    expense_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("expenses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # No back_populates on Expense: receipts are an AI-layer concern, the
+    # expense domain stays unaware of them.
+    expense: Mapped["Expense | None"] = relationship("Expense")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return (
+            f"AIExpenseReceipt(shop_id={self.shop_id!r}, "
             f"operation_key={self.operation_key!r})"
         )

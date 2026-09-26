@@ -6,21 +6,24 @@ the request's DB session and authenticated tenant — the model never
 supplies ``shop_id``. Step 3 additionally attaches the single
 tenant-bound sale write tool (``create_sale``), Step 4 the single
 tenant-bound customer-payment write tool (``record_customer_payment``),
-and Step 5 the single tenant-bound supplier-payment write tool
-(``record_supplier_payment``); each pauses with an interrupt, and the
-frontend approves/rejects and resumes.
+Step 5 the single tenant-bound supplier-payment write tool
+(``record_supplier_payment``), and Step 6 the single tenant-bound
+expense write tool (``record_expense``); each pauses with an interrupt,
+and the frontend approves/rejects and resumes.
 Conversation state lives in a process-local checkpointer keyed by a
 thread id that is always namespaced with the authenticated shop + user,
 so one tenant can never resume another's thread.
 
 Transaction ownership: the write tools only flush — this module commits
 after a finished (``done``) agent run, so an approved sale (rows + stock
-+ payments + ledger + idempotency receipt) or an approved customer
-payment (payment + ledger + idempotency receipt) commits atomically. A
-run that pauses for approval is left untouched: the interrupt fires
-BEFORE the tool executes, so nothing was mutated and there is nothing
-to undo. No transaction ever spans the HITL pause: each request builds
-the agent over its own fresh session.
++ payments + ledger + idempotency receipt), an approved customer
+payment (payment + ledger + idempotency receipt), an approved supplier
+payment (payment + ledger + idempotency receipt), or an approved expense
+(expense + ledger + idempotency receipt) commits atomically. A run that
+pauses for approval is left untouched: the interrupt fires BEFORE the
+tool executes, so nothing was mutated and there is nothing to undo. No
+transaction ever spans the HITL pause: each request builds the agent
+over its own fresh session.
 
 Authorization: any authenticated member of the shop (owner or staff) may
 record sales/payments through the assistant — exactly the same rule as
@@ -44,6 +47,7 @@ from app.ai.agent import build_master_agent, create_checkpointer, resolve_model
 from app.ai.llm import MissingXKiroKeyError
 from app.ai.state import tenant_context_from_user
 from app.ai.tools.business_reads import build_read_tools
+from app.ai.tools.expenses_write import build_expense_write_tools
 from app.ai.tools.payments_write import build_payment_write_tools
 from app.ai.tools.sales_write import build_sale_write_tools
 from app.ai.tools.supplier_payments_write import build_supplier_payment_write_tools
@@ -223,6 +227,7 @@ async def ai_chat(
         *build_sale_write_tools(db, tenant),
         *build_payment_write_tools(db, tenant),
         *build_supplier_payment_write_tools(db, tenant),
+        *build_expense_write_tools(db, tenant),
     ]
     agent = build_master_agent(
         model=model,
@@ -265,6 +270,7 @@ async def ai_chat_resume(
         *build_sale_write_tools(db, tenant),
         *build_payment_write_tools(db, tenant),
         *build_supplier_payment_write_tools(db, tenant),
+        *build_expense_write_tools(db, tenant),
     ]
     agent = build_master_agent(
         model=model,
@@ -299,10 +305,11 @@ async def _settle_transaction(db: DbSession, run_status: str) -> None:
     The write tools flush but never commit, so the commit here is what
     makes an approved operation durable — a sale (rows + stock + payments
     + ledger + idempotency receipt), a customer payment (payment +
-    ledger + idempotency receipt), or a supplier payment (payment +
-    ledger + idempotency receipt) together, or nothing at all. A
-    ``paused`` run performed no approved mutation (the interrupt fires
-    before the tool executes), so its session is deliberately left alone.
+    ledger + idempotency receipt), a supplier payment (payment + ledger +
+    idempotency receipt), or an expense (expense + ledger + idempotency
+    receipt) together, or nothing at all. A ``paused`` run performed no
+    approved mutation (the interrupt fires before the tool executes), so
+    its session is deliberately left alone.
     """
     if run_status != "done":
         return

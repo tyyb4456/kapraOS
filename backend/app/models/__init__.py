@@ -13,6 +13,7 @@ import them here too.
 
 from app.models.account import Account, AccountType
 from app.models.ai_operation import (
+    AIExpenseReceipt,
     AIPaymentReceipt,
     AISaleReceipt,
     AISupplierPaymentReceipt,
@@ -44,6 +45,7 @@ from app.models.supplier import Supplier
 from app.models.user import User, UserRole
 
 __all__ = [
+    "AIExpenseReceipt",
     "AIPaymentReceipt",
     "AISaleReceipt",
     "AISupplierPaymentReceipt",
