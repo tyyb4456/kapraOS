@@ -46,6 +46,12 @@ class SaleResponse(BaseModel):
     shop_id: UUID
     created_at: datetime
     items: list[SaleItemResponse] = []
+    # Return-aware totals (0 when no return exists). `returned_total` is the
+    # SUM of all SaleReturn.total_amount for this sale, `net_total` is what
+    # the shop actually keeps (total - returned).
+    returned_total: Decimal = Decimal("0.00")
+    net_total: Decimal | None = None
+    returns_count: int = 0
 
 
 class SaleListItemResponse(BaseModel):
@@ -67,6 +73,12 @@ class SaleListItemResponse(BaseModel):
     status: SaleStatus
     shop_id: UUID
     created_at: datetime
+    # Return-aware totals: `returned_total` = SUM(SaleReturn.total_amount),
+    # `net_total` = total_amount - returned_total (what the shop keeps),
+    # `returns_count` = number of return documents for this sale.
+    returned_total: Decimal = Decimal("0.00")
+    net_total: Decimal | None = None
+    returns_count: int = 0
 
 
 class CreateSaleRequest(BaseModel):
@@ -113,3 +125,7 @@ class SaleSummaryResponse(BaseModel):
     today_sales_count: int
     today_gross_profit: Decimal
     today_net_profit: Decimal
+    # Returns created today (any original sale) + net sales the shop keeps.
+    today_returns_total: Decimal = Decimal("0.00")
+    today_returns_count: int = 0
+    today_net_sales: Decimal | None = None

@@ -96,10 +96,19 @@ class DashboardResponse(BaseModel):
     as_of: datetime
     today_sales: Decimal
     today_sales_count: int
+    today_returns_total: Decimal = Decimal("0.00")
+    today_returns_count: int = 0
+    today_net_sales: Decimal | None = None
     today_payments_received: Decimal
     today_payment_count: int
+    today_cash_refunds_total: Decimal = Decimal("0.00")
+    today_ar_reduction_total: Decimal = Decimal("0.00")
+    today_net_payments_received: Decimal | None = None
     today_purchases: Decimal
     today_purchase_count: int
+    today_purchase_returns_total: Decimal = Decimal("0.00")
+    today_purchase_returns_count: int = 0
+    today_net_purchases: Decimal | None = None
     today_cogs: Decimal
     today_gross_profit: Decimal
     today_expenses: Decimal

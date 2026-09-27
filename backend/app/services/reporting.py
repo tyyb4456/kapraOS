@@ -149,10 +149,19 @@ class DashboardSummary:
     as_of: datetime
     today_sales: Decimal
     today_sales_count: int
+    today_returns_total: Decimal
+    today_returns_count: int
+    today_net_sales: Decimal
     today_payments_received: Decimal
     today_payment_count: int
+    today_cash_refunds_total: Decimal
+    today_ar_reduction_total: Decimal
+    today_net_payments_received: Decimal
     today_purchases: Decimal
     today_purchase_count: int
+    today_purchase_returns_total: Decimal
+    today_purchase_returns_count: int
+    today_net_purchases: Decimal
     today_cogs: Decimal
     today_gross_profit: Decimal
     today_expenses: Decimal
@@ -644,18 +653,76 @@ async def get_dashboard_summary(
 
     today_sales = _money(sales_row[0])
 
+    # Returns created today (any original sale) reduce today's net sales.
+    # COGS/expenses above are already ledger-net (they include SALE_RETURN
+    # reversals), so profits must use net sales to stay consistent.
+    from app.models.returns import SaleReturn as _SaleReturn
+
+    returns_row = (
+        await session.execute(
+            select(
+                func.coalesce(func.sum(_SaleReturn.total_amount), 0),
+                func.coalesce(func.sum(_SaleReturn.cash_refund), 0),
+                func.coalesce(func.sum(_SaleReturn.ar_amount), 0),
+                func.count(_SaleReturn.id),
+            ).where(
+                _SaleReturn.shop_id == shop_id,
+                _SaleReturn.created_at >= day_start,
+                _SaleReturn.created_at < day_end,
+            )
+        )
+    ).one()
+    today_returns_total = _money(returns_row[0])
+    today_cash_refunds_total = _money(returns_row[1])
+    today_ar_reduction_total = _money(returns_row[2])
+    today_returns_count = int(returns_row[3])
+    today_net_sales = _money(today_sales - today_returns_total)
+    # Cash actually kept today = collections - cash handed back.
+    # AR reduction is NOT subtracted here (it reduces Khata, already
+    # reflected in receivables_outstanding), but is exposed for the UI.
+    today_payments_gross = _money(payments_row[0])
+    today_net_payments_received = _money(today_payments_gross - today_cash_refunds_total)
+
+    from app.models.returns import PurchaseReturn as _PurchaseReturn
+
+    purchase_returns_row = (
+        await session.execute(
+            select(
+                func.coalesce(func.sum(_PurchaseReturn.total_amount), 0),
+                func.count(_PurchaseReturn.id),
+            ).where(
+                _PurchaseReturn.shop_id == shop_id,
+                _PurchaseReturn.created_at >= day_start,
+                _PurchaseReturn.created_at < day_end,
+            )
+        )
+    ).one()
+    today_purchase_returns_total = _money(purchase_returns_row[0])
+    today_purchase_returns_count = int(purchase_returns_row[1])
+    today_purchases_gross = _money(purchases_row[0])
+    today_net_purchases = _money(today_purchases_gross - today_purchase_returns_total)
+
     return DashboardSummary(
         as_of=now,
         today_sales=today_sales,
         today_sales_count=int(sales_row[1]),
-        today_payments_received=_money(payments_row[0]),
+        today_returns_total=today_returns_total,
+        today_returns_count=today_returns_count,
+        today_net_sales=today_net_sales,
+        today_payments_received=today_payments_gross,
         today_payment_count=int(payments_row[1]),
-        today_purchases=_money(purchases_row[0]),
+        today_cash_refunds_total=today_cash_refunds_total,
+        today_ar_reduction_total=today_ar_reduction_total,
+        today_net_payments_received=today_net_payments_received,
+        today_purchases=today_purchases_gross,
         today_purchase_count=int(purchases_row[1]),
+        today_purchase_returns_total=today_purchase_returns_total,
+        today_purchase_returns_count=today_purchase_returns_count,
+        today_net_purchases=today_net_purchases,
         today_cogs=cogs_today,
-        today_gross_profit=_money(today_sales - cogs_today),
+        today_gross_profit=_money(today_net_sales - cogs_today),
         today_expenses=expenses_today,
-        today_net_profit=_money(today_sales - cogs_today - expenses_today),
+        today_net_profit=_money(today_net_sales - cogs_today - expenses_today),
         receivables_outstanding=receivables,
         payables_outstanding=payables,
         inventory_quantity=Decimal(inventory_row[0]),

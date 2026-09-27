@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Pencil, Trash2, Undo2 } from 'lucide-react';
 import {
@@ -69,19 +70,53 @@ export function PurchasesPage() {
       purchase.supplier_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'received':
-        return <Badge variant="success" size="sm">Received</Badge>;
-      case 'pending':
-        return <Badge variant="warning" size="sm">Pending Delivery</Badge>;
-      case 'ordered':
-        return <Badge variant="secondary" size="sm">Ordered</Badge>;
-      case 'cancelled':
-        return <Badge variant="destructive" size="sm">Cancelled</Badge>;
-      default:
-        return <Badge variant="neutral" size="sm">{status}</Badge>;
+  const toNum = (v: number | string | null | undefined): number => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const getPurchaseAmounts = (purchase: Purchase) => {
+    const gross = toNum(purchase.total_amount);
+    const returned = toNum(purchase.returned_total);
+    const netRaw = purchase.net_total;
+    const net = netRaw === null || netRaw === undefined ? gross - returned : toNum(netRaw);
+    return { gross, returned, net };
+  };
+
+  const getStatusBadge = (purchase: Purchase) => {
+    const { gross, returned, net } = getPurchaseAmounts(purchase);
+    if (returned > 0.005 && net <= 0.005 && gross > 0) {
+      return <Badge variant="secondary" size="sm">Fully Returned</Badge>;
     }
+    let base: ReactNode;
+    switch (purchase.status) {
+      case 'received':
+        base = <Badge variant="success" size="sm">Received</Badge>;
+        break;
+      case 'pending':
+        base = <Badge variant="warning" size="sm">Pending Delivery</Badge>;
+        break;
+      case 'ordered':
+        base = <Badge variant="secondary" size="sm">Ordered</Badge>;
+        break;
+      case 'cancelled':
+        base = <Badge variant="destructive" size="sm">Cancelled</Badge>;
+        break;
+      default:
+        base = <Badge variant="neutral" size="sm">{purchase.status}</Badge>;
+        break;
+    }
+    if (returned > 0.005) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          {base}
+          <Badge variant="neutral" size="sm" title={`${purchase.returns_count ?? 0} return(s), Rs. ${returned} deducted`}>
+            −{formatCurrency(returned)} returned
+          </Badge>
+        </span>
+      );
+    }
+    return base;
   };
 
   const openEdit = (purchase: Purchase) => {
@@ -191,7 +226,7 @@ export function PurchasesPage() {
               <TableHead>Date</TableHead>
               <TableHead>Supplier Mill</TableHead>
               <TableHead align="right">Items Inward</TableHead>
-              <TableHead align="right">Total Cost</TableHead>
+              <TableHead align="right">Remaining (Net)</TableHead>
               <TableHead>Status</TableHead>
               <TableHead align="right">Actions</TableHead>
             </TableRow>
@@ -216,7 +251,10 @@ export function PurchasesPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredPurchases.map((purchase) => (
+              filteredPurchases.map((purchase) => {
+                const { gross, returned, net } = getPurchaseAmounts(purchase);
+                const hasReturn = returned > 0.005;
+                return (
                 <TableRow key={purchase.id}>
                   <TableCell className="font-mono text-xs font-medium text-zinc-900">
                     {purchase.order_number || '—'}
@@ -231,9 +269,17 @@ export function PurchasesPage() {
                     {purchase.items_count} items
                   </TableCell>
                   <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-                    {formatCurrency(purchase.total_amount)}
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={hasReturn ? 'text-emerald-700' : ''}>{formatCurrency(net)}</span>
+                      {hasReturn && (
+                        <span className="text-[11px] font-normal text-zinc-500">
+                          <span className="line-through">{formatCurrency(gross)}</span>
+                          <span className="ml-1 text-rose-600">−{formatCurrency(returned)}</span>
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell>{getStatusBadge(purchase.status)}</TableCell>
+                  <TableCell>{getStatusBadge(purchase)}</TableCell>
                   <TableCell align="right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
@@ -273,7 +319,8 @@ export function PurchasesPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

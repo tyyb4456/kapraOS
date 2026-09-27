@@ -223,14 +223,18 @@ export interface Sale {
   customer_name?: string | null;
   status: SaleStatus;
   payment_method?: PaymentMethod | null;
-  subtotal: number;
-  discount: number;
-  total_amount: number;
-  paid_amount: number;
-  due_amount?: number;
+  subtotal: number | string;
+  discount: number | string;
+  total_amount: number | string;
+  paid_amount: number | string;
+  due_amount?: number | string;
   items_count: number;
   items?: SaleItem[];
   created_at: string;
+  // Return-aware totals from backend (strings for Decimal precision).
+  returned_total?: number | string;
+  net_total?: number | string | null;
+  returns_count?: number;
 }
 
 // Purchases
@@ -304,11 +308,14 @@ export interface Purchase {
   supplier_id?: string | null;
   supplier_name?: string | null;
   status: PurchaseStatus;
-  total_amount: number;
-  paid_amount: number;
+  total_amount: number | string;
+  paid_amount: number | string;
   items_count: number;
   items?: PurchaseItem[];
   created_at: string;
+  returned_total?: number | string;
+  net_total?: number | string | null;
+  returns_count?: number;
 }
 
 // Expenses (matches backend ExpenseResponse: id, shop_id, category,
@@ -393,10 +400,19 @@ export interface DashboardSummary {
   as_of: string;
   today_sales: number;
   today_sales_count: number;
+  today_returns_total?: number;
+  today_returns_count?: number;
+  today_net_sales?: number | null;
   today_payments_received: number;
   today_payment_count: number;
+  today_cash_refunds_total?: number;
+  today_ar_reduction_total?: number;
+  today_net_payments_received?: number | null;
   today_purchases: number;
   today_purchase_count: number;
+  today_purchase_returns_total?: number;
+  today_purchase_returns_count?: number;
+  today_net_purchases?: number | null;
   today_cogs: number;
   today_gross_profit: number;
   today_expenses: number;

@@ -73,8 +73,13 @@ export function DashboardPage() {
     };
   }, []);
 
-  const metricValue = (value: number | undefined) =>
-    loading ? <Skeleton className="h-7 w-28" /> : formatCurrency(value ?? 0);
+  const metricValue = (value: number | undefined | null) =>
+    loading ? <Skeleton className="h-7 w-28" /> : formatCurrency(Number(value ?? 0));
+
+  const toNum = (v: unknown): number => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   return (
     <PageContainer>
@@ -123,7 +128,7 @@ export function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 border-none">
               <CardTitle className="text-xs font-medium text-zinc-500">
-                Today's Sales
+                Today's Sales (Net)
               </CardTitle>
               <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
                 <TrendingUp className="w-4 h-4" />
@@ -131,15 +136,27 @@ export function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="text-xl font-bold font-tabular text-zinc-900">
-                {metricValue(dashboard?.today_sales)}
+                {metricValue(
+                  dashboard?.today_net_sales ?? dashboard?.today_sales,
+                )}
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                 <Badge variant="neutral" size="sm">
                   {loading
                     ? '…'
                     : `${dashboard?.today_sales_count ?? 0} transaction${(dashboard?.today_sales_count ?? 0) === 1 ? '' : 's'}`}
                 </Badge>
-                <span className="text-[11px] text-zinc-400">Recorded today</span>
+                {!loading && toNum(dashboard?.today_returns_total) > 0 ? (
+                  <span className="text-[11px] text-zinc-500">
+                    {formatCurrency(toNum(dashboard?.today_sales))} gross
+                    <span className="text-rose-600"> −{formatCurrency(toNum(dashboard?.today_returns_total))} returns</span>
+                    {toNum(dashboard?.today_returns_count) > 0 && (
+                      <span> ({dashboard?.today_returns_count} return{(dashboard?.today_returns_count ?? 0) === 1 ? '' : 's'})</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-zinc-400">Recorded today</span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -147,7 +164,7 @@ export function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 border-none">
               <CardTitle className="text-xs font-medium text-zinc-500">
-                Customer Payments
+                Customer Payments (Net)
               </CardTitle>
               <div className="w-7 h-7 rounded-md bg-sky-50 text-sky-600 flex items-center justify-center">
                 <CreditCard className="w-4 h-4" />
@@ -155,13 +172,28 @@ export function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="text-xl font-bold font-tabular text-zinc-900">
-                {metricValue(dashboard?.today_payments_received)}
+                {metricValue(dashboard?.today_net_payments_received ?? dashboard?.today_payments_received)}
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                 <Badge variant="neutral" size="sm">
                   {loading ? '…' : `${dashboard?.today_payment_count ?? 0} collection${(dashboard?.today_payment_count ?? 0) === 1 ? '' : 's'}`}
                 </Badge>
-                <span className="text-[11px] text-zinc-400">Cash & Khata</span>
+                {!loading && (toNum(dashboard?.today_cash_refunds_total) > 0 || toNum(dashboard?.today_ar_reduction_total) > 0) ? (
+                  <span className="text-[11px] text-zinc-500">
+                    {formatCurrency(toNum(dashboard?.today_payments_received))} collected
+                    {toNum(dashboard?.today_cash_refunds_total) > 0 && (
+                      <span className="text-rose-600"> −{formatCurrency(toNum(dashboard?.today_cash_refunds_total))} cash back</span>
+                    )}
+                    {toNum(dashboard?.today_ar_reduction_total) > 0 && (
+                      <span className="text-amber-600"> • −{formatCurrency(toNum(dashboard?.today_ar_reduction_total))} Khata</span>
+                    )}
+                    {toNum(dashboard?.today_returns_count) > 0 && (
+                      <span> ({dashboard?.today_returns_count} return{(dashboard?.today_returns_count ?? 0) === 1 ? '' : 's'})</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-zinc-400">Cash & Khata</span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -169,7 +201,7 @@ export function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 border-none">
               <CardTitle className="text-xs font-medium text-zinc-500">
-                Purchases Inward
+                Purchases Inward (Net)
               </CardTitle>
               <div className="w-7 h-7 rounded-md bg-zinc-100 text-zinc-700 flex items-center justify-center">
                 <ShoppingBag className="w-4 h-4" />
@@ -177,15 +209,25 @@ export function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="text-xl font-bold font-tabular text-zinc-900">
-                {metricValue(dashboard?.today_purchases)}
+                {metricValue(dashboard?.today_net_purchases ?? dashboard?.today_purchases)}
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                 <Badge variant="neutral" size="sm">
                   {loading
                     ? '…'
                     : `${dashboard?.today_purchase_count ?? 0} shipment${(dashboard?.today_purchase_count ?? 0) === 1 ? '' : 's'}`}
                 </Badge>
-                <span className="text-[11px] text-zinc-400">Inward inventory</span>
+                {!loading && toNum(dashboard?.today_purchase_returns_total) > 0 ? (
+                  <span className="text-[11px] text-zinc-500">
+                    {formatCurrency(toNum(dashboard?.today_purchases))} gross
+                    <span className="text-rose-600"> −{formatCurrency(toNum(dashboard?.today_purchase_returns_total))} returns</span>
+                    {toNum(dashboard?.today_purchase_returns_count) > 0 && (
+                      <span> ({dashboard?.today_purchase_returns_count} return{(dashboard?.today_purchase_returns_count ?? 0) === 1 ? '' : 's'})</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-zinc-400">Inward inventory</span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -293,7 +335,14 @@ export function DashboardPage() {
                 </div>
               ) : recentSales.length > 0 ? (
                 <div className="divide-y divide-zinc-100">
-                  {recentSales.map((sale) => (
+                  {recentSales.map((sale) => {
+                    const gross = toNum(sale.total_amount);
+                    const returned = toNum((sale as { returned_total?: unknown }).returned_total);
+                    const netRaw = (sale as { net_total?: unknown }).net_total;
+                    const net =
+                      netRaw === null || netRaw === undefined ? gross - returned : toNum(netRaw);
+                    const hasReturn = returned > 0.005;
+                    return (
                     <Link
                       key={sale.id}
                       to="/sales"
@@ -307,14 +356,25 @@ export function DashboardPage() {
                           ) : null}
                         </div>
                         <div className="text-[11px] text-zinc-400 mt-0.5">
-                          {formatDate(sale.created_at, true)} · {sale.items_count} item{(sale.items_count ?? 0) === 1 ? '' : 's'} · {sale.status}
+                          {formatDate(sale.created_at, true)} · {sale.items_count} item{(sale.items_count ?? 0) === 1 ? '' : 's'} · {hasReturn && net <= 0.005 ? 'returned' : sale.status}
+                          {hasReturn && (
+                            <span className="text-rose-500"> · −{formatCurrency(returned)} returned</span>
+                          )}
                         </div>
                       </div>
-                      <div className="text-sm font-bold font-tabular text-zinc-900 shrink-0 ml-4">
-                        {formatCurrency(Number(sale.total_amount ?? 0))}
+                      <div className="text-right shrink-0 ml-4">
+                        <div className="text-sm font-bold font-tabular text-zinc-900">
+                          {formatCurrency(net)}
+                        </div>
+                        {hasReturn && (
+                          <div className="text-[11px] font-normal text-zinc-400 line-through">
+                            {formatCurrency(gross)}
+                          </div>
+                        )}
                       </div>
                     </Link>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <EmptyState

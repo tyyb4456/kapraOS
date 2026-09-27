@@ -40,6 +40,10 @@ class PurchaseResponse(BaseModel):
     shop_id: UUID
     created_at: datetime
     items: list[PurchaseItemResponse] = []
+    # Return-aware totals: SUM(PurchaseReturn.total_amount) + net remainder.
+    returned_total: Decimal = Decimal("0.00")
+    net_total: Decimal | None = None
+    returns_count: int = 0
 
 
 class PurchaseListItemResponse(BaseModel):
@@ -57,6 +61,10 @@ class PurchaseListItemResponse(BaseModel):
     paid_amount: Decimal
     items_count: int = 0
     created_at: datetime
+    # Return-aware totals: returned = SUM returns, net = total - returned.
+    returned_total: Decimal = Decimal("0.00")
+    net_total: Decimal | None = None
+    returns_count: int = 0
 
 
 class CreatePurchaseRequest(BaseModel):

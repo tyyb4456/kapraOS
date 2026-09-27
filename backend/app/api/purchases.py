@@ -4,6 +4,7 @@ Create and list purchases. Delegates to `app.services.purchases.create_purchase(
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -100,6 +101,7 @@ async def create_purchase(
         select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
     )).scalars().all()
 
+    # Fresh purchase has no returns yet.
     return PurchaseResponse(
         id=purchase.id,
         supplier_id=purchase.supplier_id,
@@ -121,6 +123,9 @@ async def create_purchase(
             )
             for item in items
         ],
+        returned_total=Decimal("0.00"),
+        net_total=Decimal(purchase.total),
+        returns_count=0,
     )
 
 
@@ -149,16 +154,53 @@ async def list_purchases(
     stmt = stmt.offset(offset).limit(limit)
     results = (await db.execute(stmt)).all()
 
+    purchase_ids = [p.id for p, _ in results]
+
+    items_count_by_purchase: dict = {}
+    if purchase_ids:
+        count_rows = (await db.execute(
+            select(PurchaseItem.purchase_id, func.count(PurchaseItem.id))
+            .where(PurchaseItem.purchase_id.in_(purchase_ids))
+            .group_by(PurchaseItem.purchase_id)
+        )).all()
+        items_count_by_purchase = {row[0]: int(row[1]) for row in count_rows}
+
+    returns_total_by_purchase: dict = {}
+    returns_count_by_purchase: dict = {}
+    if purchase_ids:
+        from app.models.returns import PurchaseReturn
+
+        return_rows = (await db.execute(
+            select(
+                PurchaseReturn.purchase_id,
+                func.coalesce(func.sum(PurchaseReturn.total_amount), 0),
+                func.count(PurchaseReturn.id),
+            )
+            .where(
+                PurchaseReturn.shop_id == shop_id,
+                PurchaseReturn.purchase_id.in_(purchase_ids),
+            )
+            .group_by(PurchaseReturn.purchase_id)
+        )).all()
+        for row in return_rows:
+            returns_total_by_purchase[row[0]] = Decimal(str(row[1]))
+            returns_count_by_purchase[row[0]] = int(row[2])
+
     purchases = []
     for purchase, supplier_name in results:
-        # Count items for this purchase
-        item_count = (
-            await db.execute(
-                select(func.count(PurchaseItem.id)).where(
-                    PurchaseItem.purchase_id == purchase.id
+        item_count = items_count_by_purchase.get(purchase.id, 0)
+        # Fall back to per-row count only if batch missed (should not happen).
+        if purchase.id not in items_count_by_purchase:
+            item_count = (
+                await db.execute(
+                    select(func.count(PurchaseItem.id)).where(
+                        PurchaseItem.purchase_id == purchase.id
+                    )
                 )
-            )
-        ).scalar() or 0
+            ).scalar() or 0
+
+        returned_total = returns_total_by_purchase.get(purchase.id, Decimal("0.00"))
+        net_total = Decimal(purchase.total) - Decimal(returned_total)
 
         purchases.append(
             PurchaseListItemResponse(
@@ -172,6 +214,9 @@ async def list_purchases(
                 paid_amount=purchase.paid_amount,
                 items_count=item_count,
                 created_at=purchase.created_at,
+                returned_total=returned_total,
+                net_total=net_total,
+                returns_count=returns_count_by_purchase.get(purchase.id, 0),
             )
         )
     return purchases
@@ -192,6 +237,19 @@ async def get_purchase(
         select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
     )).scalars().all()
 
+    from app.models.returns import PurchaseReturn
+
+    return_row = (await db.execute(
+        select(
+            func.coalesce(func.sum(PurchaseReturn.total_amount), 0),
+            func.count(PurchaseReturn.id),
+        ).where(
+            PurchaseReturn.shop_id == shop_id,
+            PurchaseReturn.purchase_id == purchase.id,
+        )
+    )).one()
+    returned_total = Decimal(str(return_row[0]))
+
     return PurchaseResponse(
         id=purchase.id,
         supplier_id=purchase.supplier_id,
@@ -213,10 +271,20 @@ async def get_purchase(
             )
             for item in items
         ],
+        returned_total=returned_total,
+        net_total=Decimal(purchase.total) - returned_total,
+        returns_count=int(return_row[1]),
     )
 
 
-def _purchase_to_response(purchase: Purchase, items: list[PurchaseItem]) -> PurchaseResponse:
+def _purchase_to_response(
+    purchase: Purchase,
+    items: list[PurchaseItem],
+    *,
+    returned_total: Decimal | None = None,
+    returns_count: int = 0,
+) -> PurchaseResponse:
+    rt = Decimal("0.00") if returned_total is None else Decimal(returned_total)
     return PurchaseResponse(
         id=purchase.id,
         supplier_id=purchase.supplier_id,
@@ -238,6 +306,9 @@ def _purchase_to_response(purchase: Purchase, items: list[PurchaseItem]) -> Purc
             )
             for item in items
         ],
+        returned_total=rt,
+        net_total=Decimal(purchase.total) - rt,
+        returns_count=returns_count,
     )
 
 

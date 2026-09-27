@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Pencil, Trash2, Undo2 } from 'lucide-react';
 import {
@@ -94,19 +95,58 @@ export function SalesPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Badge variant="success" size="sm">Completed</Badge>;
-      case 'partial':
-        return <Badge variant="warning" size="sm">Partial</Badge>;
-      case 'cancelled':
-        return <Badge variant="destructive" size="sm">Cancelled</Badge>;
-      case 'returned':
-        return <Badge variant="secondary" size="sm">Returned</Badge>;
-      default:
-        return <Badge variant="neutral" size="sm">{status}</Badge>;
+  const toNum = (v: number | string | null | undefined): number => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const getSaleAmounts = (sale: Sale) => {
+    const gross = toNum(sale.total_amount);
+    const returned = toNum(sale.returned_total);
+    const netRaw = sale.net_total;
+    const net = netRaw === null || netRaw === undefined ? gross - returned : toNum(netRaw);
+    return { gross, returned, net };
+  };
+
+  const getStatusBadge = (sale: Sale) => {
+    const { gross, returned, net } = getSaleAmounts(sale);
+    // Fully returned => show Returned even though backend keeps completed/partial.
+    if (returned > 0.005 && net <= 0.005 && gross > 0) {
+      return (
+        <span className="inline-flex items-center gap-1">
+          <Badge variant="secondary" size="sm">Returned</Badge>
+        </span>
+      );
     }
+    let base: ReactNode;
+    switch (sale.status) {
+      case 'completed':
+        base = <Badge variant="success" size="sm">Completed</Badge>;
+        break;
+      case 'partial':
+        base = <Badge variant="warning" size="sm">Partial</Badge>;
+        break;
+      case 'cancelled':
+        base = <Badge variant="destructive" size="sm">Cancelled</Badge>;
+        break;
+      case 'returned':
+        base = <Badge variant="secondary" size="sm">Returned</Badge>;
+        break;
+      default:
+        base = <Badge variant="neutral" size="sm">{sale.status}</Badge>;
+        break;
+    }
+    if (returned > 0.005) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          {base}
+          <Badge variant="neutral" size="sm" title={`${sale.returns_count ?? 0} return(s), Rs. ${returned} deducted`}>
+            −{formatCurrency(returned)} returned
+          </Badge>
+        </span>
+      );
+    }
+    return base;
   };
 
   const openEdit = (sale: Sale) => {
@@ -114,7 +154,7 @@ export function SalesPage() {
     setEditData({
       customer_id: sale.customer_id ?? '',
       invoice_number: sale.invoice_number ?? '',
-      discount: sale.discount ?? 0,
+      discount: Number(sale.discount ?? 0) || 0,
     });
     setError(null);
   };
@@ -219,7 +259,7 @@ export function SalesPage() {
               <TableHead>Customer</TableHead>
               <TableHead>Payment Method</TableHead>
               <TableHead align="right">Subtotal</TableHead>
-              <TableHead align="right">Total Amount</TableHead>
+              <TableHead align="right">Remaining (Net)</TableHead>
               <TableHead>Status</TableHead>
               <TableHead align="right">Actions</TableHead>
             </TableRow>
@@ -245,7 +285,10 @@ export function SalesPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredSales.map((sale) => (
+              filteredSales.map((sale) => {
+                const { gross, returned, net } = getSaleAmounts(sale);
+                const hasReturn = returned > 0.005;
+                return (
                 <TableRow key={sale.id}>
                   <TableCell className="font-mono text-xs font-medium text-zinc-900">
                     {sale.invoice_number || '—'}
@@ -256,14 +299,22 @@ export function SalesPage() {
                   <TableCell className="font-medium text-zinc-900">
                     {sale.customer_name || 'Walk-in Customer'}
                   </TableCell>
-                  <TableCell>{getPaymentMethodBadge(sale.payment_method, sale.paid_amount, sale.due_amount)}</TableCell>
+                  <TableCell>{getPaymentMethodBadge(sale.payment_method, toNum(sale.paid_amount), toNum(sale.due_amount))}</TableCell>
                   <TableCell align="right" className="font-tabular text-zinc-600">
-                    {formatCurrency(sale.subtotal)}
+                    {formatCurrency(toNum(sale.subtotal))}
                   </TableCell>
                   <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-                    {formatCurrency(sale.total_amount)}
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={hasReturn ? 'text-emerald-700' : ''}>{formatCurrency(net)}</span>
+                      {hasReturn && (
+                        <span className="text-[11px] font-normal text-zinc-500">
+                          <span className="line-through">{formatCurrency(gross)}</span>
+                          <span className="ml-1 text-rose-600">−{formatCurrency(returned)}</span>
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell>{getStatusBadge(sale.status)}</TableCell>
+                  <TableCell>{getStatusBadge(sale)}</TableCell>
                   <TableCell align="right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
@@ -303,7 +354,8 @@ export function SalesPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

@@ -118,6 +118,10 @@ async def create_sale(
         customer = await db.get(Customer, sale.customer_id)
         if customer:
             response.customer_name = customer.name
+    # Fresh sale has no returns yet.
+    response.returned_total = Decimal("0.00")
+    response.net_total = Decimal(sale.total)
+    response.returns_count = 0
     await db.commit()
     return response
 
@@ -177,9 +181,32 @@ async def list_sales(
         )).all()
         items_count_by_sale = {row[0]: row[1] for row in item_counts}
 
+    returns_total_by_sale: dict = {}
+    returns_count_by_sale: dict = {}
+    if sale_ids:
+        from app.models.returns import SaleReturn
+
+        return_rows = (await db.execute(
+            select(
+                SaleReturn.sale_id,
+                func.coalesce(func.sum(SaleReturn.total_amount), 0),
+                func.count(SaleReturn.id),
+            )
+            .where(
+                SaleReturn.shop_id == shop_id,
+                SaleReturn.sale_id.in_(sale_ids),
+            )
+            .group_by(SaleReturn.sale_id)
+        )).all()
+        for row in return_rows:
+            returns_total_by_sale[row[0]] = Decimal(str(row[1]))
+            returns_count_by_sale[row[0]] = int(row[2])
+
     results = []
     for sale in sales:
         customer_name = customer_names.get(sale.customer_id) if sale.customer_id else None
+        returned_total = returns_total_by_sale.get(sale.id, Decimal("0.00"))
+        net_total = Decimal(sale.total) - Decimal(returned_total)
         results.append(SaleListItemResponse(
             id=sale.id,
             invoice_number=sale.invoice_number,
@@ -195,6 +222,9 @@ async def list_sales(
             status=sale.status,
             shop_id=sale.shop_id,
             created_at=sale.created_at,
+            returned_total=returned_total,
+            net_total=net_total,
+            returns_count=returns_count_by_sale.get(sale.id, 0),
         ))
     return results
 
@@ -214,11 +244,28 @@ async def sales_summary(
             Sale.status.in_([SaleStatus.COMPLETED, SaleStatus.PARTIAL]),
         )
     )).one()
+    from app.models.returns import SaleReturn
+
+    returns_row = (await db.execute(
+        select(
+            func.coalesce(func.sum(SaleReturn.total_amount), 0),
+            func.count(SaleReturn.id),
+        ).where(
+            SaleReturn.shop_id == shop_id,
+            SaleReturn.created_at >= today,
+            SaleReturn.created_at <= tomorrow,
+        )
+    )).one()
+    gross = Decimal(str(total_row[0]))
+    returns_total = Decimal(str(returns_row[0]))
     return SaleSummaryResponse(
-        today_sales=Decimal(str(total_row[0])),
+        today_sales=gross,
         today_sales_count=total_row[1],
         today_gross_profit=Decimal("0"),
         today_net_profit=Decimal("0"),
+        today_returns_total=returns_total,
+        today_returns_count=int(returns_row[1]),
+        today_net_sales=gross - returns_total,
     )
 
 
@@ -242,6 +289,21 @@ async def get_sale(
     response = SaleResponse.model_validate(sale)
     if sale.customer is not None:
         response.customer_name = sale.customer.name
+    from app.models.returns import SaleReturn
+
+    return_row = (await db.execute(
+        select(
+            func.coalesce(func.sum(SaleReturn.total_amount), 0),
+            func.count(SaleReturn.id),
+        ).where(
+            SaleReturn.shop_id == shop_id,
+            SaleReturn.sale_id == sale.id,
+        )
+    )).one()
+    returned_total = Decimal(str(return_row[0]))
+    response.returned_total = returned_total
+    response.net_total = Decimal(sale.total) - returned_total
+    response.returns_count = int(return_row[1])
     return response
 
 
@@ -301,6 +363,10 @@ async def update_sale(
         customer = await db.get(Customer, sale.customer_id)
         if customer:
             response.customer_name = customer.name
+    # Edited sales have no returns by definition (edit is blocked when returns exist).
+    response.returned_total = Decimal("0.00")
+    response.net_total = Decimal(sale.total)
+    response.returns_count = 0
     return response
 
 
