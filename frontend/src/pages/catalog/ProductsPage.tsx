@@ -73,15 +73,25 @@ export function ProductsPage() {
     loadData();
   }, []);
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.variants?.some((v: { sku: string }) => v.sku.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = categoryFilter === 'all' || product.category_id === categoryFilter;
-    const matchesUnit = unitFilter === 'all' || product.unit === unitFilter;
-    return matchesSearch && matchesCategory && matchesUnit;
-  });
+  const filteredRows = products
+    .filter((product) => {
+      const matchesCategory = categoryFilter === 'all' || product.category_id === categoryFilter;
+      const matchesUnit = unitFilter === 'all' || product.unit === unitFilter;
+      return matchesCategory && matchesUnit;
+    })
+    .flatMap((product) => {
+      const variants = product.variants && product.variants.length > 0 ? product.variants : [null];
+      return variants.map((variant) => ({ product, variant }));
+    })
+    .filter(({ product, variant }) => {
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase();
+      return (
+        product.name.toLowerCase().includes(term) ||
+        product.code?.toLowerCase().includes(term) ||
+        variant?.sku.toLowerCase().includes(term)
+      );
+    });
 
   const handleAddVariant = () => {
     setFormData((prev) => ({
@@ -310,35 +320,48 @@ export function ProductsPage() {
                   <TableCell align="right"><Skeleton className="h-4 w-16" /></TableCell>
                 </TableRow>
               ))
-            ) : filteredProducts.length === 0 ? (
+            ) : filteredRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-8 text-zinc-500">
                   {searchTerm ? 'No matching products found' : 'No products added yet'}
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product) => (
-                <TableRow key={product.id}>
+              filteredRows.map(({ product, variant }) => (
+                <TableRow key={variant?.id ?? product.id}>
                   <TableCell className="font-mono text-xs text-zinc-500">
-                    {product.code || product.variants?.[0]?.sku || '—'}
+                    {variant?.sku || product.code || '—'}
                   </TableCell>
                   <TableCell className="font-medium text-zinc-900">
                     {product.name}
+                    {(product.variants?.length ?? 0) > 1 && (
+                      <span className="ml-2 text-[11px] font-normal text-zinc-500">
+                        {(product.variants?.indexOf(variant!) ?? 0) + 1} of {product.variants?.length}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="neutral" size="sm">
                       {product.category?.name || 'Uncategorized'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="capitalize text-zinc-600">{product.unit}</TableCell>
+                  <TableCell className="capitalize text-zinc-600">{variant?.unit || product.unit}</TableCell>
                   <TableCell align="right" className="font-tabular text-zinc-600">
-                    {product.variants?.[0] ? formatCurrency(product.variants[0].purchase_price) : '—'}
+                    {variant ? formatCurrency(variant.purchase_price) : '—'}
                   </TableCell>
                   <TableCell align="right" className="font-tabular font-semibold text-zinc-900">
-                    {product.variants?.[0] ? formatCurrency(product.variants[0].selling_price) : '—'}
+                    {variant ? formatCurrency(variant.selling_price) : '—'}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="success" size="sm">Active</Badge>
+                    {variant ? (
+                      variant.is_active !== false ? (
+                        <Badge variant="success" size="sm">Active</Badge>
+                      ) : (
+                        <Badge variant="neutral" size="sm">Inactive</Badge>
+                      )
+                    ) : (
+                      <Badge variant="neutral" size="sm">No variants</Badge>
+                    )}
                   </TableCell>
                   <TableCell align="right">
                     <div className="flex items-center justify-end gap-1">
