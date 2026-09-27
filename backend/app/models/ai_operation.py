@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from app.models.expense import Expense
     from app.models.payment import Payment
     from app.models.purchase import Purchase
+    from app.models.returns import PurchaseReturn, SaleReturn
     from app.models.sale import Sale
 
 
@@ -426,5 +427,133 @@ class AIPurchaseReceipt(Base, UUIDMixin, TimestampMixin):
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only
         return (
             f"AIPurchaseReceipt(shop_id={self.shop_id!r}, "
+            f"operation_key={self.operation_key!r})"
+        )
+
+
+class AICustomerReturnReceipt(Base, UUIDMixin, TimestampMixin):
+    """One idempotency receipt for one approved AI-assisted customer return.
+
+    Step 9 mirrors the Step 3/Step 4/Step 5/Step 6/Step 7 receipt pattern,
+    but with its own table: forcing returns into ``ai_sale_receipts``
+    (whose ``sale_id`` FK is sale-specific) or any other receipt table
+    would distort the data model. The mechanics are identical:
+
+    * The agent generates one ``operation_key`` per prepared return (a UUID
+      hex string). The key is part of the HITL tool-call args, so it is
+      serialised through the agent checkpoint — never a live session, never
+      an ORM object.
+    * The write tool checks ``(shop_id, operation_key)`` BEFORE calling
+      ``returns.create_sale_return()``. A hit returns the already-created
+      return without mutating anything.
+    * On a miss, the return AND its receipt are written in the SAME
+      database transaction. A unique constraint on
+      ``(shop_id, operation_key)`` is the final guard: a concurrent
+      duplicate rolls back and re-reads the winner instead of creating a
+      second return.
+
+    Scope is per shop. ``return_id`` is nullable with ``SET NULL`` so the
+    key stays claimed even if the return row is gone — a replay then
+    reports "already processed" instead of silently re-creating money
+    movement. The core ``SaleReturn`` table itself carries no idempotency
+    column (Step 8 behaviour is unchanged).
+    """
+
+    __tablename__ = "ai_customer_return_receipts"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "shop_id",
+            "operation_key",
+            name="uq_ai_customer_return_receipts_shop_operation",
+        ),
+        Index(
+            "ix_ai_customer_return_receipts_shop_created_at",
+            "shop_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "length(trim(operation_key)) > 0",
+            name="ck_ai_customer_return_receipts_key_not_blank",
+        ),
+    )
+
+    shop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("shops.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    operation_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    return_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sale_returns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    return_: Mapped["SaleReturn | None"] = relationship("SaleReturn")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return (
+            f"AICustomerReturnReceipt(shop_id={self.shop_id!r}, "
+            f"operation_key={self.operation_key!r})"
+        )
+
+
+class AISupplierReturnReceipt(Base, UUIDMixin, TimestampMixin):
+    """One idempotency receipt for one approved AI-assisted supplier return.
+
+    Step 9 mirrors the customer-return receipt pattern with its own table:
+    forcing supplier returns into ``ai_customer_return_receipts`` (whose
+    ``return_id`` FK targets ``sale_returns``) would distort the data
+    model. The mechanics are identical to every earlier AI receipt: check
+    ``(shop_id, operation_key)`` before mutating, write the receipt in the
+    SAME transaction as the return, and let the unique constraint guard
+    the concurrent race.
+    """
+
+    __tablename__ = "ai_supplier_return_receipts"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "shop_id",
+            "operation_key",
+            name="uq_ai_supplier_return_receipts_shop_operation",
+        ),
+        Index(
+            "ix_ai_supplier_return_receipts_shop_created_at",
+            "shop_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "length(trim(operation_key)) > 0",
+            name="ck_ai_supplier_return_receipts_key_not_blank",
+        ),
+    )
+
+    shop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("shops.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    operation_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    return_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchase_returns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    return_: Mapped["PurchaseReturn | None"] = relationship("PurchaseReturn")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return (
+            f"AISupplierReturnReceipt(shop_id={self.shop_id!r}, "
             f"operation_key={self.operation_key!r})"
         )

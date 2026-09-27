@@ -180,6 +180,8 @@ def test_expense_registry_is_exactly_one_tool() -> None:
         "record_supplier_payment",
         "record_expense",
         "create_purchase",
+        "create_customer_return",
+        "create_supplier_return",
     }
     assert EXPENSE_HITL_INTERRUPT_CONFIG == {"record_expense": True}
 

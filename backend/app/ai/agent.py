@@ -31,6 +31,10 @@ from app.ai.tools.expenses_write import RECORD_EXPENSE_TOOL_NAME
 from app.ai.tools.payments_write import RECORD_PAYMENT_TOOL_NAME
 from app.ai.tools.purchases_write import CREATE_PURCHASE_TOOL_NAME
 from app.ai.tools.registry import demo_side_effect, get_master_tools
+from app.ai.tools.returns_write import (
+    CREATE_CUSTOMER_RETURN_TOOL_NAME,
+    CREATE_SUPPLIER_RETURN_TOOL_NAME,
+)
 from app.ai.tools.sales_write import CREATE_SALE_TOOL_NAME
 from app.ai.tools.supplier_payments_write import RECORD_SUPPLIER_PAYMENT_TOOL_NAME
 
@@ -70,17 +74,20 @@ MASTER_TOOL_NAMES: tuple[str, ...] = (
 # Step 2 business read tools (re-exported for a single obvious boundary).
 READ_MASTER_TOOL_NAMES: tuple[str, ...] = READ_TOOL_NAMES
 
-# Step 3 + Step 4 + Step 5 + Step 6 + Step 7 write tools (exactly five
-# mutations: sale creation, customer payment, supplier payment, expense
-# recording, and purchase recording). Each module still exposes exactly
-# one tool; the master agent orchestrates all five without any
-# specialised sub-agent.
+# Step 3 + Step 4 + Step 5 + Step 6 + Step 7 + Step 9 write tools (exactly
+# seven mutations: sale creation, customer payment, supplier payment,
+# expense recording, purchase recording, customer return and supplier
+# return). Sale/payment/expense/purchase modules still expose exactly one
+# tool each; the return module exposes exactly two. The master agent
+# orchestrates all seven without any specialised sub-agent.
 WRITE_MASTER_TOOL_NAMES: tuple[str, ...] = (
     CREATE_SALE_TOOL_NAME,
     RECORD_PAYMENT_TOOL_NAME,
     RECORD_SUPPLIER_PAYMENT_TOOL_NAME,
     RECORD_EXPENSE_TOOL_NAME,
     CREATE_PURCHASE_TOOL_NAME,
+    CREATE_CUSTOMER_RETURN_TOOL_NAME,
+    CREATE_SUPPLIER_RETURN_TOOL_NAME,
 )
 
 # HITL: the fake side-effect demo pauses for human review.
@@ -132,6 +139,24 @@ EXPENSE_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
 # mutation.
 PURCHASE_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
     CREATE_PURCHASE_TOOL_NAME: True,
+}
+
+# HITL for the two Step 9 mutations (customer/supplier returns). Identical
+# mechanism: ``True`` keeps approve / edit / reject / respond; an edit
+# re-runs the return tool with the edited args, which the tool
+# re-resolves and re-validates (sale/purchase, item, quantity, remaining)
+# on a fresh session before calling the authoritative return service.
+CUSTOMER_RETURN_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
+    CREATE_CUSTOMER_RETURN_TOOL_NAME: True,
+}
+
+SUPPLIER_RETURN_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
+    CREATE_SUPPLIER_RETURN_TOOL_NAME: True,
+}
+
+RETURN_HITL_INTERRUPT_CONFIG: dict[str, bool] = {
+    CREATE_CUSTOMER_RETURN_TOOL_NAME: True,
+    CREATE_SUPPLIER_RETURN_TOOL_NAME: True,
 }
 
 # Appended to the system prompt ONLY when sale write tools are attached,
@@ -337,7 +362,54 @@ Purchase recording (Step 7 — single mutation `create_purchase`, always HITL-ap
 9. After the result: report purchase_id, supplier, items, authoritative total, and
    paid/due in plain shopkeeper language. On ambiguous/not_found/error results,
    explain and ask — never invent.
-10. Never pass shop_id (no such argument exists), never invent supplier/product IDs.
+ 10. Never pass shop_id (no such argument exists), never invent supplier/product IDs.
+"""
+
+# Appended to the system prompt ONLY when return write tools are attached,
+# so runs without the mutation capability never learn tools that are not
+# present (and cannot hallucinate return tool calls).
+RETURN_SYSTEM_ADDENDUM = """
+Customer and supplier returns (Step 9 — two mutations `create_customer_return` and `create_supplier_return`, always HITL-approved):
+1. Understand: which original sale/purchase is being returned, which exact item, and how much.
+   Customer examples: 'Ali ne 2 meter black lawn wapas kar diya' (customer Ali, 2 meter black lawn),
+   'Ali ki invoice 1023 se 2 meter black lawn return karo' (invoice 1023, 2 meter black lawn),
+   'Ahmed ke bill mein se 1 suit blue cotton return hai'.
+   Supplier examples: 'Ahmed Traders ko 3 suits blue cotton wapas karne hain',
+   'Purchase invoice P-102 se 2 meter black lawn supplier ko return karo',
+   'Last purchase se 5 suits return kar do'.
+   Amounts may use scale words: '5 hazar' = 5000.
+2. Resolve the original sale/purchase first with the read tools (sales/purchase summaries, customer/supplier
+   account lookups, catalog/inventory lookups). Resolution order: exact sale/purchase UUID, then exact
+   invoice number, then invoice fragment, then customer/supplier + document information.
+   If a customer/supplier/sale/purchase/item name matches several rows, ASK which one — never guess.
+   'Last sale/purchase' with several candidates is ambiguous — ask, never pick the most recent silently.
+   Never create a customer, supplier, sale, purchase, product or variant; a missing name is a
+   clarification, not a new row. Never pass shop_id (no such argument exists).
+3. Resolve the exact sale/purchase item next: product_name/variant_sku/variant_id against the identified
+   document's actual lines. Exactly one match continues; 'return 2 meter black' matching Black Lawn,
+   Black Cotton and Black Khaddar is ambiguous — ask which one. Never invent a line and never invent prices.
+4. Quantity is recorded in the original variant's own unit — never convert (no meter-to-yard math).
+   'return 2 meter' means quantity 2. Quantity is Decimal and is validated by the authoritative service.
+5. In the SAME turn: write a short preview to the shopkeeper (customer/supplier, sale/purchase reference,
+   item, quantity, estimated value, Khata/payable impact) AND THEN IMMEDIATELY call `create_customer_return`
+   or `create_supplier_return`. Never end your turn after the preview without calling the tool — the tool call
+   is what raises the approval card, and without it nothing can be approved. The preview amount is only an
+   estimate; the backend return service calculates the authoritative final amount.
+6. Never ask "should I record it?" / "kya yeh theek hai?" in text and stop. The approval card IS the
+   confirmation question; your text preview is only the summary.
+7. If the shopkeeper is confirming a preview from the previous turn (haan, theek hai, kar do, yes, ok),
+   skip the preview and call the return tool directly.
+8. Call each return tool ONCE per return with a FRESH idempotency_key (a UUID hex string, generated once per
+   new return request; reuse the same key only when retrying the SAME operation). The pending call pauses for
+   the shopkeeper's approval — never claim the return is recorded before the approved result comes back.
+9. Never invent prices, totals, discounts, AR/AP amounts, cash refunds, inventory costs, journal/account IDs,
+   SQL, or ledger instructions. Never modify inventory directly. Never construct accounting entries.
+   The tools call `returns.create_sale_return()` / `returns.create_purchase_return()` which own all business
+   logic; the AI only reports the authoritative backend result (return_id, totals, AR/cash or payable impact,
+   remaining returnable quantity).
+10. After the result: report return_id, sale/purchase reference, items, authoritative total, and Khata/payable
+    impact in plain shopkeeper language. On ambiguous/not_found/error results, explain and ask — never invent.
+    Never bypass HITL.
 """
 
 # Allowed resume decision types (per HITL docs).
@@ -430,15 +502,18 @@ def build_master_agent(
         extra_tools: Step 2 tenant-bound business read tools
             (``build_read_tools(session, tenant)``). Appended after the
             demo tools; read tools never require HITL approval.
-        write_tools: Step 3 + Step 4 + Step 5 + Step 6 + Step 7 tenant-bound
-            business write tools (``build_sale_write_tools(session,
+        write_tools: Step 3 + Step 4 + Step 5 + Step 6 + Step 7 + Step 9
+            tenant-bound business write tools (``build_sale_write_tools(session,
             tenant)`` + ``build_payment_write_tools(session, tenant)`` +
             ``build_supplier_payment_write_tools(session, tenant)`` +
             ``build_expense_write_tools(session, tenant)`` +
-            ``build_purchase_write_tools(session, tenant)`` — exactly one
-            tool per module, ``create_sale``, ``record_customer_payment``,
-            ``record_supplier_payment``, ``record_expense`` and
-            ``create_purchase``).
+            ``build_purchase_write_tools(session, tenant)`` +
+            ``build_return_write_tools(session, tenant)`` — exactly one
+            tool per sale/payment/expense/purchase module (``create_sale``,
+            ``record_customer_payment``, ``record_supplier_payment``,
+            ``record_expense`` and ``create_purchase``) plus exactly two
+            return tools (``create_customer_return``,
+            ``create_supplier_return``)).
             Appended last; every write tool
             pauses for HITL approval via ``interrupt_on`` and therefore
             requires a checkpointer. Each request rebuilds these over
@@ -494,6 +569,11 @@ def build_master_agent(
             system_prompt = system_prompt + EXPENSE_SYSTEM_ADDENDUM
         if CREATE_PURCHASE_TOOL_NAME in present:
             system_prompt = system_prompt + PURCHASE_SYSTEM_ADDENDUM
+        if (
+            CREATE_CUSTOMER_RETURN_TOOL_NAME in present
+            or CREATE_SUPPLIER_RETURN_TOOL_NAME in present
+        ):
+            system_prompt = system_prompt + RETURN_SYSTEM_ADDENDUM
 
     return create_deep_agent(
         model=resolved_model,
@@ -538,6 +618,7 @@ def hitl_resume_payload(decisions: list[dict[str, Any]]) -> dict[str, Any]:
 
 __all__ = [
     "AI_ROOT",
+    "CUSTOMER_RETURN_HITL_INTERRUPT_CONFIG",
     "EXPENSE_HITL_INTERRUPT_CONFIG",
     "EXPENSE_SYSTEM_ADDENDUM",
     "HITL_ALLOWED_DECISIONS",
@@ -549,11 +630,14 @@ __all__ = [
     "PURCHASE_HITL_INTERRUPT_CONFIG",
     "PURCHASE_SYSTEM_ADDENDUM",
     "READ_MASTER_TOOL_NAMES",
+    "RETURN_HITL_INTERRUPT_CONFIG",
+    "RETURN_SYSTEM_ADDENDUM",
     "SALE_HITL_INTERRUPT_CONFIG",
     "SALE_SYSTEM_ADDENDUM",
     "SKILLS_SOURCE_PATHS",
     "SUPPLIER_PAYMENT_HITL_INTERRUPT_CONFIG",
     "SUPPLIER_PAYMENT_SYSTEM_ADDENDUM",
+    "SUPPLIER_RETURN_HITL_INTERRUPT_CONFIG",
     "WRITE_MASTER_TOOL_NAMES",
     "approve_decision",
     "build_master_agent",

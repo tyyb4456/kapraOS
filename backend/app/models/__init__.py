@@ -13,11 +13,13 @@ import them here too.
 
 from app.models.account import Account, AccountType
 from app.models.ai_operation import (
+    AICustomerReturnReceipt,
     AIExpenseReceipt,
     AIPaymentReceipt,
     AIPurchaseReceipt,
     AISaleReceipt,
     AISupplierPaymentReceipt,
+    AISupplierReturnReceipt,
 )
 from app.models.attribute import Attribute, AttributeValue
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -52,11 +54,13 @@ from app.models.supplier import Supplier
 from app.models.user import User, UserRole
 
 __all__ = [
+    "AICustomerReturnReceipt",
     "AIExpenseReceipt",
     "AIPaymentReceipt",
     "AIPurchaseReceipt",
     "AISaleReceipt",
     "AISupplierPaymentReceipt",
+    "AISupplierReturnReceipt",
     "Account",
     "AccountType",
     "Attribute",
