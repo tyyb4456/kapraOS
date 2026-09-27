@@ -1,13 +1,17 @@
 import { SignIn } from '@clerk/clerk-react';
 import { Store, ArrowRight, ShieldCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { Button } from '../../components/ui/Button.tsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card.tsx';
 
 export function LoginPage() {
-  const { isClerkConfigured } = useAuth();
+  const { isClerkConfigured, isAuthenticated, isLoading, error } = useAuth();
   const navigate = useNavigate();
+
+  if (!isLoading && isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -25,6 +29,11 @@ export function LoginPage() {
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+            {error}
+          </div>
+        )}
         {isClerkConfigured ? (
           <div className="flex justify-center">
             <SignIn

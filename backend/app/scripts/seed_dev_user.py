@@ -17,7 +17,7 @@ from app.models.user import User, UserRole
 
 async def seed_user(clerk_user_id: str, name: str = "Store Owner", email: str = "owner@kapraos.local", shop_name: str = "KapraOS Fabrics & Suiting"):
     async with AsyncSessionLocal() as db:
-        # Check if user already exists
+        # Check if user already exists (idempotent re-run)
         existing_user = (await db.execute(select(User).where(User.clerk_user_id == clerk_user_id))).scalar_one_or_none()
         if existing_user:
             print(f"[+] User with Clerk ID '{clerk_user_id}' already provisioned!")
@@ -29,21 +29,23 @@ async def seed_user(clerk_user_id: str, name: str = "Store Owner", email: str = 
             await db.commit()
             return
 
-        # Check if shop exists or create a new one
-        existing_shop = (await db.execute(select(Shop).limit(1))).scalar_one_or_none()
-        if not existing_shop:
-            shop = Shop(
-                name=shop_name,
-                currency="PKR",
-                address="Shop #14, Cloth Market, Faisalabad",
-                phone="0300-8765432",
-            )
-            db.add(shop)
-            await db.flush()
-            print(f"[+] Created Shop: '{shop.name}' ({shop.id})")
-        else:
-            shop = existing_shop
-            print(f"[+] Using existing Shop: '{shop.name}' ({shop.id})")
+        # Duplicate-email guard: same email, different Clerk identity.
+        existing_email = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+        if existing_email is not None:
+            print(f"[!] Account already exists for email '{email}' (Clerk ID '{existing_email.clerk_user_id}').")
+            print(f"    Kindly sign in instead -- refusing to provision a duplicate tenant.")
+            return
+
+        # Each Clerk identity gets its own isolated Shop.
+        # Never reuse an existing Shop here -- that was the bug that made
+        # every account see the same data.
+        shop = Shop(
+            name=shop_name,
+            currency="PKR",
+        )
+        db.add(shop)
+        await db.flush()
+        print(f"[+] Created Shop: '{shop.name}' ({shop.id})")
 
         # Initialize chart of accounts
         from app.services.accounting import ensure_system_accounts

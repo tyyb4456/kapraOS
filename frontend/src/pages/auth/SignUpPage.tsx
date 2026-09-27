@@ -1,13 +1,20 @@
 import { SignUp } from '@clerk/clerk-react';
 import { Store, ArrowRight, ShieldCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { Button } from '../../components/ui/Button.tsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card.tsx';
 
 export function SignUpPage() {
-  const { isClerkConfigured } = useAuth();
+  const { isClerkConfigured, isAuthenticated, isLoading, error, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // Already signed in with a provisioned backend identity -> no need to
+  // sign up again. Prevents the "signed up again with the same account"
+  // confusion.
+  if (!isLoading && isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -25,6 +32,27 @@ export function SignUpPage() {
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {error && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            <p>
+              {error}{' '}
+              {error.toLowerCase().includes('already exists') && (
+                <Link to="/login" className="font-semibold underline underline-offset-2">
+                  Kindly sign in instead.
+                </Link>
+              )}
+            </p>
+            {error.toLowerCase().includes('already exists') && (
+              <button
+                type="button"
+                onClick={() => signOut()}
+                className="mt-2 font-semibold underline underline-offset-2 hover:opacity-80"
+              >
+                Sign out and use a different account
+              </button>
+            )}
+          </div>
+        )}
         {isClerkConfigured ? (
           <div className="flex justify-center">
             <SignUp

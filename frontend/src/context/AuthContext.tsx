@@ -63,15 +63,40 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
       try {
         meData = await getAuthMe();
       } catch (err) {
-        if (err instanceof ApiError && err.status === 401 && err.message.toLowerCase().includes('not provisioned')) {
-          // Clerk user exists but not yet provisioned in application DB
-          meData = await syncAuth({
-            name: clerkUser?.fullName || clerkUser?.firstName || undefined,
-            email: clerkUser?.primaryEmailAddress?.emailAddress,
-          });
+        // Any 401 here means the Clerk identity has no application row yet
+        // ("User not provisioned") or the token wasn't accepted. For a
+        // signed-in Clerk user we attempt a one-time provision via /sync.
+        // Any other status (network, 500, ...) is re-thrown below.
+        if (err instanceof ApiError && err.status === 401) {
+          try {
+            meData = await syncAuth({
+              name: clerkUser?.fullName || clerkUser?.firstName || undefined,
+              email: clerkUser?.primaryEmailAddress?.emailAddress,
+            });
+          } catch (syncErr) {
+            if (
+              syncErr instanceof ApiError &&
+              syncErr.status === 409
+            ) {
+              // Duplicate account: same email already registered to a
+              // different Clerk identity. Don't fake a session -- surface
+              // the message so the UI can direct the user to sign in.
+              setBackendUser(null);
+              setError(
+                'Account already exists for this email. Kindly sign in instead.',
+              );
+              return;
+            }
+            throw syncErr;
+          }
         } else {
           throw err;
         }
+      }
+      // Defensive: never accept a placeholder shop -- that masked the
+      // tenant-reuse bug and let broken sessions into the dashboard.
+      if (!meData?.shop_id || meData.shop_id === 'pending_sync') {
+        throw new Error('Backend returned an invalid shop identity');
       }
       setBackendUser({
         id: meData.id,
@@ -85,19 +110,14 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
       console.warn('Failed to load user identity from /auth/me:', err);
       if (err instanceof ApiError) {
         setError(err.message);
+      } else if (err instanceof Error) {
+        setError(err.message);
       } else {
         setError('Could not connect to backend service');
       }
-      if (clerkUser) {
-        setBackendUser({
-          id: clerkUser.id,
-          clerkUserId: clerkUser.id,
-          shopId: 'pending_sync',
-          role: 'owner',
-          email: clerkUser.primaryEmailAddress?.emailAddress,
-          fullName: clerkUser.fullName || 'Shop User',
-        });
-      }
+      // No fake fallback user: a failed identity load must not grant
+      // dashboard access with a bogus shop. Callers gate on `user != null`.
+      setBackendUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +141,11 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
       user: backendUser,
       shopId: backendUser?.shopId || null,
       role: backendUser?.role || null,
-      isAuthenticated: Boolean(isSignedIn),
+      // Require BOTH Clerk sign-in AND a provisioned backend identity.
+      // Previously `isSignedIn` alone granted access, so a failed /sync
+      // (or a duplicate-account 409) still let users into the dashboard
+      // with a fake `pending_sync` shop.
+      isAuthenticated: Boolean(isSignedIn && backendUser),
       isLoading: !isClerkLoaded || isLoading,
       error,
       refreshAuth: loadBackendIdentity,
