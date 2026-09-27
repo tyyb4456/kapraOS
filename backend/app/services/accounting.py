@@ -63,6 +63,7 @@ REFERENCE_SALE = "SALE"
 REFERENCE_SALE_COGS = "SALE_COGS"
 REFERENCE_SALE_RETURN = "SALE_RETURN"
 REFERENCE_PURCHASE = "PURCHASE"
+REFERENCE_PURCHASE_RETURN = "PURCHASE_RETURN"
 REFERENCE_CUSTOMER_PAYMENT = "CUSTOMER_PAYMENT"
 REFERENCE_SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT"
 REFERENCE_EXPENSE = "EXPENSE"
@@ -488,26 +489,39 @@ async def post_sale_return(
     session: AsyncSession,
     *,
     sale: Sale,
-    returned_quantity: Decimal,
-    refund_amount: Decimal,
+    sale_return_id: uuid.UUID,
+    total_refund: Decimal,
+    ar_amount: Decimal,
+    cash_refund: Decimal,
+    cogs_amount: Decimal,
     description: str | None = None,
 ) -> list[LedgerEntry]:
-    """Reverse a sale's accounting postings for a customer return.
+    """Reverse a sale's postings for one customer-return transaction.
 
-    This posts the opposite of `post_sale` + `post_cogs` for the returned portion:
+    AR-first allocation (deterministic, matches the returns service):
 
-        Debit   Sales Revenue         refund_amount
-        Credit  Cash / Bank           refund_amount (if paid)
-        Credit  Accounts Receivable   refund_amount (if unpaid)
+        Debit   Sales Revenue         total_refund
+        Credit  Accounts Receivable   ar_amount (up to the sale's remaining due)
+        Credit  Cash / Bank           cash_refund (the remainder, a cash refund)
 
-        Debit   Inventory             cogs_on_returned
-        Credit  Cost of Goods Sold    cogs_on_returned
+        Debit   Inventory             cogs_amount
+        Credit  Cost of Goods Sold    cogs_amount
 
-    The COGS is calculated proportionally from the sale's historical cost
-    snapshot: `SUM(SaleItem.quantity * SaleItem.cost_price) * (returned_qty / total_qty)`.
+    `total_refund` must equal `ar_amount + cash_refund`; the returns service
+    computes `ar_amount = min(total_refund, remaining_due)` so a return first
+    reduces what the customer still owes and only refunds cash for the
+    already-paid remainder. The cash refund is distributed back to the
+    original payment accounts (cash vs bank) in ledger order, mirroring
+    `post_sale`, so a card payment is reversed to Bank, not Cash.
 
-    Idempotent through reference `("SALE_RETURN", sale.id, returned_qty)`.
+    `cogs_amount` is `SUM(return_qty * SaleItem.cost_price)` from the
+    return's lines (historical cost snapshots, never current WAC).
+
+    Idempotent per return: reference `("SALE_RETURN", sale_return_id)`, so
+    replaying the same return writes nothing new and multiple partial
+    returns for one sale each post their own group.
     """
+
     accounts = await ensure_system_accounts(session, shop_id=sale.shop_id)
     cash = accounts[CASH]
     bank = accounts[BANK]
@@ -516,33 +530,18 @@ async def post_sale_return(
     cogs_account = accounts[COST_OF_GOODS_SOLD]
     inventory = accounts[INVENTORY]
 
-    refund_amount = _money(refund_amount)
-    if refund_amount <= 0:
+    total_refund = _money(total_refund)
+    ar_amount = _money(ar_amount)
+    cash_refund = _money(cash_refund)
+    cogs_amount = _money(cogs_amount)
+    if total_refund <= 0:
         return []
-
-    total_qty = sum(item.quantity for item in sale.items)
-    if total_qty <= 0:
-        return []
-
-    # Calculate COGS proportionally for the returned quantity
-    row = (
-        await session.execute(
-            select(
-                func.coalesce(
-                    func.sum(SaleItem.quantity * SaleItem.cost_price), 0
-                )
-            ).where(SaleItem.sale_id == sale.id)
-        )
-    ).scalar()
-    total_cogs = _money(row)
-    if total_cogs <= 0:
-        cogs_on_returned = _ZERO
-    else:
-        cogs_on_returned = _money(
-            total_cogs * (returned_quantity / total_qty)
+    if ar_amount + cash_refund != total_refund:
+        raise UnbalancedPostingError(
+            f"sale return {sale_return_id} split does not add up "
+            f"(ar {ar_amount} + cash {cash_refund} != total {total_refund})"
         )
 
-    # Refund payment allocation: payments on this sale
     payments = (
         await session.execute(
             select(Payment).where(
@@ -560,41 +559,80 @@ async def post_sale_return(
             payment.amount
         )
 
-    paid_total = sum(by_account.values(), start=_ZERO)
-    due_total = _money(sale.total - sale.paid_amount)
-
-    # The refund goes back the same way: first to cash/bank up to what was paid,
-    # then to AR for the rest (mirroring post_sale logic)
     lines: list[tuple[uuid.UUID, Decimal, Decimal, str | None]] = []
+    # Revenue reversal (always the full refund).
+    lines.append((revenue.id, total_refund, _ZERO, description))
 
-    remaining_refund = refund_amount
+    # AR reduction (what the customer still owed).
+    if ar_amount > 0:
+        lines.append((receivable.id, _ZERO, ar_amount, description))
 
-    # Reverse cash/bank (what was originally paid)
+    # Cash refund (already-paid remainder), back to original accounts.
+    remaining_cash = cash_refund
     for account_id, amount in by_account.items():
-        if amount > 0 and remaining_refund > 0:
-            refund_to_account = min(amount, remaining_refund)
+        if amount > 0 and remaining_cash > 0:
+            refund_to_account = min(amount, remaining_cash)
             lines.append((account_id, _ZERO, refund_to_account, description))
-            remaining_refund -= refund_to_account
+            remaining_cash -= refund_to_account
+    if remaining_cash > 0:
+        # No (or insufficient) recorded payments to allocate against —
+        # fall back to Cash so the group still balances. In practice the
+        # returns service guarantees cash_refund <= paid_amount, so this
+        # only triggers for legacy/unpaid edge cases.
+        lines.append((cash.id, _ZERO, remaining_cash, description))
 
-    # Reverse AR (what was still due)
-    if remaining_refund > 0 and due_total > 0:
-        refund_to_ar = min(due_total, remaining_refund)
-        lines.append((receivable.id, _ZERO, refund_to_ar, description))
-        remaining_refund -= refund_to_ar
-
-    # Revenue reversal (always the full refund amount)
-    lines.append((revenue.id, refund_amount, _ZERO, description))
-
-    # COGS reversal: Debit Inventory, Credit COGS
-    if cogs_on_returned > 0:
-        lines.append((inventory.id, cogs_on_returned, _ZERO, description))
-        lines.append((cogs_account.id, _ZERO, cogs_on_returned, description))
+    # COGS reversal: stock value back in, COGS down.
+    if cogs_amount > 0:
+        lines.append((inventory.id, cogs_amount, _ZERO, description))
+        lines.append((cogs_account.id, _ZERO, cogs_amount, description))
 
     return await _post_group(
         session,
         shop_id=sale.shop_id,
         reference_type=REFERENCE_SALE_RETURN,
-        reference_id=sale.id,
+        reference_id=sale_return_id,
+        lines=lines,
+    )
+
+
+async def post_purchase_return(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    purchase_return_id: uuid.UUID,
+    total_amount: Decimal,
+    description: str | None = None,
+) -> list[LedgerEntry]:
+    """Reverse a purchase's postings for one supplier-return transaction.
+
+        Debit   Accounts Payable      total_amount
+        Credit  Inventory             total_amount
+
+    The full net return value (including the proportional header-discount
+    share) reduces both the payable and the inventory asset. No cash
+    movement is modelled in V1: an over-returned purchase surfaces as a
+    negative payable (supplier credit), consistent with negative Khatas.
+
+    Idempotent per return: reference `("PURCHASE_RETURN", purchase_return_id)`.
+    """
+
+    accounts = await ensure_system_accounts(session, shop_id=shop_id)
+    payable = accounts[ACCOUNTS_PAYABLE]
+    inventory = accounts[INVENTORY]
+
+    total = _money(total_amount)
+    if total <= 0:
+        return []
+
+    lines = [
+        (payable.id, total, _ZERO, description),
+        (inventory.id, _ZERO, total, description),
+    ]
+    return await _post_group(
+        session,
+        shop_id=shop_id,
+        reference_type=REFERENCE_PURCHASE_RETURN,
+        reference_id=purchase_return_id,
         lines=lines,
     )
 

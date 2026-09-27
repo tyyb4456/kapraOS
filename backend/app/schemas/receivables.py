@@ -28,11 +28,14 @@ class CustomerBalanceResponse(BaseModel):
     customer_id: uuid.UUID
     total_sales: Decimal
     total_payments: Decimal
+    total_returns: Decimal = Decimal("0.00")
     outstanding_balance: Decimal
     number_of_sales: int
     number_of_payments: int
+    number_of_returns: int = 0
     last_sale_at: datetime | None = None
     last_payment_at: datetime | None = None
+    last_return_at: datetime | None = None
 
 
 class CustomerSummaryResponse(BaseModel):
@@ -49,7 +52,7 @@ class CustomerSummaryResponse(BaseModel):
 
 
 class StatementEntryResponse(BaseModel):
-    """One Khata line: a sale (debit) or a payment (credit)."""
+    """One Khata line: a sale (debit), a payment (credit) or a return (credit)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,6 +67,7 @@ class StatementEntryResponse(BaseModel):
     payment_id: uuid.UUID | None = None
     invoice_number: str | None = None
     payment_method: PaymentMethod | None = None
+    return_id: uuid.UUID | None = None
 
 
 class CustomerStatementResponse(BaseModel):

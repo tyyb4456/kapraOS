@@ -15,6 +15,7 @@ export interface SupplierStatementEntryResponse {
   running_balance: number | string;
   purchase_id?: string | null;
   payment_id?: string | null;
+  return_id?: string | null;
   invoice_number?: string | null;
   payment_method?: string | null;
 }
@@ -39,9 +40,10 @@ export async function getSupplierKhata(supplierId: string): Promise<KhataEntry[]
     : [];
 
   return rawList.map((entry: any, index: number) => ({
-    id: entry.payment_id || entry.purchase_id || entry.id || `entry-${index}`,
+    id: entry.return_id || entry.payment_id || entry.purchase_id || entry.id || `entry-${index}`,
     payment_id: entry.payment_id ?? null,
     purchase_id: entry.purchase_id ?? null,
+    return_id: entry.return_id ?? null,
     party_id: supplierId,
     party_name: '',
     entry_date: entry.entry_date || entry.date,

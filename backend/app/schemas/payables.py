@@ -27,11 +27,14 @@ class SupplierBalanceResponse(BaseModel):
     supplier_id: uuid.UUID
     total_purchases: Decimal
     total_payments: Decimal
+    total_returns: Decimal = Decimal("0.00")
     outstanding_balance: Decimal
     number_of_purchases: int
     number_of_payments: int
+    number_of_returns: int = 0
     last_purchase_at: datetime | None = None
     last_payment_at: datetime | None = None
+    last_return_at: datetime | None = None
 
 
 class SupplierSummaryResponse(BaseModel):
@@ -48,7 +51,7 @@ class SupplierSummaryResponse(BaseModel):
 
 
 class StatementEntryResponse(BaseModel):
-    """One Khata line: a purchase (debit) or a payment (credit)."""
+    """One Khata line: a purchase (debit), a payment (credit) or a return (credit)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -63,6 +66,7 @@ class StatementEntryResponse(BaseModel):
     payment_id: uuid.UUID | None = None
     invoice_number: str | None = None
     payment_method: PaymentMethod | None = None
+    return_id: uuid.UUID | None = None
 
 
 class SupplierStatementResponse(BaseModel):

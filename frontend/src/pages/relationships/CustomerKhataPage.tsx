@@ -237,7 +237,7 @@ export function CustomerKhataPage() {
                 <TableHead>Transaction Description</TableHead>
                 <TableHead>Ref / Invoice</TableHead>
                 <TableHead align="right">Debit (Sale +)</TableHead>
-                <TableHead align="right">Credit (Payment -)</TableHead>
+                <TableHead align="right">Credit (Payment / Return -)</TableHead>
                 <TableHead align="right">Running Balance</TableHead>
                 <TableHead align="right">Actions</TableHead>
               </TableRow>
@@ -268,7 +268,9 @@ export function CustomerKhataPage() {
                       {formatDate(entry.entry_date, true)}
                     </TableCell>
                     <TableCell className={`font-medium ${entry.debit > 0 ? 'text-zinc-900' : 'text-emerald-800'}`}>
-                      {entry.notes || (entry.debit > 0 ? 'Sale on Credit' : 'Payment Received')}
+                      {entry.entry_type === 'return'
+                        ? 'Customer Return'
+                        : (entry.notes || (entry.debit > 0 ? 'Sale on Credit' : 'Payment Received'))}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-zinc-500">
                       {entry.reference || '—'}

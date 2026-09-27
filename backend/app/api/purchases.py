@@ -6,34 +6,48 @@ Create and list purchases. Delegates to `app.services.purchases.create_purchase(
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
-from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 
 from app.api.dependencies import DbSession, ShopId
+from app.models.purchase import Purchase, PurchaseItem
+from app.models.supplier import Supplier
+from app.schemas.purchases import (
+    CreatePurchaseRequest,
+    PurchaseItemResponse,
+    PurchaseListItemResponse,
+    PurchaseResponse,
+    UpdatePurchaseRequest,
+)
+from app.schemas.returns import (
+    CreatePurchaseReturnRequest,
+    PurchaseReturnResponse,
+    PurchaseReturnWithRemainingResponse,
+)
 from app.services import purchases as purchases_service
+from app.services import returns as returns_service
 from app.services.inventory import InsufficientStockError
 from app.services.purchases import (
-    PurchaseError,
-    PurchaseNotFoundError,
-    SupplierNotFoundError,
-    VariantNotFoundError,
+    DuplicatePurchaseItemError,
     EmptyPurchaseError,
     InvalidPurchaseItemError,
     InvalidPurchaseTotalsError,
-    DuplicatePurchaseItemError,
+    PurchaseNotFoundError,
+    SupplierNotFoundError,
+    VariantNotFoundError,
 )
-from app.schemas.purchases import (
-    CreatePurchaseRequest,
-    UpdatePurchaseRequest,
-    PurchaseResponse,
-    PurchaseItemResponse,
-    PurchaseListItemResponse,
+from app.services.returns import (
+    EmptyReturnError,
+    ExceedsRemainingQuantityError,
+    InvalidReturnQuantityError,
 )
-from app.models.purchase import Purchase, PurchaseItem
-from app.models.supplier import Supplier
-from sqlalchemy import func, select
+from app.services.returns import (
+    PurchaseItemNotFoundError as ReturnPurchaseItemNotFoundError,
+)
+from app.services.returns import (
+    PurchaseNotFoundError as ReturnPurchaseNotFoundError,
+)
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 
@@ -267,6 +281,7 @@ async def update_purchase(
         InvalidPurchaseItemError,
         InvalidPurchaseTotalsError,
         DuplicatePurchaseItemError,
+        returns_service.PurchaseHasReturnsError,
     ) as exc:
         raise _unprocessable(exc) from exc
     except InsufficientStockError as exc:
@@ -292,4 +307,97 @@ async def delete_purchase(
         raise _not_found(exc) from exc
     except InsufficientStockError as exc:
         raise _unprocessable(exc) from exc
+    except returns_service.PurchaseHasReturnsError as exc:
+        raise _unprocessable(exc) from exc
     await db.commit()
+
+
+@router.post(
+    "/{purchase_id}/returns",
+    response_model=PurchaseReturnWithRemainingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_purchase_return(
+    purchase_id: UUID,
+    shop_id: ShopId,
+    db: DbSession,
+    body: CreatePurchaseReturnRequest,
+) -> PurchaseReturnWithRemainingResponse:
+    """Create a supplier return against a purchase (deterministic, auditable).
+
+    The request carries only intent (which purchase item, how much); all
+    costs, totals, inventory, payable and ledger effects are
+    backend-authoritative.
+    """
+
+    try:
+        purchase_return = await returns_service.create_purchase_return(
+            db,
+            shop_id=shop_id,
+            purchase_id=purchase_id,
+            lines=[
+                returns_service.PurchaseReturnLineInput(
+                    purchase_item_id=line.purchase_item_id,
+                    quantity=line.quantity,
+                )
+                for line in body.lines
+            ],
+            notes=body.notes,
+        )
+    except ReturnPurchaseNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except ReturnPurchaseItemNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except (
+        EmptyReturnError,
+        InvalidReturnQuantityError,
+        ExceedsRemainingQuantityError,
+        InsufficientStockError,
+    ) as exc:
+        raise _unprocessable(exc) from exc
+
+    await db.commit()
+    await db.refresh(purchase_return, attribute_names=["items"])
+    remaining = await returns_service.get_remaining_purchase_quantities(
+        db, shop_id=shop_id, purchase_id=purchase_id
+    )
+    response = PurchaseReturnResponse.model_validate(purchase_return)
+    return PurchaseReturnWithRemainingResponse(
+        **{
+            "return": response,
+            "remaining_quantities": {str(k): v for k, v in remaining.items()},
+            "purchase_id": purchase_id,
+            "total_return_amount": purchase_return.total_amount,
+        }
+    )
+
+
+@router.get("/{purchase_id}/returns", response_model=list[PurchaseReturnResponse])
+async def list_purchase_returns(
+    purchase_id: UUID,
+    shop_id: ShopId,
+    db: DbSession,
+) -> list[PurchaseReturnResponse]:
+    """List all supplier returns for a purchase (tenant-scoped, audit trail)."""
+
+    from app.models.returns import PurchaseReturn
+
+    purchase = await db.get(Purchase, purchase_id)
+    if purchase is None or purchase.shop_id != shop_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Purchase not found"
+        )
+
+    rows = (
+        await db.execute(
+            select(PurchaseReturn)
+            .where(
+                PurchaseReturn.shop_id == shop_id,
+                PurchaseReturn.purchase_id == purchase_id,
+            )
+            .order_by(PurchaseReturn.created_at.asc())
+        )
+    ).scalars().all()
+    for row in rows:
+        await db.refresh(row, attribute_names=["items"])
+    return [PurchaseReturnResponse.model_validate(row) for row in rows]

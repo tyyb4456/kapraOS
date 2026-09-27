@@ -60,6 +60,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    cast,
     func,
     literal_column,
     null,
@@ -135,10 +136,11 @@ class InvalidPaginationError(ReceivablesError):
 
 
 class StatementEntryType(str, Enum):
-    """The two kinds of row a customer Khata statement can contain."""
+    """The kinds of row a customer Khata statement can contain."""
 
     SALE = "SALE"
     PAYMENT = "PAYMENT"
+    RETURN = "RETURN"
 
 
 @dataclass(frozen=True)
@@ -148,11 +150,14 @@ class CustomerBalance:
     customer_id: uuid.UUID
     total_sales: Decimal
     total_payments: Decimal
+    total_returns: Decimal
     outstanding_balance: Decimal
     number_of_sales: int
     number_of_payments: int
+    number_of_returns: int
     last_sale_at: datetime | None
     last_payment_at: datetime | None
+    last_return_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -175,8 +180,9 @@ class CustomerSummary:
 class StatementEntry:
     """One line of a customer Khata statement.
 
-    A sale increases what the customer owes (debit); a payment decreases it
-    (credit). `running_balance` is `previous_balance + debit - credit`.
+    A sale increases what the customer owes (debit); a payment or an AR
+    return decreases it (credit). `running_balance` is
+    `previous_balance + debit - credit`.
     """
 
     entry_type: StatementEntryType
@@ -190,6 +196,7 @@ class StatementEntry:
     payment_id: uuid.UUID | None
     invoice_number: str | None
     payment_method: PaymentMethod | None
+    return_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -310,6 +317,62 @@ def _shop_customer_payments_filter(
     )
 
 
+def _customer_returns_filter(
+    shop_id: uuid.UUID, customer_id: uuid.UUID
+) -> tuple[ColumnElement[bool], ...]:
+    """AR returns that reduce this customer's receivable.
+
+    Only the AR portion (`SaleReturn.ar_amount`) counts here — the cash
+    refund remainder is ledger-only and never touches Khata. A return counts
+    when its sale still qualifies (same symmetry as payments), so voiding a
+    sale cannot leave a phantom credit behind.
+    """
+
+    from app.models.returns import SaleReturn
+
+    qualifying_sale = (
+        select(Sale.id)
+        .where(
+            Sale.id == SaleReturn.sale_id,
+            *_qualifying_sales_filter(shop_id, customer_id),
+        )
+        .correlate(SaleReturn)
+        .exists()
+    )
+
+    return (
+        SaleReturn.shop_id == shop_id,
+        SaleReturn.customer_id == customer_id,
+        qualifying_sale,
+    )
+
+
+def _shop_customer_returns_filter(
+    shop_id: uuid.UUID,
+) -> tuple[ColumnElement[bool], ...]:
+    """Shop-wide counterpart of `_customer_returns_filter`."""
+
+    from app.models.returns import SaleReturn
+
+    qualifying_sale = (
+        select(Sale.id)
+        .where(
+            Sale.id == SaleReturn.sale_id,
+            Sale.shop_id == shop_id,
+            Sale.customer_id == SaleReturn.customer_id,
+            Sale.status.in_(QUALIFYING_SALE_STATUSES),
+        )
+        .correlate(SaleReturn)
+        .exists()
+    )
+
+    return (
+        SaleReturn.shop_id == shop_id,
+        SaleReturn.customer_id.is_not(None),
+        qualifying_sale,
+    )
+
+
 def _apply_date_range(
     statement: Select[tuple[object, ...]],
     column: ColumnElement[datetime],
@@ -365,7 +428,9 @@ async def _get_customer(
 async def _compute_balance(
     session: AsyncSession, shop_id: uuid.UUID, customer_id: uuid.UUID
 ) -> CustomerBalance:
-    """Aggregate the balance in two database-side queries (no row loading)."""
+    """Aggregate the balance in three database-side queries (no row loading)."""
+
+    from app.models.returns import SaleReturn
 
     sales_row = (
         await session.execute(
@@ -387,19 +452,33 @@ async def _compute_balance(
         )
     ).one()
 
+    returns_row = (
+        await session.execute(
+            select(
+                func.sum(SaleReturn.ar_amount),
+                func.count(SaleReturn.id),
+                func.max(SaleReturn.created_at),
+            ).where(*_customer_returns_filter(shop_id, customer_id))
+        )
+    ).one()
+
     total_sales = _money(sales_row[0])
     total_payments = _money(payments_row[0])
+    total_returns = _money(returns_row[0])
 
     return CustomerBalance(
         customer_id=customer_id,
         total_sales=total_sales,
         total_payments=total_payments,
+        total_returns=total_returns,
         # Deliberately not clamped at zero - see the module docstring.
-        outstanding_balance=total_sales - total_payments,
+        outstanding_balance=total_sales - total_payments - total_returns,
         number_of_sales=sales_row[1],
         number_of_payments=payments_row[1],
+        number_of_returns=returns_row[1],
         last_sale_at=sales_row[2],
         last_payment_at=payments_row[2],
+        last_return_at=returns_row[2],
     )
 
 
@@ -441,6 +520,8 @@ async def get_total_outstanding(
     payments are excluded - they belong to no customer's Khata.
     """
 
+    from app.models.returns import SaleReturn
+
     sales = (
         await session.execute(
             select(func.coalesce(func.sum(Sale.total), 0)).where(
@@ -457,7 +538,14 @@ async def get_total_outstanding(
             )
         )
     ).scalar()
-    return _money(sales) - _money(payments)
+    returns_total = (
+        await session.execute(
+            select(func.coalesce(func.sum(SaleReturn.ar_amount), 0)).where(
+                *_shop_customer_returns_filter(shop_id)
+            )
+        )
+    ).scalar()
+    return _money(sales) - _money(payments) - _money(returns_total)
 
 
 # --------------------------------------------------------------------------
@@ -473,7 +561,7 @@ def _statement_entries(
 ):
     """Build the statement read model as one `UNION ALL` subquery.
 
-    Assembling it in SQL (rather than merging two result sets in Python) is
+    Assembling it in SQL (rather than merging result sets in Python) is
     what lets the database do the ordering, counting and `LIMIT/OFFSET`, so a
     long-running customer's Khata never has to be loaded whole.
 
@@ -483,9 +571,13 @@ def _statement_entries(
     and the invoice must still be listed before its settlement. `entry_id`
     breaks any remaining tie so the order is stable across queries.
 
-    Constants are emitted as SQL literals rather than bind parameters so the
-    two branches of the UNION always have unambiguous types.
+    Returns appear as `RETURN` credits for their AR portion only (the cash
+    refund remainder is ledger-only). Constants are emitted as SQL literals
+    rather than bind parameters so the branches of the UNION always have
+    unambiguous types.
     """
+
+    from app.models.returns import SaleReturn
 
     sale_entries = _apply_date_range(
         select(
@@ -495,6 +587,7 @@ def _statement_entries(
             Sale.id.label("entry_id"),
             Sale.id.label("sale_id"),
             type_coerce(null(), PGUUID(as_uuid=True)).label("payment_id"),
+            cast(null(), PGUUID(as_uuid=True)).label("return_id"),
             Sale.invoice_number.label("invoice_number"),
             Sale.invoice_number.label("reference"),
             type_coerce(null(), Payment.__table__.c.method.type).label(
@@ -516,6 +609,7 @@ def _statement_entries(
             Payment.id.label("entry_id"),
             Payment.sale_id.label("sale_id"),
             Payment.id.label("payment_id"),
+            cast(null(), PGUUID(as_uuid=True)).label("return_id"),
             type_coerce(null(), String(50)).label("invoice_number"),
             Payment.reference.label("reference"),
             Payment.method.label("payment_method"),
@@ -527,7 +621,31 @@ def _statement_entries(
         end_date,
     )
 
-    return sale_entries.union_all(payment_entries).subquery("khata_entries")
+    return_entries = _apply_date_range(
+        select(
+            literal_column("'RETURN'", String()).label("entry_type"),
+            literal_column("2", Integer()).label("entry_rank"),
+            SaleReturn.created_at.label("created_at"),
+            SaleReturn.id.label("entry_id"),
+            SaleReturn.sale_id.label("sale_id"),
+            type_coerce(null(), PGUUID(as_uuid=True)).label("payment_id"),
+            SaleReturn.id.label("return_id"),
+            type_coerce(null(), String(50)).label("invoice_number"),
+            SaleReturn.notes.label("reference"),
+            type_coerce(null(), Payment.__table__.c.method.type).label(
+                "payment_method"
+            ),
+            literal_column("0", Numeric(14, 2)).label("debit"),
+            SaleReturn.ar_amount.label("credit"),
+        ).where(*_customer_returns_filter(shop_id, customer_id)),
+        SaleReturn.created_at,  # type: ignore[arg-type]
+        start_date,
+        end_date,
+    )
+
+    return sale_entries.union_all(payment_entries, return_entries).subquery(  # type: ignore[arg-type]
+        "khata_entries"
+    )
 
 
 async def _balance_before(
@@ -537,6 +655,8 @@ async def _balance_before(
     before: datetime | None,
 ) -> Decimal:
     """Net balance of everything qualifying that happened before `before`."""
+
+    from app.models.returns import SaleReturn
 
     if before is None:
         return _ZERO
@@ -557,8 +677,16 @@ async def _balance_before(
             )
         )
     ).scalar()
+    returns_total = (
+        await session.execute(
+            select(func.sum(SaleReturn.ar_amount)).where(
+                *_customer_returns_filter(shop_id, customer_id),
+                SaleReturn.created_at < before,
+            )
+        )
+    ).scalar()
 
-    return _money(sales) - _money(payments)
+    return _money(sales) - _money(payments) - _money(returns_total)
 
 
 def _validate_statement_arguments(
@@ -651,6 +779,7 @@ async def get_customer_statement(
                 payment_id=row.payment_id,
                 invoice_number=row.invoice_number,
                 payment_method=_as_payment_method(row.payment_method),
+                return_id=row.return_id,
             )
         )
 

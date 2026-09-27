@@ -361,6 +361,10 @@ async def update_purchase(
 
     purchase = await _get_purchase_for_update(session, shop_id, purchase_id)
 
+    from app.services import returns as returns_service
+
+    await returns_service.assert_purchase_has_no_returns(session, purchase.id)
+
     new_supplier_id = purchase.supplier_id if supplier_id is None else supplier_id
     if supplier_id is not None:
         await _get_supplier(session, shop_id, supplier_id)
@@ -508,6 +512,10 @@ async def delete_purchase(
     """
 
     purchase = await _get_purchase_for_update(session, shop_id, purchase_id)
+
+    from app.services import returns as returns_service
+
+    await returns_service.assert_purchase_has_no_returns(session, purchase.id)
 
     for item in purchase.items:
         await inventory_service.remove_stock(

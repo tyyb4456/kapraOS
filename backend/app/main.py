@@ -18,7 +18,6 @@ from app.api.products import router as products_router
 from app.api.purchases import router as purchases_router
 from app.api.reporting import compat_router as reporting_compat_router
 from app.api.reporting import router as reporting_router
-from app.api.returns import router as returns_router
 from app.api.sales import router as sales_router
 from app.api.shops import router as shops_router
 from app.api.suppliers import router as suppliers_router
@@ -47,7 +46,6 @@ def create_app() -> FastAPI:
     app.include_router(purchases_router)
     app.include_router(payments_router)
     app.include_router(inventory_router)
-    app.include_router(returns_router)
     app.include_router(shops_router)
 
     return app

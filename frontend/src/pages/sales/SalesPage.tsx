@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Undo2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -24,6 +24,7 @@ import {
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
 import { getSales, updateSale, deleteSale } from '../../lib/api/sales.ts';
 import { getCustomers } from '../../lib/api/customers.ts';
+import { SaleReturnDialog } from '../../components/returns/SaleReturnDialog.tsx';
 import type { Sale, Customer } from '../../types/index.ts';
 
 export function SalesPage() {
@@ -36,6 +37,7 @@ export function SalesPage() {
   const [editData, setEditData] = useState({ customer_id: '', invoice_number: '', discount: 0 });
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [returning, setReturning] = useState<Sale | null>(null);
 
   const reload = async () => {
     const data = await getSales();
@@ -271,6 +273,18 @@ export function SalesPage() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 px-0"
+                        title="Customer return (put stock back, reduce Khata)"
+                        onClick={() => {
+                          setReturning(sale);
+                          setError(null);
+                        }}
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0"
                         title="Edit sale (customer / invoice / discount)"
                         onClick={() => openEdit(sale)}
                       >
@@ -339,6 +353,12 @@ export function SalesPage() {
           />
         </form>
       </Dialog>
+
+      <SaleReturnDialog
+        sale={returning}
+        onClose={() => setReturning(null)}
+        onSuccess={() => reload()}
+      />
     </PageContainer>
   );
 }

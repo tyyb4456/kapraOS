@@ -7,39 +7,56 @@ post ledger entries.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
-from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import DbSession, ShopId
-from app.services import sales as sales_service
-from app.services.inventory import InsufficientStockError
-from app.services.sales import (
-    SaleError,
-    SaleNotFoundError,
-    SaleNotEditableError,
-    ShopNotFoundError,
-    CustomerNotFoundError,
-    VariantNotFoundError,
-    EmptySaleError,
-    InvalidSaleItemError,
-    InvalidSaleTotalsError,
-    DuplicateSaleItemError,
+from app.models.customer import Customer
+from app.models.payment import Payment
+from app.models.sale import Sale, SaleItem, SaleStatus
+from app.schemas.returns import (
+    CreateSaleReturnRequest,
+    SaleReturnResponse,
+    SaleReturnWithRemainingResponse,
 )
 from app.schemas.sales import (
     CreateSaleRequest,
-    UpdateSaleRequest,
-    SaleResponse,
     SaleListItemResponse,
+    SaleResponse,
     SaleSummaryResponse,
+    UpdateSaleRequest,
 )
-from app.models.sale import Sale, SaleItem, SaleStatus
-from app.models.customer import Customer
-from app.models.payment import Payment, PaymentMethod
+from app.services import returns as returns_service
+from app.services import sales as sales_service
+from app.services.inventory import InsufficientStockError
+from app.services.returns import (
+    EmptyReturnError,
+    ExceedsRemainingQuantityError,
+    InvalidReturnQuantityError,
+    SaleNotReturnableError,
+)
+from app.services.returns import (
+    SaleItemNotFoundError as ReturnSaleItemNotFoundError,
+)
+from app.services.returns import (
+    SaleNotFoundError as ReturnSaleNotFoundError,
+)
+from app.services.sales import (
+    CustomerNotFoundError,
+    DuplicateSaleItemError,
+    EmptySaleError,
+    InvalidSaleItemError,
+    InvalidSaleTotalsError,
+    SaleNotEditableError,
+    SaleNotFoundError,
+    ShopNotFoundError,
+    VariantNotFoundError,
+)
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -182,17 +199,48 @@ async def list_sales(
     return results
 
 
+@router.get("/summary", response_model=SaleSummaryResponse)
+async def sales_summary(
+    shop_id: ShopId,
+    db: DbSession,
+) -> SaleSummaryResponse:
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
+    total_row = (await db.execute(
+        select(func.coalesce(func.sum(Sale.total), 0), func.count(Sale.id)).where(
+            Sale.shop_id == shop_id,
+            Sale.created_at >= today,
+            Sale.created_at <= tomorrow,
+            Sale.status.in_([SaleStatus.COMPLETED, SaleStatus.PARTIAL]),
+        )
+    )).one()
+    return SaleSummaryResponse(
+        today_sales=Decimal(str(total_row[0])),
+        today_sales_count=total_row[1],
+        today_gross_profit=Decimal("0"),
+        today_net_profit=Decimal("0"),
+    )
+
+
 @router.get("/{sale_id}", response_model=SaleResponse)
 async def get_sale(
     sale_id: UUID,
     shop_id: ShopId,
     db: DbSession,
 ) -> SaleResponse:
-    sale = await db.get(Sale, sale_id)
-    if sale is None or sale.shop_id != shop_id:
+    # Eager-load items + customer: async sessions can't lazy-load inside
+    # `model_validate` (raises MissingGreenlet). See traceback on
+    # GET /sales/{id} -> SaleResponse.items.
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == sale_id, Sale.shop_id == shop_id)
+        .options(selectinload(Sale.items), selectinload(Sale.customer))
+    )
+    sale = result.scalars().first()
+    if sale is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
     response = SaleResponse.model_validate(sale)
-    if sale.customer:
+    if sale.customer is not None:
         response.customer_name = sale.customer.name
     return response
 
@@ -243,6 +291,7 @@ async def update_sale(
         DuplicateSaleItemError,
         SaleNotEditableError,
         InsufficientStockError,
+        returns_service.SaleHasReturnsError,
     ) as exc:
         raise _unprocessable(exc) from exc
     await db.commit()
@@ -267,27 +316,94 @@ async def delete_sale(
         raise _not_found(exc) from exc
     except InsufficientStockError as exc:
         raise _unprocessable(exc) from exc
+    except returns_service.SaleHasReturnsError as exc:
+        raise _unprocessable(exc) from exc
     await db.commit()
 
 
-@router.get("/summary", response_model=SaleSummaryResponse)
-async def sales_summary(
+@router.post(
+    "/{sale_id}/returns",
+    response_model=SaleReturnWithRemainingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_sale_return(
+    sale_id: UUID,
     shop_id: ShopId,
     db: DbSession,
-) -> SaleSummaryResponse:
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
-    total_row = (await db.execute(
-        select(func.coalesce(func.sum(Sale.total), 0), func.count(Sale.id)).where(
-            Sale.shop_id == shop_id,
-            Sale.created_at >= today,
-            Sale.created_at <= tomorrow,
-            Sale.status.in_([SaleStatus.COMPLETED, SaleStatus.PARTIAL]),
+    body: CreateSaleReturnRequest,
+) -> SaleReturnWithRemainingResponse:
+    """Create a customer return against a sale (deterministic, auditable).
+
+    The request carries only intent (which sale item, how much); all pricing,
+    totals, inventory, receivable and ledger effects are backend-authoritative.
+    """
+
+    try:
+        sale_return = await returns_service.create_sale_return(
+            db,
+            shop_id=shop_id,
+            sale_id=sale_id,
+            lines=[
+                returns_service.SaleReturnLineInput(
+                    sale_item_id=line.sale_item_id,
+                    quantity=line.quantity,
+                )
+                for line in body.lines
+            ],
+            notes=body.notes,
         )
-    )).one()
-    return SaleSummaryResponse(
-        today_sales=Decimal(str(total_row[0])),
-        today_sales_count=total_row[1],
-        today_gross_profit=Decimal("0"),
-        today_net_profit=Decimal("0"),
+    except ReturnSaleNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except ReturnSaleItemNotFoundError as exc:
+        raise _not_found(exc) from exc
+    except SaleNotReturnableError as exc:
+        raise _unprocessable(exc) from exc
+    except (
+        EmptyReturnError,
+        InvalidReturnQuantityError,
+        ExceedsRemainingQuantityError,
+    ) as exc:
+        raise _unprocessable(exc) from exc
+
+    await db.commit()
+    await db.refresh(sale_return, attribute_names=["items"])
+    remaining = await returns_service.get_remaining_sale_quantities(
+        db, shop_id=shop_id, sale_id=sale_id
     )
+    response = SaleReturnResponse.model_validate(sale_return)
+    return SaleReturnWithRemainingResponse(
+        **{
+            "return": response,
+            "remaining_quantities": {str(k): v for k, v in remaining.items()},
+            "sale_id": sale_id,
+            "total_return_amount": sale_return.total_amount,
+            "ar_amount": sale_return.ar_amount,
+            "cash_refund": sale_return.cash_refund,
+        }
+    )
+
+
+@router.get("/{sale_id}/returns", response_model=list[SaleReturnResponse])
+async def list_sale_returns(
+    sale_id: UUID,
+    shop_id: ShopId,
+    db: DbSession,
+) -> list[SaleReturnResponse]:
+    """List all customer returns for a sale (tenant-scoped, audit trail)."""
+
+    from app.models.returns import SaleReturn
+
+    sale = await db.get(Sale, sale_id)
+    if sale is None or sale.shop_id != shop_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
+
+    rows = (
+        await db.execute(
+            select(SaleReturn)
+            .where(SaleReturn.shop_id == shop_id, SaleReturn.sale_id == sale_id)
+            .order_by(SaleReturn.created_at.asc())
+        )
+    ).scalars().all()
+    for row in rows:
+        await db.refresh(row, attribute_names=["items"])
+    return [SaleReturnResponse.model_validate(row) for row in rows]

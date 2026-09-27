@@ -125,6 +125,7 @@ export interface KhataEntry {
   payment_id?: string | null;
   sale_id?: string | null;
   purchase_id?: string | null;
+  return_id?: string | null;
 }
 
 // Supplier & Payables
@@ -152,6 +153,66 @@ export interface SaleItem {
   quantity: number;
   unit_price: number;
   subtotal: number;
+}
+
+export interface SaleDetailItem {
+  id: string;
+  variant_id: string;
+  quantity: number | string;
+  unit_price: number | string;
+  cost_price?: number | string;
+  discount?: number | string;
+  total?: number | string;
+}
+
+export interface SaleDetail {
+  id: string;
+  shop_id: string;
+  invoice_number: string | null;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  status: SaleStatus;
+  subtotal: number | string;
+  discount: number | string;
+  total: number | string;
+  paid_amount: number | string;
+  due_amount?: number | string;
+  items: SaleDetailItem[];
+  created_at: string;
+}
+
+export interface SaleReturnItem {
+  id: string;
+  sale_item_id: string;
+  variant_id: string;
+  quantity: number | string;
+  unit_price: number | string;
+  cost_price: number | string;
+  discount: number | string;
+  total: number | string;
+}
+
+export interface SaleReturn {
+  id: string;
+  shop_id: string;
+  sale_id: string;
+  customer_id?: string | null;
+  total_amount: number | string;
+  ar_amount: number | string;
+  cash_refund: number | string;
+  cogs_amount: number | string;
+  notes?: string | null;
+  created_at: string;
+  items: SaleReturnItem[];
+}
+
+export interface CreateSaleReturnResponse {
+  return: SaleReturn;
+  remaining_quantities: Record<string, number | string>;
+  sale_id: string;
+  total_return_amount: number | string;
+  ar_amount: number | string;
+  cash_refund: number | string;
 }
 
 export interface Sale {
@@ -184,6 +245,56 @@ export interface PurchaseItem {
   quantity: number;
   unit_cost: number;
   subtotal: number;
+}
+
+export interface PurchaseDetailItem {
+  id: string;
+  variant_id: string;
+  quantity: number | string;
+  unit_cost: number | string;
+  total?: number | string;
+}
+
+export interface PurchaseDetail {
+  id: string;
+  shop_id: string;
+  supplier_id: string;
+  invoice_number: string | null;
+  subtotal?: number | string;
+  discount?: number | string;
+  total: number | string;
+  paid_amount: number | string;
+  due_amount?: number | string;
+  items: PurchaseDetailItem[];
+  created_at: string;
+}
+
+export interface PurchaseReturnItem {
+  id: string;
+  purchase_item_id: string;
+  variant_id: string;
+  quantity: number | string;
+  unit_cost: number | string;
+  discount: number | string;
+  total: number | string;
+}
+
+export interface PurchaseReturn {
+  id: string;
+  shop_id: string;
+  purchase_id: string;
+  supplier_id: string;
+  total_amount: number | string;
+  notes?: string | null;
+  created_at: string;
+  items: PurchaseReturnItem[];
+}
+
+export interface CreatePurchaseReturnResponse {
+  return: PurchaseReturn;
+  remaining_quantities: Record<string, number | string>;
+  purchase_id: string;
+  total_return_amount: number | string;
 }
 
 export interface Purchase {

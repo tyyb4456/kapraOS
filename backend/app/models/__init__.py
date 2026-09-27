@@ -40,6 +40,12 @@ from app.models.product import (
     VariantAttributeValue,
 )
 from app.models.purchase import Purchase, PurchaseItem
+from app.models.returns import (
+    PurchaseReturn,
+    PurchaseReturnItem,
+    SaleReturn,
+    SaleReturnItem,
+)
 from app.models.sale import Sale, SaleItem, SaleStatus
 from app.models.shop import Shop
 from app.models.supplier import Supplier
@@ -72,8 +78,12 @@ __all__ = [
     "ProductVariant",
     "Purchase",
     "PurchaseItem",
+    "PurchaseReturn",
+    "PurchaseReturnItem",
     "Sale",
     "SaleItem",
+    "SaleReturn",
+    "SaleReturnItem",
     "SaleStatus",
     "Shop",
     "Supplier",

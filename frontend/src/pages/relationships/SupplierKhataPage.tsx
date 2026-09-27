@@ -267,7 +267,9 @@ export function SupplierKhataPage() {
                       {formatDate(entry.entry_date, true)}
                     </TableCell>
                     <TableCell className={`font-medium ${entry.credit > 0 ? 'text-zinc-900' : 'text-emerald-800'}`}>
-                      {entry.notes || (entry.credit > 0 ? 'Purchase on Credit' : 'Payment Made')}
+                      {entry.entry_type === 'return'
+                        ? 'Supplier Return'
+                        : (entry.notes || (entry.credit > 0 ? 'Purchase on Credit' : 'Payment Made'))}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-zinc-500">
                       {entry.reference || '—'}

@@ -567,6 +567,10 @@ async def update_sale(
             f"Sale {sale_id} is {sale.status.value}; only completed/partial sales can be edited"
         )
 
+    from app.services import returns as returns_service
+
+    await returns_service.assert_sale_has_no_returns(session, sale.id)
+
     # Resolve the new customer (sentinel `...` means "leave alone").
     new_customer_id = sale.customer_id
     if customer_id is not ...:
@@ -740,6 +744,10 @@ async def delete_sale(
 
     sale = await _get_sale_for_update(session, shop_id, sale_id)
 
+    from app.services import returns as returns_service
+
+    await returns_service.assert_sale_has_no_returns(session, sale.id)
+
     for item in sale.items:
         await inventory_service.add_stock(
             session,
@@ -765,3 +773,4 @@ async def delete_sale(
     await session.flush()
     await session.delete(sale)
     await session.flush()
+

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Undo2 } from 'lucide-react';
 import {
   PageContainer,
   PageHeader,
@@ -24,6 +24,7 @@ import {
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
 import { getPurchases, updatePurchase, deletePurchase } from '../../lib/api/purchases.ts';
 import { getSuppliers } from '../../lib/api/suppliers.ts';
+import { PurchaseReturnDialog } from '../../components/returns/PurchaseReturnDialog.tsx';
 import type { Purchase, Supplier } from '../../types/index.ts';
 
 export function PurchasesPage() {
@@ -36,6 +37,7 @@ export function PurchasesPage() {
   const [editData, setEditData] = useState({ supplier_id: '', invoice_number: '', discount: 0 });
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [returning, setReturning] = useState<Purchase | null>(null);
 
   const reload = async () => {
     const data = await getPurchases();
@@ -241,6 +243,18 @@ export function PurchasesPage() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 px-0"
+                        title="Supplier return (send stock back, reduce payable)"
+                        onClick={() => {
+                          setReturning(purchase);
+                          setError(null);
+                        }}
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0"
                         title="Edit purchase (supplier / invoice / discount)"
                         onClick={() => openEdit(purchase)}
                       >
@@ -309,6 +323,12 @@ export function PurchasesPage() {
           />
         </form>
       </Dialog>
+
+      <PurchaseReturnDialog
+        purchase={returning}
+        onClose={() => setReturning(null)}
+        onSuccess={() => reload()}
+      />
     </PageContainer>
   );
 }
