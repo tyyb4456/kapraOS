@@ -27,6 +27,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import cached_reads
+from app.cache import service as cache_service
 from app.models.customer import Customer
 from app.models.payment import Payment
 from app.models.sale import Sale
@@ -81,7 +83,7 @@ async def list_customers(
 
     results = []
     for customer in customers:
-        balance = await receivables_service.get_customer_balance(
+        balance = await cached_reads.get_cached_customer_balance(
             db, shop_id=shop_id, customer_id=customer.id
         )
         results.append(CustomerResponse(
@@ -155,7 +157,7 @@ async def read_customer(
     )).scalar_one_or_none()
     if customer is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
-    balance = await receivables_service.get_customer_balance(
+    balance = await cached_reads.get_cached_customer_balance(
         db, shop_id=shop_id, customer_id=customer.id
     )
     return CustomerResponse(
@@ -213,7 +215,9 @@ async def update_customer(
     await db.flush()
     await db.commit()
     await db.refresh(customer)
-    balance = await receivables_service.get_customer_balance(
+    # Profile edit changes the cached summary (name/phone) — evict after commit.
+    await cache_service.invalidate_customer(shop_id, customer.id)
+    balance = await cached_reads.get_cached_customer_balance(
         db, shop_id=shop_id, customer_id=customer.id
     )
     return CustomerResponse(
@@ -271,6 +275,7 @@ async def delete_customer(
         )
     await db.delete(customer)
     await db.commit()
+    await cache_service.invalidate_customer(shop_id, customer_id)
 
 
 @router.get(
@@ -284,7 +289,7 @@ async def read_customer_balance(
     db: DbSession,
 ) -> CustomerBalanceResponse:
     try:
-        balance = await receivables_service.get_customer_balance(
+        balance = await cached_reads.get_cached_customer_balance(
             db, shop_id=shop_id, customer_id=customer_id
         )
     except CustomerNotFoundError as exc:
@@ -316,7 +321,7 @@ async def read_customer_statement(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CustomerStatementResponse:
     try:
-        statement = await receivables_service.get_customer_statement(
+        statement = await cached_reads.get_cached_customer_statement(
             db,
             shop_id=shop_id,
             customer_id=customer_id,
@@ -343,7 +348,7 @@ async def read_customer_summary(
     db: DbSession,
 ) -> CustomerSummaryResponse:
     try:
-        summary = await receivables_service.get_customer_summary(
+        summary = await cached_reads.get_cached_customer_summary(
             db, shop_id=shop_id, customer_id=customer_id
         )
     except CustomerNotFoundError as exc:
@@ -393,4 +398,7 @@ async def create_customer_payment(
         balance=CustomerBalanceResponse.model_validate(balance),
     )
     await db.commit()
+    # Khata-affecting mutation: evict customer + dashboard + sales caches
+    # only after the commit succeeded (a rollback keeps old cache valid).
+    await cache_service.after_customer_payment_committed(shop_id, customer_id)
     return response

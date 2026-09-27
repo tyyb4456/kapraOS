@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings>=2.15.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "redis>=5.0.0",
     "ruff>=0.16.9",
     "sqlalchemy[asyncio]>=2.0.52",
     "uvicorn[standard]>=0.52.4",

@@ -8,5 +8,6 @@ pydantic_settings
 alembic
 httpx
 pytest
+redis>=5.0.0
 deepagents
 langchain

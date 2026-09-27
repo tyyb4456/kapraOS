@@ -4,6 +4,9 @@ Routers are included here as their domains are built. All domains
 are now exposed via REST endpoints.
 """
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.accounting import router as accounting_router
@@ -21,7 +24,15 @@ from app.api.reporting import router as reporting_router
 from app.api.sales import router as sales_router
 from app.api.shops import router as shops_router
 from app.api.suppliers import router as suppliers_router
+from app.cache.redis import close_redis
 from app.config import get_settings
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    """Close the shared Redis client on shutdown (fail-open, never raises)."""
+    yield
+    await close_redis()
 
 
 def create_app() -> FastAPI:
@@ -30,6 +41,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         debug=settings.debug,
+        lifespan=lifespan,
     )
 
     app.include_router(health_router)

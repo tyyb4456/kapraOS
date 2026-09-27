@@ -15,6 +15,8 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import keys as cache_keys
+from app.cache import service as cache_service
 from app.services import inventory as inventory_service
 from app.services.inventory import (
     InventoryError,
@@ -99,6 +101,19 @@ async def list_inventory(
     low_stock: bool = False,
     search: str | None = None,
 ) -> list[InventoryResponse]:
+    # Read-through cache: key includes every filter affecting the response.
+    cache_key = cache_keys.inventory_list_key(
+        shop_id,
+        variant_id=str(variant_id) if variant_id is not None else None,
+        low_stock=low_stock,
+        search=search,
+    )
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, list):
+        try:
+            return [InventoryResponse.model_validate(row) for row in cached]
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     stmt = (
         select(ProductVariant)
         .options(
@@ -142,6 +157,11 @@ async def list_inventory(
         attrs = _extract_attributes(v)
         responses.append(_build_inventory_response(inv, v, v.product, attrs))
 
+    await cache_service.set_json(
+        cache_key,
+        [r.model_dump(mode="json") for r in responses],
+        cache_service.TTL_INVENTORY_SECONDS,
+    )
     return responses
 
 
@@ -224,6 +244,13 @@ async def get_inventory(
     shop_id: ShopId,
     db: DbSession,
 ) -> InventoryResponse:
+    cache_key = cache_keys.inventory_variant_key(shop_id, variant_id)
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, dict):
+        try:
+            return InventoryResponse.model_validate(cached)
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     stmt = (
         select(ProductVariant)
         .options(
@@ -243,7 +270,13 @@ async def get_inventory(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found for this shop")
 
     attrs = _extract_attributes(variant)
-    return _build_inventory_response(variant.inventory, variant, variant.product, attrs)
+    response = _build_inventory_response(variant.inventory, variant, variant.product, attrs)
+    await cache_service.set_json(
+        cache_key,
+        response.model_dump(mode="json"),
+        cache_service.TTL_INVENTORY_SECONDS,
+    )
+    return response
 
 
 @router.post("/{variant_id}/adjust", response_model=InventoryResponse)
@@ -282,5 +315,8 @@ async def adjust_stock(
         .where(ProductVariant.id == variant_id, ProductVariant.shop_id == shop_id)
     )
     variant = (await db.execute(stmt)).scalar_one()
+    # No commit here by design (caller owns transactions); evict best-effort
+    # so the next read repopulates from PostgreSQL.
+    await cache_service.after_inventory_adjust_committed(shop_id, variant_id)
     attrs = _extract_attributes(variant)
     return _build_inventory_response(variant.inventory, variant, variant.product, attrs)

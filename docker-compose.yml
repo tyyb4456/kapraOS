@@ -25,6 +25,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── Redis (Step 10 read-cache) ───────────────────────────────────
+  # Optional but recommended: the backend uses REDIS_URL when set and
+  # otherwise falls back to a process-local in-memory cache, so this
+  # service is not required for the app to boot.
+  redis:
+    image: redis:7-alpine
+    container_name: kapraos-redis
+    restart: unless-stopped
+    # No password in local compose; production should use a managed Redis
+    # with authentication and set REDIS_URL accordingly (never commit it).
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # ─── FastAPI backend (uncomment when ready to containerise) ───
   # backend:
   #   build:
@@ -35,8 +56,11 @@ services:
   #   depends_on:
   #     db:
   #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
   #   environment:
   #     DATABASE_URL: postgresql+asyncpg://kapraos_app:changeme@db:5432/kapraos
+  #     REDIS_URL: redis://redis:6379/0
   #     APP_ENV: local
   #     DEBUG: "true"
   #     DB_ECHO: "false"
@@ -45,4 +69,6 @@ services:
 
 volumes:
   pgdata:
+    driver: local
+  redisdata:
     driver: local

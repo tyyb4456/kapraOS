@@ -16,6 +16,8 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import keys as cache_keys
+from app.cache import service as cache_service
 from app.models.category import Category
 from app.models.brand import Brand
 from app.models.attribute import Attribute, AttributeValue
@@ -143,6 +145,7 @@ async def create_category(
     db.add(category)
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return CategoryResponse.model_validate(category)
 
 
@@ -187,6 +190,7 @@ async def update_category(
         category.parent_id = new_parent
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return CategoryResponse.model_validate(category)
 
 
@@ -236,6 +240,7 @@ async def delete_category(
         await _delete_product_row(db, shop_id, product, force=True)
     await db.delete(category)
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
 
 
 # ---- Brands ----
@@ -266,6 +271,7 @@ async def create_brand(
     db.add(brand)
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return BrandResponse.model_validate(brand)
 
 
@@ -291,6 +297,7 @@ async def update_brand(
         brand.name = name
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return BrandResponse.model_validate(brand)
 
 
@@ -313,6 +320,7 @@ async def delete_brand(
     )
     await db.delete(brand)
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
 
 
 # ---- Attributes ----
@@ -343,6 +351,7 @@ async def create_attribute(
     db.add(attr)
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return AttributeResponse.model_validate(attr)
 
 
@@ -370,6 +379,7 @@ async def update_attribute(
         attr.name = name
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return AttributeResponse.model_validate(attr)
 
 
@@ -388,6 +398,7 @@ async def delete_attribute(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attribute not found")
     await db.delete(attr)
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
 
 
 @router.get("/attributes/{attribute_id}/values", response_model=list[AttributeValueResponse])
@@ -429,6 +440,7 @@ async def create_attribute_value(
     db.add(value)
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return AttributeValueResponse.model_validate(value)
 
 
@@ -456,6 +468,7 @@ async def update_attribute_value(
         row.value = value
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
     return AttributeValueResponse.model_validate(row)
 
 
@@ -474,6 +487,7 @@ async def delete_attribute_value(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attribute value not found")
     await db.delete(row)
     await db.commit()
+    await cache_service.invalidate_product(shop_id)
 
 
 # ---- Product Variants (registered before /{product_id} so /variants is reachable) ----
@@ -485,6 +499,17 @@ async def list_variants(
     product_id: UUID | None = None,
     sku: str | None = None,
 ) -> list[ProductVariantResponse]:
+    cache_key = cache_keys.variant_list_key(
+        shop_id,
+        product_id=str(product_id) if product_id is not None else None,
+        sku=sku,
+    )
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, list):
+        try:
+            return [ProductVariantResponse.model_validate(row) for row in cached]
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     stmt = select(ProductVariant).where(ProductVariant.shop_id == shop_id)
     if product_id is not None:
         stmt = stmt.where(ProductVariant.product_id == product_id)
@@ -492,7 +517,13 @@ async def list_variants(
         stmt = stmt.where(ProductVariant.sku == sku)
     stmt = stmt.order_by(ProductVariant.sku.asc())
     variants = (await db.execute(stmt)).scalars().all()
-    return [ProductVariantResponse.model_validate(v) for v in variants]
+    responses = [ProductVariantResponse.model_validate(v) for v in variants]
+    await cache_service.set_json(
+        cache_key,
+        [r.model_dump(mode="json") for r in responses],
+        cache_service.TTL_PRODUCT_SECONDS,
+    )
+    return responses
 
 
 @router.get("/variants/{variant_id}", response_model=ProductVariantResponse)
@@ -501,10 +532,21 @@ async def get_variant(
     shop_id: ShopId,
     db: DbSession,
 ) -> ProductVariantResponse:
+    cache_key = cache_keys.variant_detail_key(shop_id, variant_id)
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, dict):
+        try:
+            return ProductVariantResponse.model_validate(cached)
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     variant = await db.get(ProductVariant, variant_id)
     if variant is None or variant.shop_id != shop_id:
         raise _not_found(f"Variant {variant_id} not found")
-    return ProductVariantResponse.model_validate(variant)
+    response = ProductVariantResponse.model_validate(variant)
+    await cache_service.set_json(
+        cache_key, response.model_dump(mode="json"), cache_service.TTL_PRODUCT_SECONDS
+    )
+    return response
 
 
 @router.post("/variants", response_model=ProductVariantResponse, status_code=status.HTTP_201_CREATED)
@@ -540,6 +582,10 @@ async def create_variant(
     db.add(variant)
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(
+        shop_id, product_id=variant.product_id, variant_id=variant.id
+    )
+    await cache_service.invalidate_inventory_variant(shop_id, variant.id)
     return ProductVariantResponse.model_validate(variant)
 
 
@@ -612,6 +658,10 @@ async def update_variant(
         variant.unit = _resolve_unit(fields["unit"])
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(
+        shop_id, product_id=variant.product_id, variant_id=variant.id
+    )
+    await cache_service.invalidate_inventory_variant(shop_id, variant.id)
     return ProductVariantResponse.model_validate(variant)
 
 
@@ -745,6 +795,10 @@ async def delete_variant(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
     await _delete_variant_row(db, shop_id, variant, force=force)
     await db.commit()
+    await cache_service.invalidate_product(
+        shop_id, product_id=variant.product_id, variant_id=variant.id
+    )
+    await cache_service.invalidate_inventory_variant(shop_id, variant.id)
 
 
 # ---- Products ----
@@ -758,6 +812,19 @@ async def list_products(
     product_type: str | None = None,
     search: str | None = None,
 ) -> list[ProductResponse]:
+    cache_key = cache_keys.product_list_key(
+        shop_id,
+        category_id=str(category_id) if category_id is not None else None,
+        brand_id=str(brand_id) if brand_id is not None else None,
+        product_type=product_type,
+        search=search,
+    )
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, list):
+        try:
+            return [ProductResponse.model_validate(row) for row in cached]
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     stmt = (
         select(Product)
         .options(
@@ -776,7 +843,13 @@ async def list_products(
         stmt = stmt.where(Product.name.ilike(f"%{search}%"))
     stmt = stmt.order_by(Product.name.asc())
     products = (await db.execute(stmt)).scalars().all()
-    return [ProductResponse.model_validate(p) for p in products]
+    responses = [ProductResponse.model_validate(p) for p in products]
+    await cache_service.set_json(
+        cache_key,
+        [r.model_dump(mode="json") for r in responses],
+        cache_service.TTL_PRODUCT_SECONDS,
+    )
+    return responses
 
 
 @router.get("/{product_id}", response_model=ProductDetailResponse)
@@ -785,6 +858,13 @@ async def get_product(
     shop_id: ShopId,
     db: DbSession,
 ) -> ProductDetailResponse:
+    cache_key = cache_keys.product_detail_key(shop_id, product_id)
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, dict):
+        try:
+            return ProductDetailResponse.model_validate(cached)
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     stmt = (
         select(Product)
         .options(
@@ -797,7 +877,11 @@ async def get_product(
     product = (await db.execute(stmt)).scalar_one_or_none()
     if product is None:
         raise _not_found(f"Product {product_id} not found")
-    return ProductDetailResponse.model_validate(product)
+    response = ProductDetailResponse.model_validate(product)
+    await cache_service.set_json(
+        cache_key, response.model_dump(mode="json"), cache_service.TTL_PRODUCT_SECONDS
+    )
+    return response
 
 
 def _resolve_unit(unit_str: str) -> str:
@@ -858,6 +942,7 @@ async def create_product(
 
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id, product_id=product.id)
 
     stmt = (
         select(Product)
@@ -949,6 +1034,7 @@ async def update_product(
         product.unit = fields["unit"]
     await db.flush()
     await db.commit()
+    await cache_service.invalidate_product(shop_id, product_id=product.id)
     stmt = (
         select(Product)
         .options(
@@ -976,3 +1062,4 @@ async def delete_product(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     await _delete_product_row(db, shop_id, product, force=force)
     await db.commit()
+    await cache_service.invalidate_product(shop_id, product_id=product_id)

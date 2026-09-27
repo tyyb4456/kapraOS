@@ -12,6 +12,8 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import keys as cache_keys
+from app.cache import service as cache_service
 from app.models.purchase import Purchase, PurchaseItem
 from app.models.supplier import Supplier
 from app.schemas.purchases import (
@@ -96,6 +98,13 @@ async def create_purchase(
 
     await db.commit()
 
+    # Purchase mutates the supplier Khata, stock and summaries: evict after commit.
+    await cache_service.after_purchase_committed(
+        shop_id,
+        supplier_id=purchase.supplier_id,
+        variant_ids=[item.variant_id for item in body.items],
+    )
+
     # Eagerly load items to avoid greenlet issues with model_validate
     items = (await db.execute(
         select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
@@ -139,6 +148,20 @@ async def list_purchases(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[PurchaseListItemResponse]:
+    cache_key = cache_keys.purchase_list_key(
+        shop_id,
+        supplier_id=str(supplier_id) if supplier_id is not None else None,
+        start=start_date.isoformat() if start_date is not None else None,
+        end=end_date.isoformat() if end_date is not None else None,
+        limit=limit,
+        offset=offset,
+    )
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, list):
+        try:
+            return [PurchaseListItemResponse.model_validate(row) for row in cached]
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     stmt = (
         select(Purchase, Supplier.name)
         .join(Supplier, Purchase.supplier_id == Supplier.id, isouter=True)
@@ -219,6 +242,11 @@ async def list_purchases(
                 returns_count=returns_count_by_purchase.get(purchase.id, 0),
             )
         )
+    await cache_service.set_json(
+        cache_key,
+        [r.model_dump(mode="json") for r in purchases],
+        cache_service.TTL_PURCHASE_SECONDS,
+    )
     return purchases
 
 
@@ -361,6 +389,11 @@ async def update_purchase(
     rows = (await db.execute(
         select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
     )).scalars().all()
+    await cache_service.after_purchase_committed(
+        shop_id,
+        supplier_id=purchase.supplier_id,
+        variant_ids=[row.variant_id for row in rows],
+    )
     return _purchase_to_response(purchase, list(rows))
 
 
@@ -370,6 +403,13 @@ async def delete_purchase(
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
+    doomed = await db.get(Purchase, purchase_id)
+    doomed_supplier = doomed.supplier_id if doomed is not None and doomed.shop_id == shop_id else None
+    doomed_variants: list[UUID] = []
+    if doomed is not None and doomed.shop_id == shop_id:
+        doomed_variants = list((await db.execute(
+            select(PurchaseItem.variant_id).where(PurchaseItem.purchase_id == purchase_id)
+        )).scalars().all())
     try:
         await purchases_service.delete_purchase(
             db, shop_id=shop_id, purchase_id=purchase_id
@@ -381,6 +421,9 @@ async def delete_purchase(
     except returns_service.PurchaseHasReturnsError as exc:
         raise _unprocessable(exc) from exc
     await db.commit()
+    await cache_service.after_purchase_committed(
+        shop_id, supplier_id=doomed_supplier, variant_ids=doomed_variants
+    )
 
 
 @router.post(
@@ -431,6 +474,21 @@ async def create_purchase_return(
     await db.refresh(purchase_return, attribute_names=["items"])
     remaining = await returns_service.get_remaining_purchase_quantities(
         db, shop_id=shop_id, purchase_id=purchase_id
+    )
+    purchase_row = await db.get(Purchase, purchase_id)
+    return_supplier = purchase_row.supplier_id if purchase_row is not None else None
+    return_variant_ids: list[UUID] = []
+    if body.lines:
+        wanted = {line.purchase_item_id for line in body.lines}
+        item_rows = (await db.execute(
+            select(PurchaseItem.id, PurchaseItem.variant_id).where(
+                PurchaseItem.purchase_id == purchase_id,
+                PurchaseItem.id.in_(wanted),
+            )
+        )).all()
+        return_variant_ids = [row[1] for row in item_rows]
+    await cache_service.after_supplier_return_committed(
+        shop_id, supplier_id=return_supplier, variant_ids=return_variant_ids
     )
     response = PurchaseReturnResponse.model_validate(purchase_return)
     return PurchaseReturnWithRemainingResponse(

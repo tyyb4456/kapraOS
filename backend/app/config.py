@@ -26,6 +26,20 @@ class Settings(BaseSettings):
     database_url: str
     db_echo: bool = False
 
+    # Redis cache (Step 10). Empty string = no external Redis configured;
+    # the cache layer then uses a process-local in-memory backend with the
+    # same TTL/invalidation semantics (safe for local dev and tests).
+    # Production should set e.g. REDIS_URL=redis://:password@host:6379/0
+    # via the environment (never hardcoded, never committed).
+    redis_url: str = ""
+    # Master switch: when False, all cache reads are skipped and all
+    # invalidations are no-ops (PostgreSQL remains authoritative).
+    cache_enabled: bool = True
+    # When True, every cache hit/miss/set/invalidation is logged at INFO
+    # (key prefix only, never values) so you can watch Redis activity in
+    # the terminal. Off by default to avoid flooding production logs.
+    cache_log_hits: bool = True
+
     # Shop timezone for date-based reporting (e.g. "Asia/Karachi")
     shop_timezone: str = "UTC"
 

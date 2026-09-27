@@ -22,6 +22,8 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import keys as cache_keys
+from app.cache import service as cache_service
 from app.schemas.expenses import CreateExpenseRequest, ExpenseResponse, UpdateExpenseRequest
 from app.services import expenses as expenses_service
 from app.services.expenses import (
@@ -81,6 +83,7 @@ async def create_expense(
 
     response = ExpenseResponse.model_validate(expense)
     await db.commit()
+    await cache_service.after_expense_committed(shop_id)
     return response
 
 
@@ -101,6 +104,19 @@ async def list_expenses(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ExpenseResponse]:
+    cache_key = cache_keys.expense_list_key(
+        shop_id,
+        start=start_date.isoformat() if start_date is not None else None,
+        end=end_date.isoformat() if end_date is not None else None,
+        limit=limit,
+        offset=offset,
+    )
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, list):
+        try:
+            return [ExpenseResponse.model_validate(row) for row in cached]
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     try:
         page = await expenses_service.list_expenses(
             db,
@@ -112,7 +128,13 @@ async def list_expenses(
         )
     except (InvalidStatementRangeError, InvalidPaginationError) as exc:
         raise _unprocessable(exc) from exc
-    return [ExpenseResponse.model_validate(row) for row in page.expenses]
+    responses = [ExpenseResponse.model_validate(row) for row in page.expenses]
+    await cache_service.set_json(
+        cache_key,
+        [r.model_dump(mode="json") for r in responses],
+        cache_service.TTL_EXPENSE_SECONDS,
+    )
+    return responses
 
 
 @router.get(
@@ -170,6 +192,7 @@ async def update_expense(
         raise _unprocessable(exc) from exc
     await db.commit()
     await db.refresh(expense)
+    await cache_service.after_expense_committed(shop_id)
     return ExpenseResponse.model_validate(expense)
 
 
@@ -190,3 +213,4 @@ async def delete_expense(
     except ExpenseNotFoundError as exc:
         raise _not_found(exc) from exc
     await db.commit()
+    await cache_service.after_expense_committed(shop_id)

@@ -20,6 +20,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import cached_reads
 from app.schemas.reporting import (
     BalanceSheetResponse,
     DashboardResponse,
@@ -118,8 +119,9 @@ async def read_dashboard(
     shop_id: ShopId,
     db: DbSession,
 ) -> DashboardResponse:
-    report = await reporting_service.get_dashboard_summary(db, shop_id=shop_id)
-    return DashboardResponse.model_validate(report)
+    # Read-through cache (Step 10): same wrapper the AI dashboard tool
+    # uses. PostgreSQL stays authoritative; a miss simply reloads.
+    return await cached_reads.get_cached_dashboard(db, shop_id=shop_id)
 
 
 async def _financial_summary(
@@ -130,7 +132,7 @@ async def _financial_summary(
     end_date: datetime | None = None,
 ) -> FinancialSummaryResponse:
     try:
-        report = await reporting_service.get_financial_summary(
+        return await cached_reads.get_cached_financial_summary(
             db,
             shop_id=shop_id,
             period=period,
@@ -139,7 +141,6 @@ async def _financial_summary(
         )
     except InvalidReportRangeError as exc:
         raise _unprocessable(exc) from exc
-    return FinancialSummaryResponse.model_validate(report)
 
 
 @router.get(

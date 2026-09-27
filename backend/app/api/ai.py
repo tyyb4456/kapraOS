@@ -59,6 +59,7 @@ from app.ai.tools.returns_write import build_return_write_tools
 from app.ai.tools.sales_write import build_sale_write_tools
 from app.ai.tools.supplier_payments_write import build_supplier_payment_write_tools
 from app.api.dependencies import CurrentUserDep, DbSession
+from app.cache import service as cache_service
 from app.models.user import User
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -259,7 +260,7 @@ async def ai_chat(
             detail=f"AI provider error: {exc}",
         ) from exc
     response = _chat_response(result, client_thread_id)
-    await _settle_transaction(db, response["status"])
+    await _settle_transaction(db, response["status"], tenant.shop_id)
     return response
 
 
@@ -306,11 +307,16 @@ async def ai_chat_resume(
             detail=f"AI provider error: {exc}",
         ) from exc
     response = _chat_response(result, body.thread_id)
-    await _settle_transaction(db, response["status"])
+    await _settle_transaction(db, response["status"], tenant.shop_id, result)
     return response
 
 
-async def _settle_transaction(db: DbSession, run_status: str) -> None:
+async def _settle_transaction(
+    db: DbSession,
+    run_status: str,
+    shop_id: uuid.UUID | None = None,
+    result: Any | None = None,
+) -> None:
     """Commit a finished run; leave a paused run untouched.
 
     The write tools flush but never commit, so the commit here is what
@@ -323,6 +329,12 @@ async def _settle_transaction(db: DbSession, run_status: str) -> None:
     idempotency receipt) together, or nothing at all. A ``paused`` run
     performed no approved mutation (the interrupt fires before the tool
     executes), so its session is deliberately left alone.
+
+    Step 10: after a successful commit that executed a write tool, evict
+    this shop's read caches (tenant-scoped patterns only — never other
+    tenants, never a global flush). Pure-read runs leave the cache alone.
+    Invalidation itself is fail-open: a Redis failure only leaves a
+    short-TTL stale entry, PostgreSQL stays correct.
     """
     if run_status != "done":
         return
@@ -334,3 +346,69 @@ async def _settle_transaction(db: DbSession, run_status: str) -> None:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI provider error: {exc}",
         ) from exc
+    if shop_id is not None and _run_performed_write(result):
+        await cache_service.invalidate_shop_reads(shop_id)
+
+
+_WRITE_TOOL_NAMES = frozenset(
+    {
+        "create_sale",
+        "record_customer_payment",
+        "record_supplier_payment",
+        "record_expense",
+        "create_purchase",
+        "create_customer_return",
+        "create_supplier_return",
+    }
+)
+
+
+def _run_performed_write(result: Any) -> bool:
+    """Best-effort check whether the agent run executed a write tool.
+
+    Inspects returned messages for tool calls / tool results naming a
+    write tool. A non-empty transcript with no write-tool reference means
+    a pure-read run (cache left alone). Missing/unknown shapes default to
+    ``True`` (evict — safe direction: a needless miss beats a stale Khata).
+    """
+    saw_messages = False
+    try:
+        value = getattr(result, "value", result)
+        messages: Any = []
+        if isinstance(value, dict):
+            messages = value.get("messages") or []
+        elif hasattr(value, "messages"):
+            messages = value.messages  # type: ignore[union-attr]
+        elif isinstance(value, (list, tuple)):
+            messages = value
+        for message in messages or []:
+            saw_messages = True
+            names: list[str] = []
+            tool_calls = getattr(message, "tool_calls", None)
+            if isinstance(tool_calls, list):
+                for call in tool_calls:
+                    if isinstance(call, dict):
+                        name = call.get("name")
+                    else:
+                        name = getattr(call, "name", None)
+                    if name:
+                        names.append(str(name))
+            elif isinstance(message, dict):
+                for call in message.get("tool_calls") or []:
+                    if isinstance(call, dict) and call.get("name"):
+                        names.append(str(call["name"]))
+            tool_name = getattr(message, "name", None)
+            if tool_name:
+                names.append(str(tool_name))
+            if any(name in _WRITE_TOOL_NAMES for name in names):
+                return True
+            content = getattr(message, "content", None)
+            if isinstance(content, str) and any(
+                name in content for name in _WRITE_TOOL_NAMES
+            ):
+                return True
+    except Exception:  # noqa: BLE001 — fail open toward eviction
+        return True
+    # Empty/unknown transcript after a committed "done" run: evict, since
+    # this only runs when the DB actually changed or might have.
+    return not saw_messages

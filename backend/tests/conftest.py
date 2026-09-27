@@ -30,6 +30,11 @@ TEST_DATABASE_URL = os.environ.setdefault(
 )
 # Must happen before the first `import app...` anywhere in the test session.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# Step 10: the Redis read-cache is disabled for the general suite so every
+# pre-existing test exercises pure PostgreSQL behavior (proving the cache is
+# a purely additive optimization). `tests/test_cache.py` re-enables it
+# explicitly for its own focused tests via monkeypatching.
+os.environ.setdefault("CACHE_ENABLED", "false")
 
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Path, status
 from sqlalchemy import select
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import service as cache_service
 from app.models.payment import Payment
 from app.models.purchase import Purchase
 from app.models.sale import Sale, SaleStatus
@@ -70,6 +71,10 @@ async def void_payment(
     if payment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
 
+    # Capture Khata owners before the row disappears (post-commit invalidation).
+    void_customer_id = payment.customer_id
+    void_supplier_id = payment.supplier_id
+
     # Roll the allocation back out of the linked document first, so the
     # cached paid_amount never drifts from the remaining Payment rows.
     if payment.sale_id is not None:
@@ -102,3 +107,6 @@ async def void_payment(
     )
     await db.delete(payment)
     await db.commit()
+    await cache_service.after_payment_void_committed(
+        shop_id, customer_id=void_customer_id, supplier_id=void_supplier_id
+    )

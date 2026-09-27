@@ -28,6 +28,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import cached_reads
+from app.cache import service as cache_service
 from app.models.payment import Payment
 from app.models.purchase import Purchase
 from app.models.supplier import Supplier
@@ -71,7 +73,7 @@ async def list_suppliers(
 
     results = []
     for supplier in suppliers:
-        balance = await payables_service.get_supplier_balance(
+        balance = await cached_reads.get_cached_supplier_balance(
             db, shop_id=shop_id, supplier_id=supplier.id
         )
         results.append(SupplierResponse(
@@ -139,7 +141,7 @@ async def read_supplier(
     )).scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found")
-    balance = await payables_service.get_supplier_balance(
+    balance = await cached_reads.get_cached_supplier_balance(
         db, shop_id=shop_id, supplier_id=supplier.id
     )
     return SupplierResponse(
@@ -191,7 +193,8 @@ async def update_supplier(
     await db.flush()
     await db.commit()
     await db.refresh(supplier)
-    balance = await payables_service.get_supplier_balance(
+    await cache_service.invalidate_supplier(shop_id, supplier.id)
+    balance = await cached_reads.get_cached_supplier_balance(
         db, shop_id=shop_id, supplier_id=supplier.id
     )
     return SupplierResponse(
@@ -247,6 +250,7 @@ async def delete_supplier(
         )
     await db.delete(supplier)
     await db.commit()
+    await cache_service.invalidate_supplier(shop_id, supplier_id)
 
 
 def _not_found(exc: Exception) -> HTTPException:
@@ -270,7 +274,7 @@ async def read_supplier_balance(
     db: DbSession,
 ) -> SupplierBalanceResponse:
     try:
-        balance = await payables_service.get_supplier_balance(
+        balance = await cached_reads.get_cached_supplier_balance(
             db, shop_id=shop_id, supplier_id=supplier_id
         )
     except SupplierNotFoundError as exc:
@@ -302,7 +306,7 @@ async def read_supplier_statement(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SupplierStatementResponse:
     try:
-        statement = await payables_service.get_supplier_statement(
+        statement = await cached_reads.get_cached_supplier_statement(
             db,
             shop_id=shop_id,
             supplier_id=supplier_id,
@@ -329,7 +333,7 @@ async def read_supplier_summary(
     db: DbSession,
 ) -> SupplierSummaryResponse:
     try:
-        summary = await payables_service.get_supplier_summary(
+        summary = await cached_reads.get_cached_supplier_summary(
             db, shop_id=shop_id, supplier_id=supplier_id
         )
     except SupplierNotFoundError as exc:
@@ -378,4 +382,5 @@ async def create_supplier_payment(
         balance=SupplierBalanceResponse.model_validate(balance),
     )
     await db.commit()
+    await cache_service.after_supplier_payment_committed(shop_id, supplier_id)
     return response

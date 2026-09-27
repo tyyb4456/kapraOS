@@ -16,6 +16,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import DbSession, ShopId
+from app.cache import keys as cache_keys
+from app.cache import service as cache_service
 from app.models.customer import Customer
 from app.models.payment import Payment
 from app.models.sale import Sale, SaleItem, SaleStatus
@@ -123,6 +125,13 @@ async def create_sale(
     response.net_total = Decimal(sale.total)
     response.returns_count = 0
     await db.commit()
+    # Sale mutates Khata (optional customer), stock and summaries: evict
+    # only after the commit succeeded.
+    await cache_service.after_sale_committed(
+        shop_id,
+        customer_id=sale.customer_id,
+        variant_ids=[item.variant_id for item in body.items],
+    )
     return response
 
 
@@ -137,6 +146,22 @@ async def list_sales(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SaleListItemResponse]:
+    # Key includes every filter affecting the response.
+    cache_key = cache_keys.sales_list_key(
+        shop_id,
+        customer_id=str(customer_id) if customer_id is not None else None,
+        status=status_filter.value if status_filter is not None else None,
+        start=start_date.isoformat() if start_date is not None else None,
+        end=end_date.isoformat() if end_date is not None else None,
+        limit=limit,
+        offset=offset,
+    )
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, list):
+        try:
+            return [SaleListItemResponse.model_validate(row) for row in cached]
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     stmt = select(Sale).where(Sale.shop_id == shop_id)
     if customer_id is not None:
         stmt = stmt.where(Sale.customer_id == customer_id)
@@ -226,6 +251,11 @@ async def list_sales(
             net_total=net_total,
             returns_count=returns_count_by_sale.get(sale.id, 0),
         ))
+    await cache_service.set_json(
+        cache_key,
+        [r.model_dump(mode="json") for r in results],
+        cache_service.TTL_SALES_SECONDS,
+    )
     return results
 
 
@@ -234,6 +264,13 @@ async def sales_summary(
     shop_id: ShopId,
     db: DbSession,
 ) -> SaleSummaryResponse:
+    cache_key = cache_keys.sales_summary_today_key(shop_id)
+    cached = await cache_service.get_json(cache_key)
+    if isinstance(cached, dict):
+        try:
+            return SaleSummaryResponse.model_validate(cached)
+        except Exception:  # noqa: BLE001 — stale payload degrades to a miss
+            pass
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
     total_row = (await db.execute(
@@ -258,7 +295,7 @@ async def sales_summary(
     )).one()
     gross = Decimal(str(total_row[0]))
     returns_total = Decimal(str(returns_row[0]))
-    return SaleSummaryResponse(
+    response = SaleSummaryResponse(
         today_sales=gross,
         today_sales_count=total_row[1],
         today_gross_profit=Decimal("0"),
@@ -267,6 +304,12 @@ async def sales_summary(
         today_returns_count=int(returns_row[1]),
         today_net_sales=gross - returns_total,
     )
+    await cache_service.set_json(
+        cache_key,
+        response.model_dump(mode="json"),
+        cache_service.TTL_SALES_SECONDS,
+    )
+    return response
 
 
 @router.get("/{sale_id}", response_model=SaleResponse)
@@ -367,6 +410,11 @@ async def update_sale(
     response.returned_total = Decimal("0.00")
     response.net_total = Decimal(sale.total)
     response.returns_count = 0
+    await cache_service.after_sale_committed(
+        shop_id,
+        customer_id=sale.customer_id,
+        variant_ids=[line.variant_id for line in sale.items],
+    )
     return response
 
 
@@ -376,6 +424,16 @@ async def delete_sale(
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
+    # Capture the affected customer/variants *before* the void (the service
+    # deletes the rows), so post-commit invalidation stays precise.
+    doomed = await db.get(Sale, sale_id)
+    doomed_customer = doomed.customer_id if doomed is not None and doomed.shop_id == shop_id else None
+    doomed_variants: list[UUID] = []
+    if doomed is not None and doomed.shop_id == shop_id:
+        item_rows = (await db.execute(
+            select(SaleItem.variant_id).where(SaleItem.sale_id == sale_id)
+        )).scalars().all()
+        doomed_variants = list(item_rows)
     try:
         await sales_service.delete_sale(db, shop_id=shop_id, sale_id=sale_id)
     except SaleNotFoundError as exc:
@@ -385,6 +443,9 @@ async def delete_sale(
     except returns_service.SaleHasReturnsError as exc:
         raise _unprocessable(exc) from exc
     await db.commit()
+    await cache_service.after_sale_committed(
+        shop_id, customer_id=doomed_customer, variant_ids=doomed_variants
+    )
 
 
 @router.post(
@@ -435,6 +496,21 @@ async def create_sale_return(
     await db.refresh(sale_return, attribute_names=["items"])
     remaining = await returns_service.get_remaining_sale_quantities(
         db, shop_id=shop_id, sale_id=sale_id
+    )
+    # Affected stock: variants of the returned lines; Khata: the sale's customer.
+    sale_row = await db.get(Sale, sale_id)
+    return_customer = sale_row.customer_id if sale_row is not None else None
+    return_variant_ids: list[UUID] = []
+    if body.lines:
+        wanted = {line.sale_item_id for line in body.lines}
+        item_rows = (await db.execute(
+            select(SaleItem.id, SaleItem.variant_id).where(
+                SaleItem.sale_id == sale_id, SaleItem.id.in_(wanted)
+            )
+        )).all()
+        return_variant_ids = [row[1] for row in item_rows]
+    await cache_service.after_customer_return_committed(
+        shop_id, customer_id=return_customer, variant_ids=return_variant_ids
     )
     response = SaleReturnResponse.model_validate(sale_return)
     return SaleReturnWithRemainingResponse(
