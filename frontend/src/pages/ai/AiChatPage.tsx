@@ -13,6 +13,7 @@ import {
   Textarea,
 } from '../../components/ui/index.ts';
 import { SaleApprovalCard } from '../../components/ai/SaleApprovalCard.tsx';
+import { VoicePanel } from '../../components/ai/VoicePanel.tsx';
 import {
   resumeAiChat,
   sendAiChat,
@@ -181,7 +182,6 @@ export function AiChatPage() {
       setSending(false);
     }
   };
-
   const handleNewChat = () => {
     try {
       localStorage.removeItem(THREAD_STORAGE_KEY);
@@ -196,6 +196,10 @@ export function AiChatPage() {
     setRejectReason('');
     setError(null);
     setNotConfigured(false);
+  };
+
+  const appendVoiceReply = (text: string) => {
+    setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', text }]);
   };
 
   const canApprove = !!pending && pending.length > 0 && pending.every((a) => allowsDecision(a, 'approve'));
@@ -229,10 +233,11 @@ export function AiChatPage() {
         </Alert>
       )}
 
+      <VoicePanel onAgentReply={appendVoiceReply} />
+
       <Card>
         <CardContent className="space-y-4 pt-5">
-          {messages.length === 0 && !pending && (
-            <div className="flex flex-col items-center gap-2 py-10 text-center">
+          {messages.length === 0 && !pending && (            <div className="flex flex-col items-center gap-2 py-10 text-center">
               <div className="w-11 h-11 rounded-full bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center text-white dark:text-zinc-900">
                 <Bot className="w-5 h-5" />
               </div>

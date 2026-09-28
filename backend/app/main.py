@@ -24,6 +24,7 @@ from app.api.reporting import router as reporting_router
 from app.api.sales import router as sales_router
 from app.api.shops import router as shops_router
 from app.api.suppliers import router as suppliers_router
+from app.api.voice import router as voice_router
 from app.cache.redis import close_redis
 from app.config import get_settings
 
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(ai_router)
+    app.include_router(voice_router)
     app.include_router(customers_router)
     app.include_router(suppliers_router)
     app.include_router(accounting_router)

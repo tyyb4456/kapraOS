@@ -11,3 +11,5 @@ pytest
 redis>=5.0.0
 deepagents
 langchain
+livekit-agents
+livekit-api
