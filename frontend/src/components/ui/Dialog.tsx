@@ -50,12 +50,12 @@ export function Dialog({
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative w-full ${getWidthClass(maxWidth)} rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-xl transition-all z-10`}
+        className={`clay-dialog relative w-full ${getWidthClass(maxWidth)} p-6 transition-all z-10`}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-md p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+          className="clay-icon-tile absolute right-4 top-4 p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 focus:outline-none"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
@@ -71,7 +71,7 @@ export function Dialog({
         <div className="py-2 text-sm text-zinc-800 dark:text-zinc-200">{children}</div>
 
         {footer && (
-          <div className="mt-5 flex items-center justify-end gap-2 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+          <div className="mt-5 flex items-center justify-end gap-2 border-t border-[var(--clay-border-soft)] pt-4">
             {footer}
           </div>
         )}

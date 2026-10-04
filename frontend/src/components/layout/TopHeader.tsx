@@ -13,13 +13,13 @@ export function TopHeader({ onOpenMobileMenu, pageTitle = 'KapraOS' }: TopHeader
   const { user, isClerkConfigured, signOut } = useAuth();
 
   return (
-    <header className="h-14 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20">
+    <header className="clay-topbar h-14 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20">
       {/* Left Area: Mobile Hamburger + Breadcrumb / Page Title */}
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="lg:hidden p-1.5 -ml-1 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
+          className="clay-icon-tile lg:hidden p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
           aria-label="Open navigation menu"
         >
           <Menu className="w-5 h-5" />
@@ -40,7 +40,7 @@ export function TopHeader({ onOpenMobileMenu, pageTitle = 'KapraOS' }: TopHeader
         <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800" aria-hidden="true" />
 
         {user?.shopId && (
-          <div className="hidden sm:flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-full text-[11px] text-zinc-600 dark:text-zinc-400">
+          <div className="clay-badge hidden sm:flex items-center gap-1.5 bg-white dark:bg-zinc-900 border border-[var(--clay-border-soft)] px-2.5 py-1 text-[11px] text-zinc-600 dark:text-zinc-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-mono text-zinc-700 dark:text-zinc-300">Shop: {user.shopId.slice(0, 8)}</span>
           </div>
@@ -65,7 +65,7 @@ export function TopHeader({ onOpenMobileMenu, pageTitle = 'KapraOS' }: TopHeader
             <button
               type="button"
               onClick={() => signOut()}
-              className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-medium px-2 py-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+              className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-medium px-2 py-1 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
             >
               Sign out
             </button>

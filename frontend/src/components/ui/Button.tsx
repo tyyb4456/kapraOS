@@ -14,21 +14,21 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white active:bg-zinc-950 dark:active:bg-zinc-200 border border-zinc-900 dark:border-zinc-100 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300',
+    'clay-btn clay-btn-primary bg-[var(--clay-primary)] hover:bg-[var(--clay-primary-hover)] active:bg-[var(--clay-primary-active)] text-white border border-transparent focus-visible:ring-[var(--clay-primary)]',
   secondary:
-    'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 active:bg-zinc-200/80 border border-zinc-200 dark:border-zinc-700 focus-visible:ring-zinc-400',
+    'clay-btn bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 active:bg-zinc-100 dark:active:bg-zinc-800 border border-[var(--clay-border-soft)] dark:border-zinc-700 focus-visible:ring-[var(--clay-primary)]',
   outline:
-    'bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 active:bg-zinc-100 dark:active:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 focus-visible:ring-zinc-400',
+    'clay-btn bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 active:bg-zinc-100 dark:active:bg-zinc-800 border border-[var(--clay-border)] dark:border-zinc-700 focus-visible:ring-[var(--clay-primary)]',
   ghost:
-    'bg-transparent text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200/60 dark:active:bg-zinc-800 border border-transparent focus-visible:ring-zinc-400',
+    'bg-transparent text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200/60 dark:active:bg-zinc-800 border border-transparent focus-visible:ring-[var(--clay-primary)] rounded-[14px]',
   danger:
-    'bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 border border-rose-600 focus-visible:ring-rose-600',
+    'clay-btn bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 border border-rose-600 focus-visible:ring-rose-600',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'h-8 px-2.5 text-xs gap-1.5 rounded-md',
-  md: 'h-9 px-3.5 text-sm gap-2 rounded-md',
-  lg: 'h-10 px-4 text-base gap-2 rounded-md',
+  sm: 'h-8 px-2.5 text-xs gap-1.5 rounded-xl',
+  md: 'h-9 px-3.5 text-sm gap-2 rounded-xl',
+  lg: 'h-10 px-4 text-base gap-2 rounded-xl',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

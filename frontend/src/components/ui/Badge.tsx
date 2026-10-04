@@ -33,7 +33,7 @@ export function Badge({
 }: BadgeProps) {
   return (
     <span
-      className={`binline-flex items-center gap-1 rounded-full border ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`clay-badge inline-flex items-center gap-1 rounded-full border ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
     >
       {children}

@@ -2,10 +2,48 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-clay-bg: #e9ecf3;
+  --color-clay-surface: #ffffff;
+  --color-clay-soft: #f6f7fc;
+  --color-clay-border: #e2e6f1;
+  --color-clay-primary: #6c6ce5;
+  --color-clay-primary-hover: #5d5dde;
+  --color-clay-primary-active: #5050c8;
+  --color-clay-primary-soft: #e9e9fd;
+  --shadow-clay-sm: 0 1px 2px rgb(28 30 70 / 0.05), 0 4px 12px -4px rgb(90 95 165 / 0.12);
+  --shadow-clay-md: 0 1px 2px rgb(28 30 70 / 0.05), 0 12px 28px -12px rgb(90 95 165 / 0.18);
+  --shadow-clay-lg: 0 2px 4px rgb(28 30 70 / 0.06), 0 20px 44px -16px rgb(90 95 165 / 0.22);
+}
+
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   color-scheme: light;
+
+  /* Claymorphism tokens — light */
+  --clay-bg: #e9ecf3;
+  --clay-surface: #ffffff;
+  --clay-surface-soft: #f6f7fc;
+  --clay-border: #e2e6f1;
+  --clay-border-soft: #eceff6;
+  --clay-primary: #6c6ce5;
+  --clay-primary-hover: #5d5dde;
+  --clay-primary-active: #5050c8;
+  --clay-primary-soft: #e9e9fd;
+  --clay-primary-border: #c9c9f8;
+  --clay-shadow-sm:
+    0 1px 2px rgb(28 30 70 / 0.05),
+    0 4px 12px -4px rgb(90 95 165 / 0.12);
+  --clay-shadow-md:
+    0 1px 2px rgb(28 30 70 / 0.05),
+    0 12px 28px -12px rgb(90 95 165 / 0.18);
+  --clay-shadow-lg:
+    0 2px 4px rgb(28 30 70 / 0.06),
+    0 20px 44px -16px rgb(90 95 165 / 0.22);
+  --clay-highlight: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --clay-input-inset: inset 0 1.5px 3px rgb(28 30 70 / 0.06);
+  --clay-focus-ring: rgb(108 108 229 / 0.35);
 }
 
 .dark {
@@ -19,6 +57,30 @@
   --color-zinc-900: #282e38;
   --color-zinc-800: #353c4a;
   --color-zinc-700: #4b5468;
+
+  /* Claymorphism tokens — dark (same shapes, adapted depth) */
+  --clay-bg: #1e222b;
+  --clay-surface: #282e38;
+  --clay-surface-soft: #232936;
+  --clay-border: rgb(255 255 255 / 0.08);
+  --clay-border-soft: rgb(255 255 255 / 0.06);
+  --clay-primary: #8383f0;
+  --clay-primary-hover: #9292f3;
+  --clay-primary-active: #6c6ce5;
+  --clay-primary-soft: rgb(108 108 229 / 0.18);
+  --clay-primary-border: rgb(108 108 229 / 0.4);
+  --clay-shadow-sm:
+    0 1px 2px rgb(0 0 0 / 0.35),
+    0 6px 16px -6px rgb(0 0 0 / 0.5);
+  --clay-shadow-md:
+    0 1px 2px rgb(0 0 0 / 0.4),
+    0 14px 30px -12px rgb(0 0 0 / 0.55);
+  --clay-shadow-lg:
+    0 2px 6px rgb(0 0 0 / 0.45),
+    0 24px 48px -16px rgb(0 0 0 / 0.6);
+  --clay-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --clay-input-inset: inset 0 1.5px 3px rgb(0 0 0 / 0.35);
+  --clay-focus-ring: rgb(131 131 240 / 0.45);
 }
 
 html,
@@ -31,7 +93,7 @@ body,
 
 body {
   font-family: var(--font-sans);
-  background-color: #f8f9fa;
+  background-color: var(--clay-bg);
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -39,8 +101,12 @@ body {
 }
 
 .dark body {
-  background-color: #1e222b;
+  background-color: var(--clay-bg);
   color: #f4f4f5;
+}
+
+::selection {
+  background: rgb(108 108 229 / 0.22);
 }
 
 .font-tabular {
@@ -48,8 +114,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -57,20 +123,278 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+  background: #c3c9da;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #a5adc7;
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
 .dark ::-webkit-scrollbar-thumb {
   background: #4b5468;
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #5b6579;
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* Claymorphism primitives — shared surfaces, controls, feedback       */
+/* Professional soft-depth: large blur, low opacity, subtle highlight. */
+/* ------------------------------------------------------------------ */
+
+.clay-card {
+  background: var(--clay-surface);
+  border: 1px solid var(--clay-border-soft);
+  border-radius: 20px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-md);
+}
+
+.dark .clay-card {
+  box-shadow: var(--clay-highlight), var(--clay-shadow-md);
+}
+
+.clay-panel-soft {
+  background: var(--clay-surface-soft);
+  border: 1px solid var(--clay-border-soft);
+  border-radius: 18px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+}
+
+/* Raised pressable tile (quick actions, icon buttons, stat tiles) */
+.clay-tile {
+  background: var(--clay-surface);
+  border: 1px solid var(--clay-border-soft);
+  border-radius: 16px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+  transition: transform 120ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.clay-tile:hover {
+  box-shadow: var(--clay-highlight), var(--clay-shadow-md);
+  border-color: var(--clay-border);
+}
+
+.clay-tile:active {
+  transform: translateY(1px);
+  box-shadow: var(--clay-input-inset), 0 2px 8px -4px rgb(90 95 165 / 0.12);
+}
+
+/* Icon inside a soft clay container */
+.clay-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid var(--clay-border-soft);
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+}
+
+.dark .clay-icon-tile {
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+}
+
+/* Buttons — soft raised clay controls */
+.clay-btn {
+  border-radius: 14px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+  transition: transform 100ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.clay-btn:hover {
+  box-shadow: var(--clay-highlight), var(--clay-shadow-md);
+}
+
+.clay-btn:active {
+  transform: translateY(1px);
+  box-shadow: var(--clay-input-inset), 0 2px 8px -4px rgb(90 95 165 / 0.14);
+}
+
+.clay-btn-primary {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -1px 0 rgb(0 0 0 / 0.08),
+    0 1px 2px rgb(80 80 200 / 0.25),
+    0 10px 22px -10px rgb(108 108 229 / 0.55);
+}
+
+.clay-btn-primary:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.32),
+    inset 0 -1px 0 rgb(0 0 0 / 0.08),
+    0 1px 2px rgb(80 80 200 / 0.28),
+    0 14px 28px -10px rgb(108 108 229 / 0.6);
+}
+
+.clay-btn-primary:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 6px rgb(30 30 90 / 0.35),
+    0 2px 8px -4px rgb(108 108 229 / 0.4);
+}
+
+/* Inputs / selects / textareas — gently tactile, never deeply recessed */
+.clay-input,
+.clay-select,
+.clay-textarea {
+  background: var(--clay-surface);
+  border: 1px solid var(--clay-border);
+  border-radius: 14px;
+  box-shadow: var(--clay-input-inset);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.clay-input:focus,
+.clay-select:focus,
+.clay-textarea:focus {
+  border-color: var(--clay-primary);
+  box-shadow:
+    var(--clay-input-inset),
+    0 0 0 3px var(--clay-focus-ring);
+  outline: none;
+}
+
+.dark .clay-input,
+.dark .clay-select,
+.dark .clay-textarea {
+  background: #1e222b;
+}
+
+.clay-input-error {
+  border-color: #fda4af;
+}
+
+.clay-input-error:focus {
+  border-color: #f43f5e;
+  box-shadow:
+    var(--clay-input-inset),
+    0 0 0 3px rgb(244 63 94 / 0.18);
+  outline: none;
+}
+
+.dark .clay-input-error {
+  border-color: rgb(136 19 55 / 0.9);
+}
+
+.dark .clay-input-error:focus {
+  border-color: #fb7185;
+  box-shadow:
+    var(--clay-input-inset),
+    0 0 0 3px rgb(251 113 133 / 0.22);
+}
+
+/* Table container — clay shell, rows stay compact */
+.clay-table-wrap {
+  background: var(--clay-surface);
+  border: 1px solid var(--clay-border-soft);
+  border-radius: 20px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-md);
+  overflow: hidden;
+}
+
+.clay-table-head {
+  background: var(--clay-surface-soft);
+}
+
+/* Dialog / modal — larger soft clay sheet */
+.clay-dialog {
+  background: var(--clay-surface);
+  border: 1px solid var(--clay-border-soft);
+  border-radius: 22px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-lg);
+}
+
+/* Badges / status pills — soft rounded depth, muted semantics preserved */
+.clay-badge {
+  border-radius: 999px;
+  box-shadow: var(--clay-highlight), 0 2px 6px -2px rgb(90 95 165 / 0.14);
+}
+
+.dark .clay-badge {
+  box-shadow: var(--clay-highlight), 0 2px 8px -2px rgb(0 0 0 / 0.5);
+}
+
+/* Alerts — soft clay notice */
+.clay-alert {
+  border-radius: 16px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+}
+
+/* Tabs — recessed clay track, raised active pill */
+.clay-tab-track {
+  background: var(--clay-surface-soft);
+  border: 1px solid var(--clay-border-soft);
+  border-radius: 16px;
+  box-shadow: var(--clay-input-inset);
+  padding: 4px;
+}
+
+.clay-tab-active {
+  background: var(--clay-surface);
+  border: 1px solid var(--clay-border-soft);
+  border-radius: 12px;
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+}
+
+/* Sidebar + topbar shells */
+.clay-sidebar {
+  background: var(--clay-surface);
+  border-right: 1px solid var(--clay-border-soft);
+  box-shadow: var(--clay-highlight), 8px 0 24px -16px rgb(90 95 165 / 0.18);
+}
+
+.dark .clay-sidebar {
+  box-shadow: var(--clay-highlight), 8px 0 24px -12px rgb(0 0 0 / 0.5);
+}
+
+.clay-topbar {
+  background: color-mix(in srgb, var(--clay-surface) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--clay-border-soft);
+}
+
+.clay-nav-active {
+  background: var(--clay-primary-soft);
+  border: 1px solid var(--clay-primary-border);
+  color: var(--clay-primary-active);
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+}
+
+.dark .clay-nav-active {
+  color: #c7c7fb;
+}
+
+/* Soft pastel icon chips keep depth without going toy-like */
+.clay-chip-accent {
+  border: 1px solid var(--clay-border-soft);
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+}
+
+/* Accessible focus that matches the clay palette */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--clay-primary);
+  outline-offset: 2px;
+}
+
+/* Slightly soften legacy card-like markup that lives in pages:
+   small pastel icon squares + quick-action tiles inherit clay depth
+   without changing layout or density. */
+:where(.bg-emerald-50, .bg-sky-50, .bg-amber-50, .bg-rose-50, .bg-zinc-100) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 2px 8px -3px rgb(90 95 165 / 0.14);
+}
+
+.dark :where(.bg-emerald-50, .bg-sky-50, .bg-amber-50, .bg-rose-50, .bg-zinc-100) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 8px -3px rgb(0 0 0 / 0.5);
 }
 
 /* ------------------------------------------------------------------ */

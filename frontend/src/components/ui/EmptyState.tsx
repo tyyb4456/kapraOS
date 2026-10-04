@@ -18,9 +18,9 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 p-8 text-center ${className}`}
+      className={`clay-panel-soft flex flex-col items-center justify-center border-dashed p-8 text-center ${className}`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 mb-3">
+      <div className="clay-icon-tile h-10 w-10 text-zinc-500 dark:text-zinc-400 mb-3 rounded-full">
         {icon || <PackageOpen className="w-5 h-5" />}
       </div>
       <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>

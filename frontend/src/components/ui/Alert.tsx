@@ -45,7 +45,7 @@ export function Alert({ variant = 'info', title, children, className = '', ...pr
   return (
     <div
       role="alert"
-      className={`flex items-start gap-3 rounded-lg border p-3.5 text-xs ${config.bg} ${config.border} ${config.text} ${className}`}
+      className={`clay-alert flex items-start gap-3 border p-3.5 text-xs ${config.bg} ${config.border} ${config.text} ${className}`}
       {...props}
     >
       <IconComponent className="w-4 h-4 shrink-0 mt-0.5" />

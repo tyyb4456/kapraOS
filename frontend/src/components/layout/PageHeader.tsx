@@ -17,7 +17,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <div
-      className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-zinc-200/80 dark:border-zinc-800 ${className}`}
+      className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-[var(--clay-border-soft)] ${className}`}
     >
       <div className="space-y-1">
         {breadcrumbs && breadcrumbs.length > 0 && (

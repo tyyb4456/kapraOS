@@ -142,19 +142,52 @@ def resolve_voice_model() -> Any:
 def _latest_user_text(chat_ctx: Any) -> str:
     """Newest user message text from the LiveKit chat context."""
     try:
-        messages = list(getattr(chat_ctx, "messages", None) or [])
+        accessor = getattr(chat_ctx, "messages", None)
+        if callable(accessor):
+            # LiveKit SDK: ChatContext.messages() is a method, not a property.
+            messages = list(accessor())
+        elif isinstance(accessor, (list, tuple)):
+            messages = list(accessor)
+        else:
+            # Fallback to raw items (covers FunctionCall/chat-item mixes).
+            items = getattr(chat_ctx, "items", None)
+            if callable(items):
+                items = items()
+            messages = list(items or [])
     except Exception:  # noqa: BLE001 — untrusted SDK shape, fail to empty text
+        logger.debug("Could not read voice chat context.", exc_info=True)
         return ""
     for message in reversed(messages):
         try:
             if getattr(message, "role", None) != "user":
                 continue
-            text = message.text_content if hasattr(message, "text_content") else ""
+            text: Any = ""
+            if hasattr(message, "text_content"):
+                attr = getattr(message, "text_content")
+                # text_content is a property on ChatMessage; but be defensive
+                # if a mock replaces it with a method.
+                text = attr() if callable(attr) else attr
+            if not isinstance(text, str) or not text.strip():
+                # Fallback: scan raw content list for string parts
+                # (e.g. content=[transcript] as built by AgentActivity).
+                content = getattr(message, "content", None)
+                if isinstance(content, (list, tuple)):
+                    parts = [c for c in content if isinstance(c, str) and c.strip()]
+                    if parts:
+                        text = "\n".join(parts)
+                    else:
+                        continue
+                else:
+                    continue
             if isinstance(text, str) and text.strip():
                 return text.strip()
         except Exception:  # noqa: BLE001 — skip one malformed message, keep scanning
             logger.debug("Skipping malformed chat message in voice turn.")
             continue
+    logger.debug(
+        "No user text found in voice chat context (%d items scanned).",
+        len(messages),
+    )
     return ""
 
 

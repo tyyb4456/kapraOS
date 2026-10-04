@@ -118,11 +118,11 @@ export function Sidebar({
   const { user, signOut, role } = useAuth();
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800 select-none">
+    <div className="clay-sidebar flex flex-col h-full select-none">
       {/* Brand Header */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+      <div className="flex items-center justify-between h-14 px-4 border-b border-[var(--clay-border-soft)] shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-8 h-8 rounded-md bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center text-white dark:text-zinc-900 shrink-0 shadow-xs">
+          <div className="clay-icon-tile w-8 h-8 bg-[var(--clay-primary)] text-white border-transparent rounded-[14px]">
             <Store className="w-4 h-4" />
           </div>
           {!collapsed && (
@@ -141,7 +141,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="hidden lg:flex items-center justify-center w-6 h-6 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+          className="clay-icon-tile hidden lg:flex items-center justify-center w-6 h-6 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -165,10 +165,10 @@ export function Sidebar({
                   to={item.path}
                   onClick={onCloseMobile}
                   className={({ isActive }) =>
-                    `flex items-center gap-2.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                    `flex items-center gap-2.5 px-2.5 py-1.5 text-xs rounded-xl transition-all ${
                       isActive
-                        ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-medium shadow-xs'
-                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/70 font-normal'
+                        ? 'clay-nav-active font-medium'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/70 font-normal border border-transparent'
                     } ${collapsed ? 'justify-center px-2' : ''}`
                   }
                   title={collapsed ? item.label : undefined}
@@ -183,11 +183,11 @@ export function Sidebar({
       </div>
 
       {/* User & Shop Bottom Widget */}
-      <div className="p-3 border-t border-zinc-100 dark:border-zinc-800 shrink-0 bg-zinc-50/60 dark:bg-zinc-900/50">
+      <div className="p-3 border-t border-[var(--clay-border-soft)] shrink-0 bg-[var(--clay-surface-soft)]">
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between gap-2'}`}>
           {!collapsed ? (
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-semibold text-xs flex items-center justify-center shrink-0">
+              <div className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-primary-soft)] text-[var(--clay-primary-active)] dark:text-[#c7c7fb] font-semibold text-xs flex items-center justify-center shrink-0">
                 {user?.fullName?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div className="flex flex-col min-w-0 flex-1">
@@ -206,7 +206,7 @@ export function Sidebar({
             </div>
           ) : (
             <div
-              className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-semibold text-xs flex items-center justify-center shrink-0"
+              className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-primary-soft)] text-[var(--clay-primary-active)] dark:text-[#c7c7fb] font-semibold text-xs flex items-center justify-center shrink-0"
               title={user?.fullName || 'User'}
             >
               {user?.fullName?.charAt(0).toUpperCase() || 'U'}
@@ -217,7 +217,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => signOut()}
-              className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
+              className="clay-icon-tile p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
               title="Sign out"
             >
               <LogOut className="w-3.5 h-3.5" />

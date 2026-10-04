@@ -46,7 +46,7 @@ function AuthButtons({ mobile = false }: { mobile?: boolean }) {
         )}
         <button
           onClick={() => navigate('/dashboard')}
-          className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-linear-to-r from-rose-600 to-orange-500 px-4 text-sm font-medium text-white shadow-sm shadow-rose-900/20 transition-all hover:from-rose-700 hover:to-orange-600 ${mobile ? 'w-full' : ''}`}
+          className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-4 text-sm font-medium text-white shadow-sm shadow-indigo-900/20 transition-all hover:from-indigo-700 hover:to-blue-600 ${mobile ? 'w-full' : ''}`}
         >
           <LayoutDashboardIcon />
           Open Dashboard
@@ -60,13 +60,13 @@ function AuthButtons({ mobile = false }: { mobile?: boolean }) {
     <div className={`flex ${mobile ? 'flex-col w-full' : 'items-center'} gap-2`}>
       <Link
         to="/login"
-        className={`inline-flex h-9 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-transparent dark:text-zinc-200 dark:hover:bg-zinc-800 ${mobile ? 'w-full' : ''}`}
+        className={`clay-btn inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-transparent dark:text-zinc-200 dark:hover:bg-zinc-800 ${mobile ? 'w-full' : ''}`}
       >
         Sign in
       </Link>
       <Link
         to="/signup"
-        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-linear-to-r from-rose-600 to-orange-500 px-4 text-sm font-medium text-white shadow-sm shadow-rose-900/20 transition-all hover:from-rose-700 hover:to-orange-600 ${mobile ? 'w-full' : ''}`}
+        className={`inline-flex h-9 items-center justify-center gap-1.5 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-4 text-sm font-medium text-white shadow-sm shadow-indigo-900/20 transition-all hover:from-indigo-700 hover:to-blue-600 ${mobile ? 'w-full' : ''}`}
       >
         Get started free
         <ArrowRight className="h-4 w-4" />
@@ -88,7 +88,7 @@ function LayoutDashboardIcon() {
 
 function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+    <p className="clay-badge mb-3 inline-flex items-center gap-2 border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
       {children}
     </p>
   );
@@ -98,11 +98,11 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 /* Data                                                                */
 /* ------------------------------------------------------------------ */
 
-/* Single accent system: pink → orange gradient for CTAs / highlights.
+/* Single accent system: indigo → blue gradient for CTAs / highlights.
    Feature icons use ONE tone (accent tint). Neutral zinc is the second tone.
    Green is reserved for success states only (recovery / profit). */
 const FEATURE_ICON_STYLE =
-  'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30';
+  'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30';
 
 const features = [
   {
@@ -167,12 +167,12 @@ export function LandingPage() {
   const primaryCta = () => navigate(isAuthenticated ? '/dashboard' : '/signup');
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-[var(--clay-bg)] text-zinc-900 antialiased dark:text-zinc-100">
       {/* ================= NAVBAR ================= */}
-      <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/85 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/85">
+      <header className="clay-topbar sticky top-0 z-50">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">
+            <span className="clay-icon-tile h-9 w-9 bg-[var(--clay-primary)] text-white border-transparent">
               <Store className="h-4.5 w-4.5" />
             </span>
             <span className="leading-tight">
@@ -188,7 +188,7 @@ export function LandingPage() {
               ['Dukaan flow', '#how'],
               ['AI Munshi', '#ai'],
             ].map(([label, href]) => (
-              <a key={href} href={href} className="rounded-md px-3 py-2 transition-colors hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-500/10 dark:hover:text-rose-300">
+              <a key={href} href={href} className="rounded-md px-3 py-2 transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-300">
                 {label}
               </a>
             ))}
@@ -212,7 +212,7 @@ export function LandingPage() {
         </div>
 
         {menuOpen && (
-          <div className="border-t border-zinc-200 bg-white px-4 py-4 md:hidden dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="border-t border-[var(--clay-border-soft)] bg-[var(--clay-surface)] px-4 py-4 md:hidden">
             <nav className="mb-4 flex flex-col gap-1 text-sm font-medium">
               {[
                 ['Features', '#features'],
@@ -237,10 +237,10 @@ export function LandingPage() {
 
       {/* ================= HERO ================= */}
       <section className="relative overflow-hidden">
-        {/* soft accent glow — single pink→orange family */}
+        {/* soft accent glow — single indigo→blue family */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-32 right-[-10%] h-105 w-130 rounded-full bg-rose-200/40 blur-3xl dark:bg-rose-500/10" />
-          <div className="absolute top-40 left-[-12%] h-95 w-115 rounded-full bg-orange-200/40 blur-3xl dark:bg-orange-500/10" />
+          <div className="absolute -top-32 right-[-10%] h-105 w-130 rounded-full bg-indigo-200/50 blur-3xl dark:bg-indigo-500/10" />
+          <div className="absolute top-40 left-[-12%] h-95 w-115 rounded-full bg-blue-200/50 blur-3xl dark:bg-blue-500/10" />
         </div>
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pt-14 pb-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:px-8 lg:pt-20 lg:pb-24">
@@ -250,7 +250,7 @@ export function LandingPage() {
 
             <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.6rem]">
               Aapki poori kapra dukaan,
-              <span className="block bg-linear-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent dark:from-rose-400 dark:to-orange-300">
+              <span className="block bg-linear-to-r from-indigo-600 to-blue-500 bg-clip-text text-transparent dark:from-indigo-400 dark:to-blue-300">
                 ab ek hi screen par.
               </span>
             </h1>
@@ -264,7 +264,7 @@ export function LandingPage() {
               <button
                 onClick={primaryCta}
                 disabled={isLoading}
-                className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-6 text-[15px] font-semibold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-700 hover:to-orange-600 disabled:opacity-60"
+                className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-6 text-[15px] font-semibold text-white shadow-lg shadow-indigo-900/20 transition-all hover:-translate-y-0.5 hover:from-indigo-700 hover:to-blue-600 disabled:opacity-60"
               >
                 {isLoading ? 'Loading…' : isAuthenticated ? 'Open Dashboard' : 'Start free — Apni dukaan joro'}
                 <ArrowRight className="h-4.5 w-4.5" />
@@ -275,14 +275,14 @@ export function LandingPage() {
                 {!isAuthenticated ? (
                   <Link
                     to="/login"
-                    className="text-sm font-medium text-rose-700 underline-offset-4 hover:text-rose-800 hover:underline dark:text-rose-300 dark:hover:text-rose-200"
+                    className="text-sm font-medium text-indigo-700 underline-offset-4 hover:text-indigo-800 hover:underline dark:text-indigo-300 dark:hover:text-indigo-200"
                   >
                     Already have an account? Sign in →
                   </Link>
                 ) : (
                   <a
                     href="#features"
-                    className="text-sm font-medium text-rose-700 underline-offset-4 hover:text-rose-800 hover:underline dark:text-rose-300 dark:hover:text-rose-200"
+                    className="text-sm font-medium text-indigo-700 underline-offset-4 hover:text-indigo-800 hover:underline dark:text-indigo-300 dark:hover:text-indigo-200"
                   >
                     Explore features ↓
                   </a>
@@ -297,7 +297,7 @@ export function LandingPage() {
                 ['Khata', 'Auto udhaar'],
                 ['P&L', 'Daily profit'],
               ].map(([k, v]) => (
-                <div key={k} className="rounded-xl border border-zinc-200 bg-white/80 p-3.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
+                <div key={k} className="clay-tile p-3.5">
                   <dt className="text-lg font-extrabold tracking-tight">{k}</dt>
                   <dd className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{v}</dd>
                 </div>
@@ -335,13 +335,13 @@ export function LandingPage() {
         <div className="grid items-center gap-10 lg:grid-cols-2">
           <div className="order-2 lg:order-1">
             {/* Product mock — evening closing dashboard (replaces distressed-people photo) */}
-            <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="overflow-hidden clay-card">
               <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Aaj ka hisaab — Evening closing</p>
                   <p className="text-sm font-bold">Dashboard • Live ledger</p>
                 </div>
-                <span className="rounded-full bg-linear-to-r from-rose-600 to-orange-500 px-3 py-1 text-[11px] font-bold text-white">Live</span>
+                <span className="clay-badge bg-linear-to-r from-indigo-600 to-blue-500 px-3 py-1 text-[11px] font-bold text-white">Live</span>
               </div>
               <div className="space-y-3 p-5">
                 {[
@@ -350,7 +350,7 @@ export function LandingPage() {
                   ['Kharcha', 'Rs 4,200', false],
                   ['Low-stock variants', '3 alerts', false],
                 ].map(([label, val, positive]) => (
-                  <div key={label as string} className="flex items-center justify-between rounded-xl border border-zinc-200 bg-[#f8f9fa] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                  <div key={label as string} className="clay-panel-soft flex items-center justify-between px-4 py-3">
                     <p className="text-sm font-medium">{label}</p>
                     <p className={`font-tabular text-sm font-extrabold ${positive ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{val}</p>
                   </div>
@@ -370,7 +370,7 @@ export function LandingPage() {
               />
               <div className="absolute inset-0 bg-linear-to-t from-zinc-950/75 via-zinc-950/15 to-transparent" />
               <div className="absolute bottom-3 left-3 right-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-orange-200">Pehle — har dukaan ki kahani</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-200">Pehle — har dukaan ki kahani</p>
                 <p className="mt-1 text-sm font-medium leading-relaxed text-white">“Maal kahan rakha tha? Kis ne udhaar liya tha? Register ka panna kahan gaya?”</p>
               </div>
             </div>
@@ -379,7 +379,7 @@ export function LandingPage() {
             <SectionEyebrow>Dher se — System tak</SectionEyebrow>
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
               Kapron ke dher mein{' '}
-              <span className="bg-linear-to-r from-rose-600 to-orange-500 bg-clip-text text-transparent dark:from-rose-400 dark:to-orange-300">hisaab</span>{' '}
+              <span className="bg-linear-to-r from-indigo-600 to-blue-500 bg-clip-text text-transparent dark:from-indigo-400 dark:to-blue-300">hisaab</span>{' '}
               nahi dhoondna parta.
             </h2>
             <p className="mt-4 leading-relaxed text-zinc-600 dark:text-zinc-400">
@@ -393,7 +393,7 @@ export function LandingPage() {
                 'Har din ka P&L — sale, COGS, kharcha, net profit',
               ].map((li) => (
                 <li key={li} className="flex items-start gap-2.5 text-sm">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                  <span className="clay-chip-accent mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
                     <Check className="h-3 w-3" strokeWidth={3} />
                   </span>
                   <span className="font-medium">{li}</span>
@@ -402,7 +402,7 @@ export function LandingPage() {
             </ul>
             <button
               onClick={primaryCta}
-              className="mt-7 inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-5 text-sm font-semibold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-700 hover:to-orange-600"
+              className="mt-7 inline-flex h-11 cursor-pointer items-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/20 transition-all hover:-translate-y-0.5 hover:from-indigo-700 hover:to-blue-600"
             >
               {isAuthenticated ? 'Go to Dashboard' : 'Dher khatam karo — Start free'}
               <ArrowRight className="h-4 w-4" />
@@ -412,7 +412,7 @@ export function LandingPage() {
       </section>
 
       {/* ================= FEATURES GRID ================= */}
-      <section id="features" className="border-y border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section id="features" className="border-y border-[var(--clay-border-soft)]">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>Jo dukaan chalata hai — sab kuch</SectionEyebrow>
@@ -424,9 +424,9 @@ export function LandingPage() {
             {features.map((f) => (
               <div
                 key={f.title}
-                className="group rounded-2xl border border-zinc-200 bg-[#f8f9fa] p-6 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:shadow-black/40"
+                className="group clay-tile p-6 hover:-translate-y-1"
               >
-                <span className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border ${FEATURE_ICON_STYLE}`}>
+                <span className={`clay-chip-accent inline-flex h-11 w-11 items-center justify-center rounded-xl border ${FEATURE_ICON_STYLE}`}>
                   <f.icon className="h-5 w-5" />
                 </span>
                 <h3 className="mt-4 text-[15px] font-bold">{f.title}</h3>
@@ -459,8 +459,8 @@ export function LandingPage() {
                 />
               </div>
             </div>
-            <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <p className="text-xs font-semibold uppercase tracking-widest text-rose-700 dark:text-rose-300">Print • Color • Meter</p>
+            <div className="clay-panel-soft mt-3 p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Print • Color • Meter</p>
               <p className="mt-1 text-sm font-medium leading-relaxed">Har print apna variant — sale par ghat-ta, purchase par barhta.</p>
             </div>
           </div>
@@ -479,7 +479,7 @@ export function LandingPage() {
                 ['BOUTIQUE', 'Single designer piece tracking'],
                 ['Low-stock bell', 'Khatam hone se pehle khabar'],
               ].map(([t, d]) => (
-                <div key={t} className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <div key={t} className="clay-panel-soft p-4">
                   <p className="text-xs font-extrabold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">{t}</p>
                   <p className="mt-1 text-[13px] text-zinc-600 dark:text-zinc-400">{d}</p>
                 </div>
@@ -490,7 +490,7 @@ export function LandingPage() {
       </section>
 
       {/* ================= KHATA (product ledger mock) ================= */}
-      <section id="khata" className="border-y border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section id="khata" className="border-y border-[var(--clay-border-soft)]">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div>
@@ -507,7 +507,7 @@ export function LandingPage() {
                   ['Imran Fabrics — Supplier payable', 'Rs 48,000', 'Is hafte dena hai', false],
                   ['Recovery — Ahmed Sahab', '+ Rs 15,000', 'Aaj received ✓', true],
                 ].map(([name, amt, sub, positive]) => (
-                  <div key={name as string} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-[#f8f9fa] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                  <div key={name as string} className="clay-panel-soft flex items-center justify-between gap-3 px-4 py-3">
                     <div className="flex items-center gap-3">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-xs font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">
                         {(name as string).charAt(0)}
@@ -521,9 +521,9 @@ export function LandingPage() {
                   </div>
                 ))}
               </div>
-              <blockquote className="mt-6 rounded-r-2xl border-l-4 border-rose-500 bg-[#f8f9fa] px-4 py-3 dark:bg-zinc-900">
+              <blockquote className="mt-6 rounded-r-2xl border-l-4 border-indigo-500 bg-[#f8f9fa] px-4 py-3 dark:bg-zinc-900">
                 <div className="flex items-center gap-2">
-                  <BookOpenText className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-300" />
+                  <BookOpenText className="h-4 w-4 shrink-0 text-indigo-700 dark:text-indigo-300" />
                   <p className="text-sm font-bold">“Baji, aapka pichla Rs 6,200 rehta hai — ye suit us mein jor dun?”</p>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Khata khol ke baat karo — customer ka bharosa, dukaan ki ronak.</p>
@@ -531,10 +531,10 @@ export function LandingPage() {
             </div>
             <div>
               {/* Product mock — customer khata ledger (replaces laundry photo) */}
-              <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="overflow-hidden clay-card">
                 <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-rose-600 to-orange-500 text-xs font-bold text-white">A</span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-indigo-600 to-blue-500 text-xs font-bold text-white">A</span>
                     <div>
                       <p className="text-sm font-bold leading-tight">Ayesha Bibi — Khata</p>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">Balance • History • Recovery</p>
@@ -548,7 +548,7 @@ export function LandingPage() {
                     ['Payment received', '18 Feb', '− Rs 2,000'],
                     ['Embroidered kurta — Udhaar', '24 Feb', 'Rs 4,850'],
                   ].map(([label, date, val]) => (
-                    <div key={label as string} className="flex items-center justify-between rounded-xl border border-zinc-200 bg-[#f8f9fa] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div key={label as string} className="clay-panel-soft flex items-center justify-between px-4 py-3">
                       <div>
                         <p className="text-sm font-semibold leading-tight">{label}</p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">{date}</p>
@@ -558,7 +558,7 @@ export function LandingPage() {
                   ))}
                   <div className="flex items-center justify-between gap-3 pt-1">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">Auto-posted from POS • No diary needed</p>
-                    <span className="rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-4 py-2 text-xs font-bold text-white">Recover Rs 2,000</span>
+                    <span className="clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-4 py-2 text-xs font-bold text-white">Recover Rs 2,000</span>
                   </div>
                 </div>
               </div>
@@ -575,7 +575,7 @@ export function LandingPage() {
         </div>
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {steps.map((s) => (
-            <div key={s.n} className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <div key={s.n} className="clay-card relative overflow-hidden p-6">
               <span className="font-tabular text-5xl font-extrabold text-zinc-200 dark:text-zinc-800">{s.n}</span>
               <h3 className="mt-2 text-base font-bold">{s.title}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{s.desc}</p>
@@ -595,7 +595,7 @@ export function LandingPage() {
           <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1.1fr_0.9fr] lg:p-12">
             <div>
               <p className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
-                <Sparkles className="h-3.5 w-3.5 text-orange-300" /> AI Munshi — live on your data
+                <Sparkles className="h-3.5 w-3.5 text-blue-300" /> AI Munshi — live on your data
               </p>
               <h3 className="mt-4 text-2xl font-extrabold tracking-tight sm:text-3xl">Bas poocho: “Aaj kitni sale hui?”</h3>
               <p className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-300">
@@ -605,7 +605,7 @@ export function LandingPage() {
               <div className="mt-5 flex flex-wrap gap-2 text-xs">
                 {['“Lawn mein kya khatam ho raha hai?”', '“Ahmed ka udhaar kitna hai?”', '“Is hafte ka profit batao”'].map((q) => (
                   <span key={q} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 font-medium text-zinc-200">
-                    <MessageCircleQuestion className="h-3.5 w-3.5 text-orange-300" /> {q}
+                    <MessageCircleQuestion className="h-3.5 w-3.5 text-blue-300" /> {q}
                   </span>
                 ))}
               </div>
@@ -627,7 +627,7 @@ export function LandingPage() {
               </div>
               <button
                 onClick={() => navigate(isAuthenticated ? '/ai-chat' : '/signup')}
-                className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 text-sm font-bold text-white shadow-lg shadow-rose-900/20 transition-all hover:-translate-y-0.5 hover:from-rose-500 hover:to-orange-400"
+                className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 text-sm font-bold text-white shadow-lg shadow-indigo-900/20 transition-all hover:-translate-y-0.5 hover:from-indigo-500 hover:to-blue-400"
               >
                 <Sparkles className="h-4 w-4" />
                 {isAuthenticated ? 'AI Munshi se baat karo' : 'AI Munshi try karo — free'}
@@ -641,8 +641,8 @@ export function LandingPage() {
       <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8 lg:pb-24">
         <div className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-[#1e222b] text-white shadow-2xl dark:border-zinc-700">
           <div aria-hidden className="pointer-events-none absolute inset-0">
-            <div className="absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-rose-500/25 blur-3xl" />
-            <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-orange-500/20 blur-3xl" />
+            <div className="absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-indigo-500/25 blur-3xl" />
+            <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
           </div>
           <div className="relative px-6 py-14 text-center sm:px-12 lg:py-18">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Apni bahi ko digital karo</p>
@@ -655,7 +655,7 @@ export function LandingPage() {
             <div className="mt-7 flex flex-col items-center justify-center gap-3">
               <button
                 onClick={primaryCta}
-                className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg bg-linear-to-r from-rose-600 to-orange-500 px-7 text-[15px] font-bold text-white shadow-lg shadow-rose-900/30 transition-all hover:-translate-y-0.5 hover:from-rose-500 hover:to-orange-400"
+                className="inline-flex h-12 cursor-pointer items-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-7 text-[15px] font-bold text-white shadow-lg shadow-indigo-900/30 transition-all hover:-translate-y-0.5 hover:from-indigo-500 hover:to-blue-400"
               >
                 {isAuthenticated ? 'Open Dashboard' : 'Create free account'}
                 <ArrowRight className="h-4.5 w-4.5" />
@@ -675,11 +675,11 @@ export function LandingPage() {
       </section>
 
       {/* ================= FOOTER ================= */}
-      <footer className="border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <footer className="border-t border-[var(--clay-border-soft)] bg-[var(--clay-surface)]">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_1fr_1fr_1fr] lg:px-8">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">
+              <span className="clay-icon-tile h-9 w-9 bg-[var(--clay-primary)] text-white border-transparent">
                 <Store className="h-4.5 w-4.5" />
               </span>
               <span className="text-[15px] font-bold">KapraOS</span>
@@ -740,11 +740,11 @@ function FooterCol({ title, links }: { title: string; links: [string, string][] 
         {links.map(([label, href]) => (
           <li key={label + href}>
             {href.startsWith('#') ? (
-              <a href={href} className="text-sm text-zinc-600 transition-colors hover:text-rose-700 dark:text-zinc-400 dark:hover:text-rose-300">
+              <a href={href} className="text-sm text-zinc-600 transition-colors hover:text-indigo-700 dark:text-zinc-400 dark:hover:text-indigo-300">
                 {label}
               </a>
             ) : (
-              <Link to={href} className="text-sm text-zinc-600 transition-colors hover:text-rose-700 dark:text-zinc-400 dark:hover:text-rose-300">
+              <Link to={href} className="text-sm text-zinc-600 transition-colors hover:text-indigo-700 dark:text-zinc-400 dark:hover:text-indigo-300">
                 {label}
               </Link>
             )}
