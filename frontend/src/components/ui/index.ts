@@ -10,4 +10,5 @@ export * from './Tabs.tsx';
 export * from './Skeleton.tsx';
 export * from './Alert.tsx';
 export * from './EmptyState.tsx';
+export * from './DatePicker.tsx';
 export * from './ThemeToggle.tsx';

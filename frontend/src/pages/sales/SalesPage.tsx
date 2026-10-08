@@ -21,6 +21,7 @@ import {
   Badge,
   Skeleton,
   Dialog,
+  DatePicker,
 } from '../../components/ui/index.ts';
 import { formatCurrency, formatDate } from '../../lib/formatters.ts';
 import { getSales, updateSale, deleteSale } from '../../lib/api/sales.ts';
@@ -30,6 +31,8 @@ import type { Sale, Customer } from '../../types/index.ts';
 
 export function SalesPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('');
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +68,23 @@ export function SalesPage() {
   }, []);
 
   const filteredSales = sales.filter((sale) => {
+    if (paymentFilter !== 'all') {
+      const hasKhataBadge =
+        !sale.payment_method ||
+        (Number(sale.paid_amount ?? 0) === 0 && Number(sale.due_amount ?? 0) > 0);
+      if (paymentFilter === 'khata') {
+        if (!hasKhataBadge && (sale.payment_method as string | null | undefined) !== 'khata') return false;
+      } else {
+        const method = sale.payment_method === 'bank' ? 'bank_transfer' : sale.payment_method;
+        if (method !== paymentFilter) return false;
+      }
+    }
+    if (dateFilter) {
+      const d = new Date(sale.created_at);
+      if (isNaN(d.getTime())) return false;
+      const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (local !== dateFilter) return false;
+    }
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -98,6 +118,11 @@ export function SalesPage() {
   const toNum = (v: number | string | null | undefined): number => {
     const n = Number(v ?? 0);
     return Number.isFinite(n) ? n : 0;
+  };
+
+  const todayStr = (): string => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
   const getSaleAmounts = (sale: Sale) => {
@@ -231,13 +256,40 @@ export function SalesPage() {
                 leftIcon={<Search className="w-4 h-4" />}
               />
             </div>
+            <div className="w-full sm:w-48">
+              <DatePicker
+                value={dateFilter}
+                onChange={setDateFilter}
+                placeholder="Filter by date"
+              />
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                variant={dateFilter === todayStr() ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setDateFilter(todayStr())}
+              >
+                Today
+              </Button>
+              {dateFilter && (
+                <Button variant="ghost" size="sm" onClick={() => setDateFilter('')}>
+                  All Dates
+                </Button>
+              )}
+            </div>
             <div className="w-full sm:w-44">
-              <Select defaultValue="all">
+              <Select
+                value={paymentFilter}
+                onChange={(e) => setPaymentFilter(e.target.value)}
+              >
                 <option value="all">All Payment Methods</option>
                 <option value="cash">Cash</option>
                 <option value="khata">Customer Khata</option>
                 <option value="card">Card</option>
                 <option value="bank_transfer">Bank Transfer</option>
+                <option value="jazzcash">JazzCash</option>
+                <option value="easypaisa">Easypaisa</option>
+                <option value="other">Other</option>
               </Select>
             </div>
           </div>

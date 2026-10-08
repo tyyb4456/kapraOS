@@ -5,6 +5,42 @@ export async function getSuppliers(): Promise<Supplier[]> {
   return apiClient.get<Supplier[]>('/suppliers');
 }
 
+export async function getSupplier(supplierId: string): Promise<Supplier> {
+  return apiClient.get<Supplier>(`/suppliers/${supplierId}`);
+}
+
+export interface SupplierBalance {
+  supplier_id: string;
+  total_purchases: number;
+  total_payments: number;
+  total_returns: number;
+  outstanding_balance: number;
+  number_of_purchases: number;
+  number_of_payments: number;
+  number_of_returns: number;
+  last_purchase_at: string | null;
+  last_payment_at: string | null;
+  last_return_at: string | null;
+}
+
+export async function getSupplierBalance(supplierId: string): Promise<SupplierBalance> {
+  const data = await apiClient.get<any>(`/suppliers/${supplierId}/balance`);
+  const num = (v: unknown) => (typeof v === 'string' ? parseFloat(v) : Number(v) || 0);
+  return {
+    supplier_id: data.supplier_id,
+    total_purchases: num(data.total_purchases),
+    total_payments: num(data.total_payments),
+    total_returns: num(data.total_returns),
+    outstanding_balance: num(data.outstanding_balance),
+    number_of_purchases: data.number_of_purchases ?? 0,
+    number_of_payments: data.number_of_payments ?? 0,
+    number_of_returns: data.number_of_returns ?? 0,
+    last_purchase_at: data.last_purchase_at ?? null,
+    last_payment_at: data.last_payment_at ?? null,
+    last_return_at: data.last_return_at ?? null,
+  };
+}
+
 export interface SupplierStatementEntryResponse {
   entry_type: string;
   date: string;

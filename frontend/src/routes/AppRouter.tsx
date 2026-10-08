@@ -16,6 +16,7 @@ import { CustomersPage } from '../pages/relationships/CustomersPage.tsx';
 import { CustomerKhataPage } from '../pages/relationships/CustomerKhataPage.tsx';
 import { SuppliersPage } from '../pages/relationships/SuppliersPage.tsx';
 import { SupplierKhataPage } from '../pages/relationships/SupplierKhataPage.tsx';
+import { SupplierProfilePage } from '../pages/relationships/SupplierProfilePage.tsx';
 import { ExpensesPage } from '../pages/finance/ExpensesPage.tsx';
 import { ReportsPage } from '../pages/finance/ReportsPage.tsx';
 
@@ -74,6 +75,7 @@ export function AppRouter() {
         <Route path="/customers/khata/:id" element={<CustomerKhataPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/suppliers/khata" element={<SupplierKhataPage />} />
+        <Route path="/suppliers/:id" element={<SupplierProfilePage />} />
         <Route path="/suppliers/khata/:id" element={<SupplierKhataPage />} />
 
         {/* Finance */}

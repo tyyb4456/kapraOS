@@ -227,7 +227,12 @@ export function SuppliersPage() {
               filteredSuppliers.map((supplier) => (
                 <TableRow key={supplier.id}>
                   <TableCell className="font-medium text-zinc-900">
-                    {supplier.name}
+                    <Link
+                      to={`/suppliers/${supplier.id}`}
+                      className="hover:text-indigo-600 hover:underline underline-offset-2"
+                    >
+                      {supplier.name}
+                    </Link>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-zinc-600">
                     {supplier.phone || '—'}
