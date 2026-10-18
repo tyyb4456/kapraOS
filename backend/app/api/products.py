@@ -105,7 +105,8 @@ async def get_category_tree(
 
     async def build_tree(category: Category) -> CategoryTreeResponse:
         children_stmt = select(Category).where(
-            Category.parent_id == category.id
+            Category.parent_id == category.id,
+            Category.shop_id == shop_id,
         ).order_by(Category.name.asc())
         children = (await db.execute(children_stmt)).scalars().all()
         return CategoryTreeResponse(
@@ -407,9 +408,16 @@ async def list_attribute_values(
     shop_id: ShopId,
     db: DbSession,
 ) -> list[AttributeValueResponse]:
+    # AttributeValue itself carries no shop_id: the tenant is only reachable
+    # through the parent Attribute, so the shop scope must be enforced with
+    # an explicit join (same as update/delete below). Without it any tenant
+    # could read another shop's values by id.
     values = (await db.execute(
-        select(AttributeValue).where(
+        select(AttributeValue)
+        .join(Attribute, AttributeValue.attribute_id == Attribute.id)
+        .where(
             AttributeValue.attribute_id == attribute_id,
+            Attribute.shop_id == shop_id,
         ).order_by(AttributeValue.value.asc())
     )).scalars().all()
     return [AttributeValueResponse.model_validate(v) for v in values]

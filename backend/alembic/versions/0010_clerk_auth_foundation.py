@@ -107,11 +107,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Step 1: Restore password_hash column.
+    # Step 1: Restore password_hash column. The column is NOT NULL, so it
+    # needs a server_default to be added to a populated table; the default
+    # is then dropped to match the pre-0010 schema exactly.
     op.add_column(
         "users",
-        sa.Column("password_hash", sa.String(length=255), nullable=False),
+        sa.Column(
+            "password_hash",
+            sa.String(length=255),
+            nullable=False,
+            server_default="",
+        ),
     )
+    op.alter_column("users", "password_hash", server_default=None)
 
     # Step 2: Remove unique constraint.
     op.drop_constraint(
@@ -135,11 +143,17 @@ def downgrade() -> None:
     # Step 6: Create the old enum type.
     USER_ROLE_V1_ENUM.create(op.get_bind(), checkfirst=True)
 
-    # Step 7: Change column to use the old enum type.
+    # Step 7: Change column to use the old enum type. v1 has no 'staff'
+    # member, so re-expand staff to 'cashier' first (the upgrade collapsed
+    # manager/cashier/inventory_manager into staff; the inverse mapping is
+    # inherently lossy).
     op.execute(
         sa.text(
             "ALTER TABLE users ALTER COLUMN role DROP DEFAULT"
         )
+    )
+    op.execute(
+        sa.text("UPDATE users SET role = 'cashier' WHERE role = 'staff'")
     )
     op.execute(
         sa.text(

@@ -7,6 +7,7 @@ from decimal import Decimal
 
 import pytest
 import sqlalchemy as sa
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -535,3 +536,49 @@ async def test_product_variant_cannot_reference_a_product_from_another_shop(
     )
     with pytest.raises(sa.exc.IntegrityError):
         await db_session.flush()
+
+
+# --------------------------------------------------------------------------
+# API: attribute-values endpoint tenant scoping
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_attribute_values_endpoint_is_tenant_scoped(
+    api_session: AsyncSession, mocked_api_client: AsyncClient
+) -> None:
+    """Shop B must not read shop A's attribute values by attribute id.
+
+    Regression: the values query filtered only by attribute_id; AttributeValue
+    carries no shop_id, so without an explicit join to Attribute any tenant
+    could read another shop's values.
+    """
+    import uuid
+
+    from app.models import User
+    from app.models.user import UserRole
+
+    shop_a = await _make_shop(api_session, f"Attr A {uuid.uuid4().hex[:6]}")
+    shop_b = await _make_shop(api_session, f"Attr B {uuid.uuid4().hex[:6]}")
+
+    attr_a = Attribute(shop_id=shop_a.id, name="Fabric")
+    api_session.add(attr_a)
+    await api_session.flush()
+    api_session.add(AttributeValue(attribute_id=attr_a.id, value="Lawn"))
+    api_session.add(
+        User(
+            clerk_user_id="mock_clerk_id",
+            shop_id=shop_b.id,
+            name="B Owner",
+            email=f"owner-{uuid.uuid4().hex[:6]}@example.com",
+            role=UserRole.OWNER,
+        )
+    )
+    await api_session.flush()
+
+    response = await mocked_api_client.get(
+        f"/products/attributes/{attr_a.id}/values"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []

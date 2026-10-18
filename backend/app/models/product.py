@@ -117,7 +117,9 @@ class Product(Base, UUIDMixin, TimestampMixin):
 
     code: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    unit: Mapped[str] = mapped_column(String(20), nullable=False, default="meter")
+    unit: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="meter", server_default="meter"
+    )
 
     product_type: Mapped[ProductType] = mapped_column(
         SQLEnum(

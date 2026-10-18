@@ -217,7 +217,9 @@ async def resume_voice_turn(
                 "No pending approval on this voice conversation."
             ) from exc
         raise VoiceAgentError(f"AI provider error: {exc}") from exc
-    return await _voice_turn_result(db, result, thread_id, tenant.shop_id)
+    return await _voice_turn_result(
+        db, result, thread_id, tenant.shop_id, commit_if_paused=True
+    )
 
 
 async def _voice_turn_result(
@@ -225,14 +227,21 @@ async def _voice_turn_result(
     result: Any,
     client_thread_id: str,
     shop_id: Any,
+    *,
+    commit_if_paused: bool = False,
 ) -> VoiceTurnResult:
     """Shape an agent invoke result as done/paused with speech-ready text."""
     interrupts = list(getattr(result, "interrupts", None) or [])
     if interrupts:
         pending = _serialize_interrupts(interrupts)
-        # A paused run performed no approved mutation (the interrupt fires
-        # BEFORE the tool executes) — _settle_transaction leaves it alone.
-        await _settle_transaction(db, "paused", shop_id, result)
+        # A first-turn pause performed no approved mutation (the interrupt
+        # fires BEFORE the tool executes) — _settle_transaction leaves it
+        # alone. A RESUME that pauses again has already executed its
+        # approved tool; those flushes must commit (the checkpoint can
+        # never re-approve them), hence ``commit_if_paused``.
+        await _settle_transaction(
+            db, "paused", shop_id, result, commit_if_paused=commit_if_paused
+        )
         return VoiceTurnResult(
             status="paused",
             reply=to_speech_text(approval_speech_prompt(pending)),

@@ -517,10 +517,19 @@ class SaleNotEditableError(SaleError):
 async def _get_sale_for_update(
     session: AsyncSession, shop_id: uuid.UUID, sale_id: uuid.UUID
 ) -> Sale:
-    """Load a sale with its items + payments, enforcing tenant ownership."""
+    """Load a sale with its items + payments, locked `FOR UPDATE`.
+
+    Enforces tenant ownership AND takes the row lock that serializes edits
+    and voids against concurrent returns (which lock the same row before
+    checking/creating return rows) - without it, a return could commit
+    while an edit/void is mid-flight, or a delete could cascade away
+    freshly committed return rows.
+    """
 
     result = await session.execute(
-        select(Sale).where(Sale.id == sale_id, Sale.shop_id == shop_id)
+        select(Sale)
+        .where(Sale.id == sale_id, Sale.shop_id == shop_id)
+        .with_for_update()
     )
     sale = result.scalar_one_or_none()
     if sale is None:

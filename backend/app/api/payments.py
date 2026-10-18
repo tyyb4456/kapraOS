@@ -65,8 +65,14 @@ async def void_payment(
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
+    # Lock the payment row first: two concurrent voids (or a void racing a
+    # settlement) must serialize here, otherwise paid_amount could be
+    # decremented twice while only one Payment row is ever removed. A losing
+    # racer blocks, then re-reads and finds the row already deleted -> 404.
     payment = (await db.execute(
-        select(Payment).where(Payment.id == payment_id, Payment.shop_id == shop_id)
+        select(Payment)
+        .where(Payment.id == payment_id, Payment.shop_id == shop_id)
+        .with_for_update()
     )).scalar_one_or_none()
     if payment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
@@ -76,10 +82,14 @@ async def void_payment(
     void_supplier_id = payment.supplier_id
 
     # Roll the allocation back out of the linked document first, so the
-    # cached paid_amount never drifts from the remaining Payment rows.
+    # cached paid_amount never drifts from the remaining Payment rows. The
+    # document row is locked too, so the decrement can't race a concurrent
+    # settlement against the same sale/purchase.
     if payment.sale_id is not None:
         sale = (await db.execute(
-            select(Sale).where(Sale.id == payment.sale_id, Sale.shop_id == shop_id)
+            select(Sale)
+            .where(Sale.id == payment.sale_id, Sale.shop_id == shop_id)
+            .with_for_update()
         )).scalar_one_or_none()
         if sale is not None:
             sale.paid_amount = max(
@@ -93,9 +103,11 @@ async def void_payment(
                 )
     if payment.purchase_id is not None:
         purchase = (await db.execute(
-            select(Purchase).where(
+            select(Purchase)
+            .where(
                 Purchase.id == payment.purchase_id, Purchase.shop_id == shop_id
             )
+            .with_for_update()
         )).scalar_one_or_none()
         if purchase is not None:
             purchase.paid_amount = max(

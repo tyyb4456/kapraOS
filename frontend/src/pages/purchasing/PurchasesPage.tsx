@@ -124,7 +124,9 @@ export function PurchasesPage() {
     setEditData({
       supplier_id: purchase.supplier_id ?? '',
       invoice_number: purchase.order_number ?? '',
-      discount: 0,
+      // Round-trip the stored discount: PATCH replaces it, so seeding 0
+      // here silently wiped any existing discount on unrelated edits.
+      discount: toNum(purchase.discount),
     });
     setError(null);
   };
@@ -138,7 +140,7 @@ export function PurchasesPage() {
       await updatePurchase(editing.id, {
         supplier_id: editData.supplier_id || undefined,
         invoice_number: editData.invoice_number || null,
-        discount: editData.discount || 0,
+        discount: editData.discount,
       });
       setEditing(null);
       await reload();

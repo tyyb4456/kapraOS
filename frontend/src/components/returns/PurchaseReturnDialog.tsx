@@ -35,6 +35,7 @@ export function PurchaseReturnDialog({ purchase, onClose, onSuccess }: PurchaseR
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [returnsLoadFailed, setReturnsLoadFailed] = useState(false);
   const [resultTotal, setResultTotal] = useState<number | null>(null);
 
   useEffect(() => {
@@ -43,16 +44,24 @@ export function PurchaseReturnDialog({ purchase, onClose, onSuccess }: PurchaseR
       setNotes('');
       setError(null);
       setResultTotal(null);
+      setReturnsLoadFailed(false);
       return;
     }
     const load = async () => {
       setLoading(true);
       setError(null);
       setResultTotal(null);
+      setReturnsLoadFailed(false);
       try {
         const [detail, returns] = await Promise.all([
           getPurchaseDetail(purchase.id),
-          getPurchaseReturns(purchase.id).catch(() => []),
+          getPurchaseReturns(purchase.id).catch(() => {
+            // Remaining quantities cannot be verified without the return
+            // history: flag it so submit is blocked instead of treating
+            // "unknown" as "nothing returned yet".
+            setReturnsLoadFailed(true);
+            return [];
+          }),
         ]);
         const returnedByItem = new Map<string, number>();
         for (const r of returns) {
@@ -101,7 +110,7 @@ export function PurchaseReturnDialog({ purchase, onClose, onSuccess }: PurchaseR
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!purchase || submitting) return;
+    if (!purchase || submitting || returnsLoadFailed) return;
     setError(null);
     setResultTotal(null);
     const payloadLines = [];
@@ -154,7 +163,7 @@ export function PurchaseReturnDialog({ purchase, onClose, onSuccess }: PurchaseR
               variant="primary"
               size="sm"
               onClick={handleSubmit}
-              disabled={submitting || loading || !hasAnyQty}
+              disabled={submitting || loading || !hasAnyQty || returnsLoadFailed}
             >
               {submitting ? 'Saving return...' : 'Save Return'}
             </Button>
@@ -182,6 +191,12 @@ export function PurchaseReturnDialog({ purchase, onClose, onSuccess }: PurchaseR
           {error && (
             <div className="p-2.5 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700">
               {error}
+            </div>
+          )}
+          {returnsLoadFailed && (
+            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700">
+              Could not load return history — returnable quantities cannot be
+              verified. Close and reopen to retry.
             </div>
           )}
           {lines.length === 0 ? (

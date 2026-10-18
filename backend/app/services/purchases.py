@@ -316,12 +316,19 @@ async def create_purchase(
 async def _get_purchase_for_update(
     session: AsyncSession, shop_id: uuid.UUID, purchase_id: uuid.UUID
 ) -> Purchase:
-    """Load a purchase with its items + payments, enforcing tenant ownership."""
+    """Load a purchase with its items + payments, locked `FOR UPDATE`.
+
+    Enforces tenant ownership AND takes the row lock that serializes edits
+    and voids against concurrent supplier returns (which lock the same row
+    before checking/creating return rows) - without it, a return could
+    commit while an edit/void is mid-flight, or a delete could cascade
+    away freshly committed return rows.
+    """
 
     result = await session.execute(
-        select(Purchase).where(
-            Purchase.id == purchase_id, Purchase.shop_id == shop_id
-        )
+        select(Purchase)
+        .where(Purchase.id == purchase_id, Purchase.shop_id == shop_id)
+        .with_for_update()
     )
     purchase = result.scalar_one_or_none()
     if purchase is None:

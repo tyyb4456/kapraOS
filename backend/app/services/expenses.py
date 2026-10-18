@@ -180,6 +180,33 @@ async def get_expense(
     return expense
 
 
+async def _get_expense_for_update(
+    session: AsyncSession, *, shop_id: uuid.UUID, expense_id: uuid.UUID
+) -> Expense:
+    """Like ``get_expense`` but locks the row `FOR UPDATE`.
+
+    Edit/void must serialize on the expense row: without the lock two
+    concurrent PATCHes lose updates, and a PATCH racing a DELETE can issue
+    an UPDATE against a deleted row (StaleDataError -> 500).
+    """
+
+    expense = (
+        await session.execute(
+            select(Expense)
+            .where(
+                Expense.id == expense_id,
+                Expense.shop_id == shop_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if expense is None:
+        raise ExpenseNotFoundError(
+            f"Expense {expense_id} not found for shop {shop_id}"
+        )
+    return expense
+
+
 async def list_expenses(
     session: AsyncSession,
     *,
@@ -245,7 +272,9 @@ async def update_expense(
     None to clear it.
     """
 
-    expense = await get_expense(session, shop_id=shop_id, expense_id=expense_id)
+    expense = await _get_expense_for_update(
+        session, shop_id=shop_id, expense_id=expense_id
+    )
 
     repost = False
     if category is not None:
@@ -287,7 +316,9 @@ async def delete_expense(
 ) -> None:
     """Void an expense: drop its EXPENSE ledger group and delete the row."""
 
-    expense = await get_expense(session, shop_id=shop_id, expense_id=expense_id)
+    expense = await _get_expense_for_update(
+        session, shop_id=shop_id, expense_id=expense_id
+    )
     await accounting_service.delete_postings_for_reference(
         session, shop_id=shop_id, reference_id=expense.id
     )

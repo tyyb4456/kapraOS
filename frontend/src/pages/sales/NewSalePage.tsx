@@ -15,7 +15,7 @@ import {
   CardTitle,
   Badge,
 } from '../../components/ui/index.ts';
-import { formatCurrency } from '../../lib/formatters.ts';
+import { formatCurrency, roundMoney, roundQuantity } from '../../lib/formatters.ts';
 import { createSale, type CreateSaleRequest } from '../../lib/api/sales.ts';
 import { getProducts } from '../../lib/api/products.ts';
 import { getCustomers } from '../../lib/api/customers.ts';
@@ -85,9 +85,19 @@ export function NewSalePage() {
     loadCustomers();
   }, []);
 
-  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-  const totalDiscount = items.reduce((sum, item) => sum + item.discount, 0);
-  const netTotal = subtotal - totalDiscount;
+  const lineTotal = (item: SaleItem) =>
+    roundMoney(
+      roundQuantity(item.quantity) * roundMoney(item.unit_price) - roundMoney(item.discount),
+    );
+
+  const subtotal = roundMoney(
+    items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0),
+  );
+  const totalDiscount = roundMoney(items.reduce((sum, item) => sum + item.discount, 0));
+  // Mirror the backend line math exactly (per-line round(qty*price - discount, 2)),
+  // so the payment amount sent for a "full payment" can never disagree with the
+  // server-computed total by a cent.
+  const netTotal = roundMoney(items.reduce((sum, item) => sum + lineTotal(item), 0));
 
   const handleAddItem = (variant: VariantWithProduct) => {
     const existingIndex = items.findIndex(i => i.variant_id === variant.id);
@@ -353,7 +363,7 @@ export function NewSalePage() {
                         <div className="flex items-start gap-1 pt-5">
                           <div className="text-right font-semibold text-zinc-900 font-tabular w-20 sm:w-24">
                             <span className="block sm:hidden text-[10px] font-normal text-zinc-400 uppercase">Total</span>
-                            {formatCurrency(item.quantity * item.unit_price - item.discount)}
+                            {formatCurrency(lineTotal(item))}
                           </div>
                           <button
                             type="button"

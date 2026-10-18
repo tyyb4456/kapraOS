@@ -9,6 +9,7 @@ from typing import NamedTuple
 
 import pytest
 import sqlalchemy as sa
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -989,3 +990,97 @@ async def test_purchase_movement_is_traceable_to_the_purchase(
     assert movement.shop_id == fixture.shop.id
     assert movement.quantity == Decimal("7.000")
     assert movement.unit_cost == Decimal("123.45")
+
+
+# --------------------------------------------------------------------------
+# API: list payload contract
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_purchases_exposes_discount_for_edit_round_trip(
+    api_session: AsyncSession, mocked_api_client
+) -> None:
+    """The list payload must expose `discount` so edit flows can round-trip it.
+
+    Regression: the field was absent, so the purchase edit dialog seeded 0
+    and the next PATCH (e.g. fixing the invoice number) silently wiped the
+    stored discount.
+    """
+    from app.models import User
+    from app.models.user import UserRole
+
+    fixture = await _make_shop_with_variant(api_session)
+    api_session.add(
+        User(
+            clerk_user_id="mock_clerk_id",
+            shop_id=fixture.shop.id,
+            name="Owner",
+            email=f"owner-{uuid.uuid4().hex[:6]}@example.com",
+            role=UserRole.OWNER,
+        )
+    )
+    await api_session.flush()
+    purchase = await create_purchase(
+        api_session,
+        shop_id=fixture.shop.id,
+        supplier_id=fixture.supplier.id,
+        items=[
+            PurchaseItemInput(
+                variant_id=fixture.variant.id,
+                quantity=Decimal("2"),
+                unit_cost=Decimal("100.00"),
+            )
+        ],
+        discount=Decimal("25.00"),
+    )
+
+    response = await mocked_api_client.get("/purchases")
+
+    assert response.status_code == 200
+    row = next(r for r in response.json() if r["id"] == str(purchase.id))
+    assert Decimal(row["discount"]) == Decimal("25.00")
+    assert Decimal(row["total_amount"]) == Decimal("175.00")
+
+
+@pytest.mark.asyncio
+async def test_duplicate_invoice_number_is_a_clean_409_not_500(
+    api_session: AsyncSession, mocked_api_client: AsyncClient
+) -> None:
+    """A duplicate per-shop invoice number must surface as 409, not a 500.
+
+    Regression: neither router handled the unique-index IntegrityError, so
+    losing the (documented) create race or reusing an invoice number by
+    hand produced an unhandled 500.
+    """
+    from app.models import User
+    from app.models.user import UserRole
+
+    fixture = await _make_shop_with_variant(api_session)
+    api_session.add(
+        User(
+            clerk_user_id="mock_clerk_id",
+            shop_id=fixture.shop.id,
+            name="Owner",
+            email=f"owner-{uuid.uuid4().hex[:6]}@example.com",
+            role=UserRole.OWNER,
+        )
+    )
+    await api_session.flush()
+    body = {
+        "supplier_id": str(fixture.supplier.id),
+        "invoice_number": "DUP-INV-001",
+        "items": [
+            {
+                "variant_id": str(fixture.variant.id),
+                "quantity": 1,
+                "unit_cost": 100,
+            }
+        ],
+    }
+
+    first = await mocked_api_client.post("/purchases", json=body)
+    second = await mocked_api_client.post("/purchases", json=body)
+
+    assert first.status_code == 201
+    assert second.status_code == 409

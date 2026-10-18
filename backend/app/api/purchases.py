@@ -10,6 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.dependencies import DbSession, ShopId
 from app.cache import keys as cache_keys
@@ -95,6 +96,15 @@ async def create_purchase(
         raise _not_found(exc) from exc
     except (EmptyPurchaseError, InvalidPurchaseItemError, InvalidPurchaseTotalsError, DuplicatePurchaseItemError) as exc:
         raise _unprocessable(exc) from exc
+    except IntegrityError:
+        # The per-shop invoice-number unique index can lose a race between
+        # two concurrent creates (or a caller-supplied duplicate): a clean
+        # 409 beats an unhandled 500.
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The purchase conflicts with existing data (a duplicate invoice number is the usual cause). Reload and retry.",
+        ) from None
 
     await db.commit()
 
@@ -234,6 +244,7 @@ async def list_purchases(
                 supplier_name=supplier_name,
                 status="received",
                 total_amount=purchase.total,
+                discount=purchase.discount,
                 paid_amount=purchase.paid_amount,
                 items_count=item_count,
                 created_at=purchase.created_at,
@@ -361,6 +372,17 @@ async def update_purchase(
     invoice_sentinel: object = ...
     if "invoice_number" in fields_set:
         invoice_sentinel = body.invoice_number
+    # Capture the pre-edit supplier/variants too: an edit can re-point the
+    # supplier (invalidation must cover the OLD supplier) and can remove
+    # lines whose variant inventory keys would otherwise stay stale.
+    previous = await db.get(Purchase, purchase_id)
+    previous_supplier: UUID | None = None
+    previous_variants: list[UUID] = []
+    if previous is not None and previous.shop_id == shop_id:
+        previous_supplier = previous.supplier_id
+        previous_variants = list((await db.execute(
+            select(PurchaseItem.variant_id).where(PurchaseItem.purchase_id == purchase_id)
+        )).scalars().all())
     try:
         purchase = await purchases_service.update_purchase(
             db,
@@ -389,11 +411,22 @@ async def update_purchase(
     rows = (await db.execute(
         select(PurchaseItem).where(PurchaseItem.purchase_id == purchase.id)
     )).scalars().all()
+    # Evict BOTH sides of the change: an edit may have re-pointed the
+    # supplier (old supplier's Khata/statement keys) and removed lines whose
+    # variant inventory keys would otherwise stay stale.
+    union_variants: list[UUID] = []
+    seen_variants: set[UUID] = set()
+    for vid in [*previous_variants, *[row.variant_id for row in rows]]:
+        if vid not in seen_variants:
+            seen_variants.add(vid)
+            union_variants.append(vid)
     await cache_service.after_purchase_committed(
         shop_id,
         supplier_id=purchase.supplier_id,
-        variant_ids=[row.variant_id for row in rows],
+        variant_ids=union_variants,
     )
+    if previous_supplier is not None and previous_supplier != purchase.supplier_id:
+        await cache_service.invalidate_supplier(shop_id, previous_supplier)
     return _purchase_to_response(purchase, list(rows))
 
 

@@ -13,6 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import DbSession, ShopId
@@ -114,6 +115,15 @@ async def create_sale(
         raise _not_found(exc) from exc
     except (EmptySaleError, InvalidSaleItemError, InvalidSaleTotalsError, DuplicateSaleItemError) as exc:
         raise _unprocessable(exc) from exc
+    except IntegrityError:
+        # The per-shop invoice-number unique index can lose a race between
+        # two concurrent creates (or a caller-supplied duplicate): a clean
+        # 409 beats an unhandled 500.
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The sale conflicts with existing data (a duplicate invoice number is the usual cause). Reload and retry.",
+        ) from None
 
     response = SaleResponse.model_validate(sale)
     if sale.customer_id is not None:
@@ -375,6 +385,17 @@ async def update_sale(
     invoice_sentinel: object = ...
     if "invoice_number" in fields_set:
         invoice_sentinel = body.invoice_number
+    # Capture the pre-edit customer/variants too: an edit can re-point the
+    # customer (invalidation must cover the OLD customer) and can restore
+    # stock for removed variants (their inventory keys go stale otherwise).
+    previous = await db.get(Sale, sale_id)
+    previous_customer: UUID | None = None
+    previous_variants: list[UUID] = []
+    if previous is not None and previous.shop_id == shop_id:
+        previous_customer = previous.customer_id
+        previous_variants = list((await db.execute(
+            select(SaleItem.variant_id).where(SaleItem.sale_id == sale_id)
+        )).scalars().all())
     try:
         sale = await sales_service.update_sale(
             db,
@@ -410,11 +431,22 @@ async def update_sale(
     response.returned_total = Decimal("0.00")
     response.net_total = Decimal(sale.total)
     response.returns_count = 0
+    # Evict BOTH sides of the change: an edit may have re-pointed the
+    # customer (old customer's Khata/statement keys) and restored stock for
+    # removed variants (their inventory keys), not just the new values.
+    union_variants: list[UUID] = []
+    seen_variants: set[UUID] = set()
+    for vid in [*previous_variants, *[line.variant_id for line in sale.items]]:
+        if vid not in seen_variants:
+            seen_variants.add(vid)
+            union_variants.append(vid)
     await cache_service.after_sale_committed(
         shop_id,
         customer_id=sale.customer_id,
-        variant_ids=[line.variant_id for line in sale.items],
+        variant_ids=union_variants,
     )
+    if previous_customer is not None and previous_customer != sale.customer_id:
+        await cache_service.invalidate_customer(shop_id, previous_customer)
     return response
 
 

@@ -395,6 +395,7 @@ export interface Purchase {
   supplier_name?: string | null;
   status: PurchaseStatus;
   total_amount: number | string;
+  discount: number | string;
   paid_amount: number | string;
   items_count: number;
   items?: PurchaseItem[];

@@ -25,10 +25,14 @@ payment (payment + ledger + idempotency receipt), an approved expense
 (expense + ledger + idempotency receipt), an approved purchase
 (purchase + items + stock + ledger + idempotency receipt), or an approved
 return (return + items + stock + ledger + idempotency receipt) commits
-atomically. A run that pauses for approval is left untouched: the
-interrupt fires BEFORE the tool executes, so nothing was mutated and
-there is nothing to undo. No transaction ever spans the HITL pause:
-each request builds the agent over its own fresh session.
+atomically. A first-turn run that pauses for approval is left
+untouched: the interrupt fires BEFORE the tool executes, so nothing was
+mutated and there is nothing to undo. A *resumed* run commits even when
+it pauses again, because the approved tool already executed before the
+next interrupt fired - the checkpoint has permanently recorded that
+execution, so those flushes could never be re-approved and must land.
+No transaction ever spans the HITL pause: each request builds the agent
+over its own fresh session.
 
 Authorization: any authenticated member of the shop (owner or staff) may
 record sales/payments through the assistant — exactly the same rule as
@@ -316,8 +320,10 @@ async def _settle_transaction(
     run_status: str,
     shop_id: uuid.UUID | None = None,
     result: Any | None = None,
+    *,
+    commit_if_paused: bool = False,
 ) -> None:
-    """Commit a finished run; leave a paused run untouched.
+    """Commit a finished run; leave a paused first turn untouched.
 
     The write tools flush but never commit, so the commit here is what
     makes an approved operation durable — a sale (rows + stock + payments
@@ -326,9 +332,15 @@ async def _settle_transaction(
     idempotency receipt), an expense (expense + ledger + idempotency
     receipt), a purchase (purchase + items + stock + ledger +
     idempotency receipt), or a return (return + items + stock + ledger +
-    idempotency receipt) together, or nothing at all. A ``paused`` run
+    idempotency     receipt) together, or nothing at all. A first-turn ``paused`` run
     performed no approved mutation (the interrupt fires before the tool
     executes), so its session is deliberately left alone.
+
+    ``commit_if_paused`` is for *resumed* requests: an approved tool
+    executes before any later interrupt can fire, so when a resume pauses
+    again the executed work is already recorded in the checkpoint and can
+    never be re-approved — those flushes must be committed. Reject-only
+    or read-only resumes commit an empty transaction harmlessly.
 
     Step 10: after a successful commit that executed a write tool, evict
     this shop's read caches (tenant-scoped patterns only — never other
@@ -336,7 +348,7 @@ async def _settle_transaction(
     Invalidation itself is fail-open: a Redis failure only leaves a
     short-TTL stale entry, PostgreSQL stays correct.
     """
-    if run_status != "done":
+    if run_status != "done" and not commit_if_paused:
         return
     try:
         await db.commit()

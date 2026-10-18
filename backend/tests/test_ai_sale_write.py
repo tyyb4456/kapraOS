@@ -1204,3 +1204,157 @@ async def test_chat_endpoint_sale_edit_decision_contract(
         assert sales[0].due_amount == Decimal("1600.00")
     finally:
         app.dependency_overrides.pop(get_chat_model, None)
+
+
+def _two_sale_fake() -> BaseChatModel:
+    """Fake model that proposes two sales back-to-back.
+
+    After the first tool result it immediately proposes a second sale, so
+    approving the first sale causes a NEW interrupt in the same run.
+    """
+
+    class _TwoSaleFakeModel(BaseChatModel):
+        @property
+        def _llm_type(self) -> str:
+            return "two-sale-fake"
+
+        def bind_tools(self, tools: Any, **kwargs: Any) -> "_TwoSaleFakeModel":
+            return self
+
+        def _generate(
+            self,
+            messages: list[BaseMessage],
+            stop: list[str] | None = None,
+            run_manager: CallbackManagerForLLMRun | None = None,
+            **kwargs: Any,
+        ) -> ChatResult:
+            tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
+            if len(tool_msgs) >= 2:
+                message = AIMessage(content="Both sales recorded.")
+            else:
+                message = AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "create_sale",
+                            "args": {
+                                "idempotency_key": f"two{uuid.uuid4().hex[:24]}",
+                                "customer_name": "Ali",
+                                "product_name": "Black Lawn",
+                                "quantity": "1",
+                                "payment_kind": "credit",
+                            },
+                            "id": f"call_sale_{len(tool_msgs) + 1}",
+                            "type": "tool_call",
+                        }
+                    ],
+                )
+            return ChatResult(generations=[ChatGeneration(message=message)])
+
+    return _TwoSaleFakeModel()
+
+
+@pytest.mark.asyncio
+async def test_chat_resume_commits_sale_when_run_pauses_again(
+    mocked_api_client: Any, api_session: AsyncSession
+) -> None:
+    """An approved sale must be durable even if the resumed run pauses again.
+
+    Regression: only ``done`` runs were committed. When a resume executed
+    the approved sale and the model immediately proposed a second one, the
+    route returned ``paused`` without committing — rolling back the first
+    sale while the checkpoint still recorded it as executed, so it could
+    never be approved again.
+    """
+    from app.api.ai import get_chat_model
+    from app.main import app
+    from app.models import Shop as ShopModel
+    from app.models import User as UserModel
+    from app.models.user import UserRole
+
+    shop = ShopModel(name=f"HTTP Resume Shop {uuid.uuid4().hex[:6]}")
+    api_session.add(shop)
+    await api_session.flush()
+    await api_session.refresh(shop)
+    api_session.add(
+        UserModel(
+            clerk_user_id="mock_clerk_id",
+            shop_id=shop.id,
+            name="Seller",
+            email=f"seller-{uuid.uuid4().hex[:6]}@example.com",
+            role=UserRole.OWNER,
+        )
+    )
+    await api_session.flush()
+    category = Category(shop_id=shop.id, shop=shop, name="Lawn")
+    api_session.add(category)
+    await api_session.flush()
+    product = Product(
+        shop_id=shop.id,
+        category_id=category.id,
+        name="Black Lawn",
+        product_type=ProductType.OPEN_FABRIC,
+    )
+    api_session.add(product)
+    await api_session.flush()
+    variant = ProductVariant(
+        shop_id=shop.id,
+        product_id=product.id,
+        sku=f"HTTP-{uuid.uuid4().hex[:6]}",
+        purchase_price=Decimal("500.00"),
+        selling_price=Decimal("800.00"),
+        unit=Unit.METER,
+    )
+    supplier = Supplier(shop_id=shop.id, name="HTTP Supplier")
+    customer = Customer(shop_id=shop.id, name="Ali")
+    api_session.add_all([variant, supplier, customer])
+    await api_session.flush()
+    await create_purchase(
+        api_session,
+        shop_id=shop.id,
+        supplier_id=supplier.id,
+        items=[
+            PurchaseItemInput(
+                variant_id=variant.id,
+                quantity=Decimal(10),
+                unit_cost=Decimal(500),
+            )
+        ],
+    )
+
+    def _sale_count() -> Any:
+        return api_session.execute(
+            select(func.count(Sale.id)).where(Sale.shop_id == shop.id)
+        )
+
+    app.dependency_overrides[get_chat_model] = _two_sale_fake
+    try:
+        thread = uuid.uuid4().hex
+        paused = await mocked_api_client.post(
+            "/ai/chat",
+            json={"message": "Ali ko do sale de do", "thread_id": thread},
+        )
+        assert paused.status_code == 200
+        assert paused.json()["status"] == "paused"
+        assert (await _sale_count()).scalar_one() == 0
+
+        second_pause = await mocked_api_client.post(
+            "/ai/chat/resume",
+            json={"thread_id": thread, "decisions": [{"type": "approve"}]},
+        )
+        assert second_pause.status_code == 200
+        body = second_pause.json()
+        assert body["status"] == "paused"
+        assert body["interrupts"][0]["name"] == "create_sale"
+        # The first approved sale must be committed despite the new pause.
+        assert (await _sale_count()).scalar_one() == 1
+
+        final = await mocked_api_client.post(
+            "/ai/chat/resume",
+            json={"thread_id": thread, "decisions": [{"type": "approve"}]},
+        )
+        assert final.status_code == 200
+        assert final.json()["status"] == "done"
+        assert (await _sale_count()).scalar_one() == 2
+    finally:
+        app.dependency_overrides.pop(get_chat_model, None)

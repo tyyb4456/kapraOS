@@ -1,6 +1,27 @@
 import type { UnitOfMeasure } from '../types/index.ts';
 
 /**
+ * Round a money amount to 2 decimal places, mirroring the backend's
+ * ROUND_HALF_UP money quantization. Use for client-side money that is
+ * sent to the API (e.g. POS payment amounts) so float artifacts cannot
+ * disagree with the server and turn a full payment into a spurious 422
+ * or a one-paisa due.
+ */
+export function roundMoney(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(2));
+}
+
+/**
+ * Round a quantity to 3 decimal places, mirroring the backend's
+ * quantity quantization (e.g. metrage).
+ */
+export function roundQuantity(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(3));
+}
+
+/**
  * Format currency in Pakistani Rupees (PKR)
  * Example: 12500 -> "Rs. 12,500", 1250.5 -> "Rs. 1,250.50"
  */
