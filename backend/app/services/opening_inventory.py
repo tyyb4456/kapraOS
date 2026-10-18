@@ -248,7 +248,12 @@ def _normalise_quantity(raw: object) -> Decimal:
         raise InvalidOpeningInventoryLineError(
             f"quantity {raw!r} is not a valid number"
         )
-    quantized = quantity.quantize(_QUANTITY_SCALE, rounding=ROUND_HALF_UP)
+    try:
+        quantized = quantity.quantize(_QUANTITY_SCALE, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        raise InvalidOpeningInventoryLineError(
+            f"quantity {raw!r} is not a valid number"
+        ) from None
     if quantized != quantity:
         raise InvalidOpeningInventoryLineError(
             "quantity must have at most 3 decimal places"
@@ -271,7 +276,12 @@ def _normalise_cost(raw: object) -> Decimal:
         raise InvalidOpeningInventoryLineError(
             f"unit cost {raw!r} is not a valid number"
         )
-    cost = cost.quantize(_MONEY_SCALE, rounding=ROUND_HALF_UP)
+    try:
+        cost = cost.quantize(_MONEY_SCALE, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        raise InvalidOpeningInventoryLineError(
+            f"unit cost {raw!r} is not a valid number"
+        ) from None
     if cost <= 0:
         raise InvalidOpeningInventoryLineError("unit cost must be greater than 0")
     return cost
@@ -318,6 +328,11 @@ def _parse_line(index: int, line: OpeningInventoryLineInput) -> _LineParse:
         parsed.cost_status = _normalise_cost_status(getattr(line, "cost_status", None))
     except OpeningInventoryError as exc:
         parsed.errors.append(str(exc))
+    if not parsed.errors:
+        try:
+            _ = parsed.value
+        except InvalidOperation:
+            parsed.errors.append("value is out of range")
     return parsed
 
 

@@ -476,6 +476,41 @@ async def test_preview_rejects_zero_negative_and_invalid_precision_quantities(
 
 
 @pytest.mark.asyncio
+async def test_preview_rejects_extreme_finite_and_non_finite_values(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_variant(db_session)
+    second = await _add_variant(db_session, fixture)
+    third = await _add_variant(db_session, fixture, sku="LINEN-WHT-003")
+    fourth = await _add_variant(db_session, fixture, sku="LINEN-WHT-004")
+    fifth = await _add_variant(db_session, fixture, sku="LINEN-WHT-005")
+
+    preview = await preview_opening_inventory(
+        db_session,
+        shop_id=fixture.shop.id,
+        lines=[
+            _line(fixture.variant.id, quantity="1e30"),
+            _line(second.id, unit_cost="1e999"),
+            _line(third.id, quantity=Decimal("Infinity")),
+            _line(fourth.id, unit_cost=Decimal("-Infinity")),
+            _line(
+                fifth.id,
+                quantity="1000000000000000",
+                unit_cost="1000000000000",
+            ),
+        ],
+    )
+
+    assert preview.valid is False
+    assert all(line.errors for line in preview.lines)
+    for line in preview.lines[:4]:
+        assert "not a valid number" in line.errors[0]
+    assert "out of range" in preview.lines[4].errors[0]
+    assert preview.total_value == Decimal("0.00")
+    assert preview.entry_count == 0
+
+
+@pytest.mark.asyncio
 async def test_preview_reports_missing_and_cross_tenant_variants(
     db_session: AsyncSession,
 ) -> None:
@@ -659,6 +694,46 @@ async def test_posting_rejects_invalid_lines_without_writing_anything(
                 db_session,
                 shop_id=fixture.shop.id,
                 idempotency_key=f"bad-line-{index}",
+                lines=payload,
+            )
+
+    counts = await _counts(db_session, fixture.shop.id, [fixture.variant.id])
+    assert counts == {
+        "batches": 0,
+        "entries": 0,
+        "movements": 0,
+        "ledger": 0,
+        "inventory_rows": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_posting_rejects_extreme_finite_and_non_finite_values(
+    db_session: AsyncSession,
+) -> None:
+    fixture = await _make_variant(db_session)
+    second = await _add_variant(db_session, fixture)
+    third = await _add_variant(db_session, fixture, sku="LINEN-WHT-003")
+    fourth = await _add_variant(db_session, fixture, sku="LINEN-WHT-004")
+
+    payloads = [
+        [_line(fixture.variant.id, quantity="1e999")],
+        [_line(second.id, unit_cost="1e30")],
+        [_line(third.id, quantity=Decimal("Infinity"))],
+        [
+            _line(
+                fourth.id,
+                quantity="1000000000000000",
+                unit_cost="1000000000000",
+            )
+        ],
+    ]
+    for index, payload in enumerate(payloads):
+        with pytest.raises(InvalidOpeningInventoryLineError):
+            await post_opening_inventory(
+                db_session,
+                shop_id=fixture.shop.id,
+                idempotency_key=f"extreme-value-{index}",
                 lines=payload,
             )
 
