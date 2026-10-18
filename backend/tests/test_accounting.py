@@ -47,6 +47,7 @@ from app.services.accounting import (
     INVENTORY,
     MAINTENANCE_EXPENSE,
     MARKETING_EXPENSE,
+    OPENING_BALANCE_EQUITY,
     OTHER_EXPENSE,
     RENT_EXPENSE,
     SALARIES_EXPENSE,
@@ -297,6 +298,7 @@ async def test_system_accounts_are_created(db_session: AsyncSession) -> None:
         INVENTORY,
         ACCOUNTS_PAYABLE,
         "3000",
+        OPENING_BALANCE_EQUITY,
         SALES_REVENUE,
         COST_OF_GOODS_SOLD,
         RENT_EXPENSE,
@@ -310,6 +312,8 @@ async def test_system_accounts_are_created(db_session: AsyncSession) -> None:
     }
     assert accounts[CASH].account_type is AccountType.ASSET
     assert accounts[ACCOUNTS_PAYABLE].account_type is AccountType.LIABILITY
+    assert accounts[OPENING_BALANCE_EQUITY].account_type is AccountType.EQUITY
+    assert accounts[OPENING_BALANCE_EQUITY].name == "Opening Balance Equity"
     assert accounts[SALES_REVENUE].account_type is AccountType.REVENUE
     assert accounts[COST_OF_GOODS_SOLD].account_type is AccountType.EXPENSE
     assert accounts[RENT_EXPENSE].account_type is AccountType.EXPENSE

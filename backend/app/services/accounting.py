@@ -75,6 +75,7 @@ ACCOUNTS_RECEIVABLE = "1100"
 INVENTORY = "1200"
 ACCOUNTS_PAYABLE = "2000"
 OWNER_EQUITY = "3000"
+OPENING_BALANCE_EQUITY = "3100"
 SALES_REVENUE = "4000"
 COST_OF_GOODS_SOLD = "5000"
 RENT_EXPENSE = "5100"
@@ -97,6 +98,10 @@ DEFAULT_ACCOUNTS: tuple[tuple[str, str, AccountType], ...] = (
     (INVENTORY, "Inventory", AccountType.ASSET),
     (ACCOUNTS_PAYABLE, "Accounts Payable", AccountType.LIABILITY),
     (OWNER_EQUITY, "Owner Equity", AccountType.EQUITY),
+    # Starting stock entered when the shop adopts KapraOS is not a purchase
+    # and not an owner contribution: its own equity account keeps the two
+    # distinguishable (Opening Inventory credits this account).
+    (OPENING_BALANCE_EQUITY, "Opening Balance Equity", AccountType.EQUITY),
     (SALES_REVENUE, "Sales Revenue", AccountType.REVENUE),
     (COST_OF_GOODS_SOLD, "Cost of Goods Sold", AccountType.EXPENSE),
     (RENT_EXPENSE, "Rent Expense", AccountType.EXPENSE),

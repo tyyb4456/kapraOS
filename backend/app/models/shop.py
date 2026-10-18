@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from app.models.customer import Customer
     from app.models.expense import Expense
     from app.models.ledger_entry import LedgerEntry
+    from app.models.opening_inventory import OpeningInventoryBatch
     from app.models.payment import Payment
     from app.models.product import Product
     from app.models.purchase import Purchase
@@ -156,6 +157,16 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         "Expense",
         back_populates="shop",
         cascade="all, delete-orphan",
+    )
+
+    # Opening inventory (once-per-variant starting stock). Overlaps with
+    # `OpeningInventoryBatch.shop`, which also populates `shop_id` alongside
+    # the entries' composite foreign key.
+    opening_inventory_batches: Mapped[list["OpeningInventoryBatch"]] = relationship(
+        "OpeningInventoryBatch",
+        back_populates="shop",
+        cascade="all, delete-orphan",
+        overlaps="opening_inventory_batches,shop",
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only

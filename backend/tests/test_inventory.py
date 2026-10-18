@@ -583,6 +583,7 @@ async def test_all_movement_types_are_supported(db_session: AsyncSession) -> Non
             InventoryMovementType.PURCHASE,
             InventoryMovementType.CUSTOMER_RETURN,
             InventoryMovementType.ADJUSTMENT,
+            InventoryMovementType.OPENING,
         ):
             await inventory_service.add_stock(
                 db_session,

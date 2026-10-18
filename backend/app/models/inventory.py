@@ -46,7 +46,13 @@ if TYPE_CHECKING:
 
 
 class InventoryMovementType(str, Enum):
-    """Why an `InventoryMovement` happened (architecture's exact set)."""
+    """Why an `InventoryMovement` happened (architecture's exact set).
+
+    `OPENING` is the starting stock a shop enters once when it adopts
+    KapraOS - not a purchase, and deliberately its own type so opening
+    balances stay distinguishable in the movement ledger
+    (`opening_inventory_batches` / `opening_inventory_entries`).
+    """
 
     PURCHASE = "purchase"
     SALE = "sale"
@@ -54,6 +60,7 @@ class InventoryMovementType(str, Enum):
     SUPPLIER_RETURN = "supplier_return"
     DAMAGE = "damage"
     ADJUSTMENT = "adjustment"
+    OPENING = "opening"
 
 
 class Inventory(Base, UUIDMixin, TimestampMixin):

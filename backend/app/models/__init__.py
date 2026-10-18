@@ -33,6 +33,12 @@ from app.models.inventory import (
     InventoryMovementType,
 )
 from app.models.ledger_entry import LedgerEntry
+from app.models.opening_inventory import (
+    OpeningInventoryBatch,
+    OpeningInventoryCostStatus,
+    OpeningInventoryEntry,
+    OpeningInventorySource,
+)
 from app.models.payment import Payment, PaymentMethod
 from app.models.product import (
     Product,
@@ -75,6 +81,10 @@ __all__ = [
     "InventoryMovement",
     "InventoryMovementType",
     "LedgerEntry",
+    "OpeningInventoryBatch",
+    "OpeningInventoryCostStatus",
+    "OpeningInventoryEntry",
+    "OpeningInventorySource",
     "Payment",
     "PaymentMethod",
     "Product",
