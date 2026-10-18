@@ -5,14 +5,19 @@ precision, unit-agnostic stock, ledger history and concurrency safety.
 
 import asyncio
 import uuid
+from collections.abc import AsyncGenerator
 from decimal import Decimal
 from typing import NamedTuple
+from unittest.mock import AsyncMock, patch
 
 import pytest
+import pytest_asyncio
 import sqlalchemy as sa
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.database.session as session_module
+from app.main import app
 from app.models import (
     Category,
     Inventory,
@@ -23,7 +28,9 @@ from app.models import (
     ProductVariant,
     Shop,
     Unit,
+    User,
 )
+from app.models.user import UserRole
 from app.services import inventory as inventory_service
 from app.services.inventory import (
     InsufficientStockError,
@@ -760,3 +767,292 @@ async def test_concurrent_removals_cannot_oversell() -> None:
             if shop_to_delete is not None:
                 await cleanup.delete(shop_to_delete)
                 await cleanup.commit()
+
+
+# --------------------------------------------------------------------------
+# 11. HTTP API - the adjustment endpoint owns its transaction
+# --------------------------------------------------------------------------
+
+
+def _auth_headers() -> dict[str, str]:
+    return {"Authorization": "Bearer mock_token"}
+
+
+async def _make_user(api_session: AsyncSession, shop_id: uuid.UUID) -> User:
+    user = User(
+        clerk_user_id="mock_clerk_id",
+        shop_id=shop_id,
+        name="Mock User",
+        email="mock@example.com",
+        role=UserRole.OWNER,
+    )
+    api_session.add(user)
+    await api_session.flush()
+    return user
+
+
+@pytest_asyncio.fixture
+async def committed_client() -> AsyncGenerator[AsyncClient, None]:
+    """An auth-bypassed client whose requests use real per-request sessions.
+
+    `mocked_api_client` shares the test's savepoint-bound session, so a route
+    that never commits still looks successful. These endpoint tests need the
+    production behavior instead: every request opens its own session, and
+    closing that session rolls back anything the route failed to commit.
+    """
+
+    patcher = patch(
+        "app.auth.auth._verify_token",
+        new_callable=AsyncMock,
+        return_value={"sub": "mock_clerk_id"},
+    )
+    patcher.start()
+
+    async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        async with session_module.AsyncSessionLocal() as session:
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[session_module.get_db] = _override_get_db
+    try:
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+    finally:
+        app.dependency_overrides.pop(session_module.get_db, None)
+        patcher.stop()
+
+
+async def _committed_catalog(
+    *, shop_name: str = "Adjust API Shop", sku: str = "ADJ-API-001"
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """Commit a shop/catalog/variant/User so request sessions can see it."""
+
+    async with session_module.AsyncSessionLocal() as setup:
+        shop = Shop(name=shop_name)
+        category = Category(shop=shop, name="Open Fabric")
+        setup.add_all([shop, category])
+        await setup.flush()
+
+        product = Product(
+            shop_id=shop.id,
+            category_id=category.id,
+            name="Premium Linen",
+            product_type=ProductType.OPEN_FABRIC,
+        )
+        setup.add(product)
+        await setup.flush()
+
+        variant = ProductVariant(
+            shop_id=shop.id,
+            product_id=product.id,
+            sku=sku,
+            purchase_price=Decimal("420.00"),
+            selling_price=Decimal("650.00"),
+            unit=Unit.METER,
+        )
+        user = User(
+            clerk_user_id="mock_clerk_id",
+            shop_id=shop.id,
+            name="Mock User",
+            email="mock@example.com",
+            role=UserRole.OWNER,
+        )
+        setup.add_all([variant, user])
+        await setup.flush()
+        await setup.commit()
+        return shop.id, variant.id
+
+
+async def _delete_shop(shop_id: uuid.UUID) -> None:
+    async with session_module.AsyncSessionLocal() as cleanup:
+        shop_to_delete = await cleanup.get(Shop, shop_id)
+        if shop_to_delete is not None:
+            await cleanup.delete(shop_to_delete)
+            await cleanup.commit()
+
+
+@pytest.mark.asyncio
+async def test_adjust_endpoint_commits_quantity_and_movement(
+    committed_client: AsyncClient,
+) -> None:
+    """Regression: without `db.commit()` both writes die with the session.
+
+    The buggy route returned 200 while its flushed writes were rolled back
+    when the request session closed. A separate session can only see rows
+    that were actually committed.
+    """
+
+    shop_id, variant_id = await _committed_catalog()
+    try:
+        response = await committed_client.post(
+            f"/inventory/{variant_id}/adjust",
+            params={"quantity_delta": "7.5", "notes": "stock take surplus"},
+            headers=_auth_headers(),
+        )
+        assert response.status_code == 200
+        assert Decimal(str(response.json()["quantity"])) == Decimal("7.5")
+
+        async with session_module.AsyncSessionLocal() as check:
+            inventory = await inventory_service.get_or_create_inventory(
+                check, shop_id=shop_id, variant_id=variant_id
+            )
+            assert inventory.quantity == Decimal("7.5")
+
+            movements = await _movements_for(check, variant_id)
+            adjustments = [
+                m
+                for m in movements
+                if m.movement_type is InventoryMovementType.ADJUSTMENT
+            ]
+            assert len(adjustments) == 1
+            assert adjustments[0].quantity == Decimal("7.5")
+            assert adjustments[0].notes == "stock take surplus"
+    finally:
+        await _delete_shop(shop_id)
+
+
+@pytest.mark.asyncio
+async def test_adjust_endpoint_rejects_delta_below_reserved(
+    mocked_api_client: AsyncClient, api_session: AsyncSession
+) -> None:
+    """A negative adjustment below reserved stock fails and persists nothing."""
+
+    fixture = await _make_variant(api_session)
+    await _make_user(api_session, fixture.shop.id)
+    await inventory_service.add_stock(
+        api_session,
+        shop_id=fixture.shop.id,
+        variant_id=fixture.variant.id,
+        quantity=Decimal("10"),
+        movement_type=InventoryMovementType.PURCHASE,
+    )
+    inventory = await inventory_service.get_or_create_inventory(
+        api_session, shop_id=fixture.shop.id, variant_id=fixture.variant.id
+    )
+    inventory.reserved_quantity = Decimal("8")
+    await api_session.flush()
+
+    response = await mocked_api_client.post(
+        f"/inventory/{fixture.variant.id}/adjust",
+        params={"quantity_delta": "-3"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert inventory.quantity == Decimal("10")
+    movements = await _movements_for(api_session, fixture.variant.id)
+    assert all(
+        m.movement_type is not InventoryMovementType.ADJUSTMENT for m in movements
+    )
+
+
+@pytest.mark.asyncio
+async def test_adjust_endpoint_rejects_negative_delta_beyond_stock(
+    mocked_api_client: AsyncClient, api_session: AsyncSession
+) -> None:
+    """A deduction past zero is refused without a movement or a write."""
+
+    fixture = await _make_variant(api_session)
+    await _make_user(api_session, fixture.shop.id)
+    await inventory_service.add_stock(
+        api_session,
+        shop_id=fixture.shop.id,
+        variant_id=fixture.variant.id,
+        quantity=Decimal("2"),
+        movement_type=InventoryMovementType.PURCHASE,
+    )
+
+    response = await mocked_api_client.post(
+        f"/inventory/{fixture.variant.id}/adjust",
+        params={"quantity_delta": "-5"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 422
+    inventory = await inventory_service.get_or_create_inventory(
+        api_session, shop_id=fixture.shop.id, variant_id=fixture.variant.id
+    )
+    assert inventory.quantity == Decimal("2")
+    movements = await _movements_for(api_session, fixture.variant.id)
+    assert [m.movement_type for m in movements] == [InventoryMovementType.PURCHASE]
+
+
+@pytest.mark.asyncio
+async def test_adjust_endpoint_commit_failure_leaves_no_partial_changes(
+    committed_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A database failure is never reported as success and writes nothing."""
+
+    shop_id, variant_id = await _committed_catalog()
+    try:
+        async with session_module.AsyncSessionLocal() as seed:
+            await inventory_service.add_stock(
+                seed,
+                shop_id=shop_id,
+                variant_id=variant_id,
+                quantity=Decimal("5"),
+                movement_type=InventoryMovementType.PURCHASE,
+            )
+            await seed.commit()
+
+        async def _failing_commit(self: AsyncSession) -> None:
+            raise RuntimeError("simulated database failure")
+
+        monkeypatch.setattr(session_module.AsyncSession, "commit", _failing_commit)
+        try:
+            response = await committed_client.post(
+                f"/inventory/{variant_id}/adjust",
+                params={"quantity_delta": "2"},
+                headers=_auth_headers(),
+            )
+            assert response.status_code == 500
+        finally:
+            monkeypatch.undo()
+
+        async with session_module.AsyncSessionLocal() as check:
+            inventory = await inventory_service.get_or_create_inventory(
+                check, shop_id=shop_id, variant_id=variant_id
+            )
+            assert inventory.quantity == Decimal("5")
+            movements = await _movements_for(check, variant_id)
+            assert [m.movement_type for m in movements] == [
+                InventoryMovementType.PURCHASE
+            ]
+    finally:
+        await _delete_shop(shop_id)
+
+
+@pytest.mark.asyncio
+async def test_adjust_endpoint_cannot_touch_another_shops_variant(
+    mocked_api_client: AsyncClient, api_session: AsyncSession
+) -> None:
+    """Tenant isolation: another shop's variant is a 404, not a write."""
+
+    shop_a = await _make_variant(api_session, shop_name="Shop A", sku="A-001")
+    shop_b = await _make_variant(api_session, shop_name="Shop B", sku="B-001")
+    await _make_user(api_session, shop_a.shop.id)
+    await inventory_service.add_stock(
+        api_session,
+        shop_id=shop_b.shop.id,
+        variant_id=shop_b.variant.id,
+        quantity=Decimal("5"),
+        movement_type=InventoryMovementType.PURCHASE,
+    )
+
+    response = await mocked_api_client.post(
+        f"/inventory/{shop_b.variant.id}/adjust",
+        params={"quantity_delta": "3"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 404
+    inventory = await inventory_service.get_or_create_inventory(
+        api_session, shop_id=shop_b.shop.id, variant_id=shop_b.variant.id
+    )
+    assert inventory.quantity == Decimal("5")
+    movements = await _movements_for(api_session, shop_b.variant.id)
+    assert [m.movement_type for m in movements] == [InventoryMovementType.PURCHASE]

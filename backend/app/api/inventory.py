@@ -288,7 +288,7 @@ async def adjust_stock(
     notes: str | None = None,
 ) -> InventoryResponse:
     try:
-        movement = await inventory_service.adjust_stock(
+        await inventory_service.adjust_stock(
             db,
             shop_id=shop_id,
             variant_id=variant_id,
@@ -315,8 +315,15 @@ async def adjust_stock(
         .where(ProductVariant.id == variant_id, ProductVariant.shop_id == shop_id)
     )
     variant = (await db.execute(stmt)).scalar_one()
-    # No commit here by design (caller owns transactions); evict best-effort
-    # so the next read repopulates from PostgreSQL.
-    await cache_service.after_inventory_adjust_committed(shop_id, variant_id)
     attrs = _extract_attributes(variant)
-    return _build_inventory_response(variant.inventory, variant, variant.product, attrs)
+    response = _build_inventory_response(
+        variant.inventory, variant, variant.product, attrs
+    )
+    # The service only flushes; the route owns the transaction boundary, like
+    # every other mutation endpoint.
+    await db.commit()
+    # Adjustment mutates stock and summaries: evict only after the commit
+    # succeeded, so a rolled-back transaction never invalidates as if the
+    # write had landed.
+    await cache_service.after_inventory_adjust_committed(shop_id, variant_id)
+    return response

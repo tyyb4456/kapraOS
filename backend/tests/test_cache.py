@@ -847,3 +847,65 @@ async def test_customer_summary_route_cached(
     assert second.status_code == 200
     assert second.json() == first.json()
     assert cache_service.get_metrics()["hits"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_inventory_adjust_route_evicts_cache_after_commit(
+    mocked_api_client, api_session: AsyncSession
+):
+    """POST /inventory/{id}/adjust commits, then evicts the cached reads."""
+    from httpx import AsyncClient
+
+    from app.cache import keys as cache_keys
+
+    client: AsyncClient = mocked_api_client
+    shop, variant = await _make_shop_with_catalog(api_session, name="Adjust Cache Shop")
+    await _make_user_for_shop(api_session, shop.id)
+
+    variant_key = cache_keys.inventory_variant_key(shop.id, variant.id)
+    list_key = cache_keys.inventory_list_key(shop.id)
+    await cache_service.set_json(variant_key, {"variant_id": str(variant.id)}, 60)
+    await cache_service.set_json(list_key, [], 60)
+    invalidations_before = cache_service.get_metrics()["invalidations"]
+
+    response = await client.post(
+        f"/inventory/{variant.id}/adjust", params={"quantity_delta": "4"}
+    )
+
+    assert response.status_code == 200
+    assert Decimal(str(response.json()["quantity"])) == Decimal("4")
+    assert await cache_service.get_json(variant_key) is None
+    assert await cache_service.get_json(list_key) is None
+    assert cache_service.get_metrics()["invalidations"] > invalidations_before
+
+
+@pytest.mark.asyncio
+async def test_inventory_adjust_route_keeps_cache_when_commit_fails(
+    mocked_api_client, api_session: AsyncSession, monkeypatch
+):
+    """A failed transaction must not evict the cache as if it succeeded."""
+    from httpx import AsyncClient
+
+    from app.cache import keys as cache_keys
+
+    client: AsyncClient = mocked_api_client
+    shop, variant = await _make_shop_with_catalog(api_session, name="No Commit Shop")
+    await _make_user_for_shop(api_session, shop.id)
+
+    key = cache_keys.inventory_variant_key(shop.id, variant.id)
+    await cache_service.set_json(key, {"variant_id": str(variant.id)}, 60)
+    invalidations_before = cache_service.get_metrics()["invalidations"]
+
+    async def _failing_commit() -> None:
+        raise RuntimeError("simulated database failure")
+
+    monkeypatch.setattr(api_session, "commit", _failing_commit)
+
+    with pytest.raises(RuntimeError):
+        await client.post(
+            f"/inventory/{variant.id}/adjust", params={"quantity_delta": "4"}
+        )
+
+    # The write never reached PostgreSQL; the cached read is still valid.
+    assert await cache_service.get_json(key) is not None
+    assert cache_service.get_metrics()["invalidations"] == invalidations_before

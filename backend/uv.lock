@@ -358,6 +358,8 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "av" },
+    { name = "certifi" },
+    { name = "clerk-backend-api" },
     { name = "deepagents" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -366,12 +368,14 @@ dependencies = [
     { name = "langchain-fireworks" },
     { name = "livekit-agents" },
     { name = "livekit-api" },
+    { name = "livekit-plugins-ai-coustics" },
     { name = "mypy" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "python-dotenv" },
     { name = "redis" },
     { name = "ruff" },
     { name = "sqlalchemy", extra = ["asyncio"] },
@@ -383,6 +387,8 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "av", specifier = ">=18.1.0" },
+    { name = "certifi", specifier = ">=2026.7.22" },
+    { name = "clerk-backend-api", specifier = ">=6.0.0" },
     { name = "deepagents", specifier = ">=0.7.19" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
@@ -391,12 +397,14 @@ requires-dist = [
     { name = "langchain-fireworks", specifier = ">=1.3.1" },
     { name = "livekit-agents", specifier = ">=1.7.0,<2.0.0" },
     { name = "livekit-api", specifier = ">=1.0.0" },
+    { name = "livekit-plugins-ai-coustics", specifier = ">=0.3.4" },
     { name = "mypy", specifier = ">=2.3.1" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "python-dotenv", specifier = ">=1.2.3" },
     { name = "redis", specifier = ">=5.0.0" },
     { name = "ruff", specifier = ">=0.16.9" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.52" },
@@ -688,6 +696,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/35/4f/b911ed898b26a09789eba9c9200c999aff6c61b4bafaf4838e56d1a1e1a3/charset_normalizer-3.5.1-cp37-abi3-win_amd64.whl", hash = "sha256:70055ff39b97c99e7ae40ea3e393fb62aa2e44dbd9b29f8d14f42fb0025c3959", size = 199764, upload-time = "2026-08-15T08:20:13.908Z" },
     { url = "https://files.pythonhosted.org/packages/f0/a7/920baf467bfd9bf689f3b318340f37aee4572a71f162bd8db51da55ba4fa/charset_normalizer-3.5.1-cp37-abi3-win_arm64.whl", hash = "sha256:87e4f41d375c0b9be2fb5251aee4b8a689169e134535aed81bf085c3b647451e", size = 287318, upload-time = "2026-08-15T08:20:15.551Z" },
     { url = "https://files.pythonhosted.org/packages/cc/61/d01fc49b8dea277640b55a9e15960dbca9fdc8c9fde18e572d39c59f4019/charset_normalizer-3.5.1-py3-none-any.whl", hash = "sha256:6df0ec430f9a831772c23ca5a224cba36517a58a84bb32c32bb59a9fa67c47f6", size = 68658, upload-time = "2026-08-15T08:20:43.306Z" },
+]
+
+[[package]]
+name = "clerk-backend-api"
+version = "7.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "httpcore" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d8/48/de97a14a8fcc9da3f37ed2d6320be489f4dd076e640c9bac60482f620e59/clerk_backend_api-7.0.0.tar.gz", hash = "sha256:2ff8eab7a75d7ff527cadfaf4ebba53ee5316ac1f7bc22f0d0d6f1b8033082f0", size = 291950, upload-time = "2026-08-11T13:50:25.109Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/11/ba1731756d7e8bce06ac3428604629600cde7c17f1b8415277f62f18657c/clerk_backend_api-7.0.0-py3-none-any.whl", hash = "sha256:8df8639dcdaa600dbd1a26878ecaeb6dcc724b2d21247eb6abef4cbd73be9eb5", size = 598066, upload-time = "2026-08-11T13:50:23.67Z" },
 ]
 
 [[package]]
@@ -1890,6 +1914,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/82/2e/7b4ec0de0e5f1ef4c2f441a3047dda950c11d819fb1804e0a13c6ef68317/livekit_local_inference-0.2.7-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f122e205899c5393ef4a710beedfece7a166649afa5ccbdc3cca61f2df113efa", size = 34835765, upload-time = "2026-08-18T09:47:08.974Z" },
     { url = "https://files.pythonhosted.org/packages/01/c9/5cee5031e9ac2b545f6a68d2442bb02a3a6564f298d91f321448c1b59944/livekit_local_inference-0.2.7-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7a97bc2932b73f72c5246cb8350cf2cd7d21fc6237053fc7c1ac645352ed0f3f", size = 34876770, upload-time = "2026-08-18T09:47:11.379Z" },
     { url = "https://files.pythonhosted.org/packages/7f/72/c2c956d1797bd944449fd90945ceea5dded222a54b2df8c967c77440298f/livekit_local_inference-0.2.7-cp314-cp314-win_amd64.whl", hash = "sha256:168c2f2dd55ee6dd94fd7caae0ff73e4875e25aa418df819905fd339de1de4cd", size = 34882427, upload-time = "2026-08-18T09:47:13.983Z" },
+]
+
+[[package]]
+name = "livekit-plugins-ai-coustics"
+version = "0.3.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "livekit" },
+    { name = "livekit-agents" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0d/97/7c6e850dfc29b66065a6e9df3d41fec764c81aca87d3b58f68efcd1ebc4f/livekit_plugins_ai_coustics-0.3.4.tar.gz", hash = "sha256:8999db1861b53a1afe1893a672ef8f905c59b8899cf46dda7399031bcee3dab2", size = 18826, upload-time = "2026-10-11T22:32:35.607Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/cf/e6d7250b51af097cf1d9913e21f04844eb0f0e4ecf2ca9737c5840fcc670/livekit_plugins_ai_coustics-0.3.4-cp310-abi3-macosx_10_9_x86_64.whl", hash = "sha256:6ab62f8510cbf2c16c009a8d6c5801106610e445b8a9ddb87628215c38f30c6c", size = 70489818, upload-time = "2026-10-11T22:32:17.609Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/50/95c18c4ed8632660096493ce2f9e8942d8ffb7426f7882b6039187876f01/livekit_plugins_ai_coustics-0.3.4-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:947169bd5d8f3c4a32df35fe86387c82ab1417caaba1eca914b7c499f09a4fec", size = 70630487, upload-time = "2026-10-11T22:32:21.156Z" },
+    { url = "https://files.pythonhosted.org/packages/45/9b/7cf4089a8ab076bf901fac350065d50f6821be212f98d891a94436826bd8/livekit_plugins_ai_coustics-0.3.4-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:c99e9acc7173418ad92faf7d2a53580cc9bc9b8a4a2ece7994293ad287c8172c", size = 70342671, upload-time = "2026-10-11T22:32:24.878Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/bf/d900d7dbc6bb6fbe34307ddf80045988e950ecf2268739b0e26826754407/livekit_plugins_ai_coustics-0.3.4-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:aa9571dfc67f5d6013579e777dd5a0f7d0dbd4ff3323f017d94494fb13343813", size = 70724692, upload-time = "2026-10-11T22:32:28.183Z" },
+    { url = "https://files.pythonhosted.org/packages/18/7c/57131654543f9b38bf4c3e6df281b7985783d5444deee4dcc4822af1a4dd/livekit_plugins_ai_coustics-0.3.4-cp310-abi3-win_amd64.whl", hash = "sha256:333869a86d960cb938f384231953e5f62ff973b14b5a7dd129509e877f7e5c62", size = 70303249, upload-time = "2026-10-11T22:32:31.861Z" },
 ]
 
 [[package]]
