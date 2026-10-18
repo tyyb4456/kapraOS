@@ -67,6 +67,7 @@ REFERENCE_PURCHASE_RETURN = "PURCHASE_RETURN"
 REFERENCE_CUSTOMER_PAYMENT = "CUSTOMER_PAYMENT"
 REFERENCE_SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT"
 REFERENCE_EXPENSE = "EXPENSE"
+REFERENCE_OPENING_INVENTORY = "OPENING_INVENTORY"
 
 #: Codes referenced by name throughout this module.
 CASH = "1000"
@@ -675,6 +676,53 @@ async def post_expense(
         shop_id=expense.shop_id,
         reference_type=REFERENCE_EXPENSE,
         reference_id=expense.id,
+        lines=lines,
+    )
+
+
+async def post_opening_inventory(
+    session: AsyncSession,
+    *,
+    shop_id: uuid.UUID,
+    batch_id: uuid.UUID,
+    total_value: Decimal,
+    description: str | None = None,
+) -> list[LedgerEntry]:
+    """Post starting stock entered through an opening-inventory batch.
+
+        Debit   Inventory                   total
+        Credit  Opening Balance Equity      total
+
+    An opening balance is the point at which the shop's books start: there is
+    no supplier and no payable, so the balancing side is equity - never
+    Accounts Payable (`post_purchase`). `total_value` must be strictly
+    positive: the strict costing policy admits no zero-cost opening stock,
+    and Step 8 forbids zero-value ledger lines, so a non-positive aggregate
+    is a caller bug and is rejected outright instead of silently skipped.
+
+    Idempotent per batch: reference `("OPENING_INVENTORY", batch_id)`, so a
+    retried posting writes nothing new.
+    """
+
+    accounts = await ensure_system_accounts(session, shop_id=shop_id)
+    inventory = accounts[INVENTORY]
+    equity = accounts[OPENING_BALANCE_EQUITY]
+
+    total = _money(total_value)
+    if total <= 0:
+        raise InvalidLedgerLineError(
+            f"opening inventory posting must be positive, got {total}"
+        )
+
+    lines = [
+        (inventory.id, total, _ZERO, description),
+        (equity.id, _ZERO, total, description),
+    ]
+    return await _post_group(
+        session,
+        shop_id=shop_id,
+        reference_type=REFERENCE_OPENING_INVENTORY,
+        reference_id=batch_id,
         lines=lines,
     )
 
