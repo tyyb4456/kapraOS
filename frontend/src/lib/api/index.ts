@@ -2,6 +2,7 @@ export * from './client.ts';
 export * from './auth.ts';
 export * from './products.ts';
 export * from './inventory.ts';
+export * from './openingInventory.ts';
 export * from './sales.ts';
 export * from './purchases.ts';
 export * from './customers.ts';

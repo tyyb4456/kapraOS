@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
+  PackagePlus,
   FolderTree,
   Warehouse,
   ArrowLeftRight,
@@ -62,6 +63,7 @@ const navigationGroups: NavGroup[] = [
     groupTitle: 'INVENTORY',
     items: [
       { label: 'Inventory', path: '/inventory', icon: Warehouse },
+      { label: 'Opening Stock', path: '/inventory/opening', icon: PackagePlus },
       { label: 'Stock Movements', path: '/inventory/movements', icon: ArrowLeftRight },
     ],
   },

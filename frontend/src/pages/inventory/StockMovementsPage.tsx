@@ -29,6 +29,7 @@ type MovementType =
   | 'adjustment'
   | 'damage'
   | 'transfer'
+  | 'opening'
   | 'purchase_in'
   | 'sale_out'
   | 'return_in'
@@ -92,13 +93,15 @@ export function StockMovementsPage() {
         return <Badge variant="destructive" size="sm">Damage</Badge>;
       case 'transfer':
         return <Badge variant="secondary" size="sm">Transfer</Badge>;
+      case 'opening':
+        return <Badge variant="info" size="sm">Opening Stock</Badge>;
       default:
         return <Badge variant="neutral" size="sm">{type}</Badge>;
     }
   };
 
   const getQuantityColor = (type: string, quantity: number) => {
-    if (type === 'purchase_in' || type === 'purchase' || type === 'return_in' || type === 'customer_return') {
+    if (type === 'purchase_in' || type === 'purchase' || type === 'return_in' || type === 'customer_return' || type === 'opening') {
       return 'text-emerald-700';
     }
     if (type === 'sale_out' || type === 'sale' || type === 'return_out' || type === 'supplier_return' || type === 'damage') {
@@ -127,6 +130,7 @@ export function StockMovementsPage() {
                 onChange={(e) => setFilterType(e.target.value as MovementType)}
               >
                 <option value="all">All Movement Types</option>
+                <option value="opening">Opening Stock (+)</option>
                 <option value="purchase">Purchase Inward (+)</option>
                 <option value="sale">POS Sale Cut (-)</option>
                 <option value="customer_return">Customer Return (+)</option>

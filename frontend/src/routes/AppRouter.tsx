@@ -8,6 +8,9 @@ import { ProductsPage } from '../pages/catalog/ProductsPage.tsx';
 import { CategoriesPage } from '../pages/catalog/CategoriesPage.tsx';
 import { InventoryPage } from '../pages/inventory/InventoryPage.tsx';
 import { StockMovementsPage } from '../pages/inventory/StockMovementsPage.tsx';
+import { OpeningInventoryPage } from '../pages/inventory/OpeningInventoryPage.tsx';
+import { NewOpeningInventoryPage } from '../pages/inventory/NewOpeningInventoryPage.tsx';
+import { OpeningInventoryBatchPage } from '../pages/inventory/OpeningInventoryBatchPage.tsx';
 import { SalesPage } from '../pages/sales/SalesPage.tsx';
 import { NewSalePage } from '../pages/sales/NewSalePage.tsx';
 import { PurchasesPage } from '../pages/purchasing/PurchasesPage.tsx';
@@ -60,6 +63,9 @@ export function AppRouter() {
         {/* Inventory */}
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/inventory/movements" element={<StockMovementsPage />} />
+        <Route path="/inventory/opening" element={<OpeningInventoryPage />} />
+        <Route path="/inventory/opening/new" element={<NewOpeningInventoryPage />} />
+        <Route path="/inventory/opening/:batchId" element={<OpeningInventoryBatchPage />} />
 
         {/* Sales & POS */}
         <Route path="/sales" element={<SalesPage />} />

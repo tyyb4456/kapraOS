@@ -572,6 +572,31 @@ async def after_inventory_adjust_committed(shop_id: Any, variant_id: Any) -> int
     return removed
 
 
+async def after_opening_inventory_committed(
+    shop_id: Any, variant_ids: list[Any] | None = None
+) -> int:
+    """Opening inventory posted → stock reads + dashboard + financial reports.
+
+    Same footprint as a stock adjustment, multiplied over every variant the
+    batch touched: per-variant reads, the inventory list/status caches, the
+    dashboard summary and financial reports (the posting debits Inventory /
+    credits Opening Balance Equity). Call only after `db.commit()` succeeded.
+    """
+    removed = 0
+    for vid in variant_ids or []:
+        removed += int(await delete(cache_keys.inventory_variant_key(shop_id, vid)))
+    if variant_ids:
+        removed += await delete_pattern(
+            f"{cache_keys.shop_prefix(shop_id)}:inventory:list:*"
+        )
+        removed += await delete_pattern(
+            f"{cache_keys.shop_prefix(shop_id)}:inventory:status:*"
+        )
+    removed += await invalidate_dashboard(shop_id)
+    removed += await invalidate_financial(shop_id)
+    return removed
+
+
 async def after_payment_void_committed(
     shop_id: Any,
     customer_id: Any | None = None,
@@ -632,6 +657,7 @@ __all__ = [
     "after_customer_return_committed",
     "after_expense_committed",
     "after_inventory_adjust_committed",
+    "after_opening_inventory_committed",
     "after_payment_void_committed",
     "after_purchase_committed",
     "after_sale_committed",

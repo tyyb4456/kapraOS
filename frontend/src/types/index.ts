@@ -83,7 +83,8 @@ export type MovementType =
   | 'sale'
   | 'customer_return'
   | 'supplier_return'
-  | 'damage';
+  | 'damage'
+  | 'opening';
 
 export interface StockMovement {
   id: string;
@@ -97,6 +98,91 @@ export interface StockMovement {
   reference_id?: string | null;
   notes?: string | null;
   created_at: string;
+}
+
+// Opening Inventory - the one-time starting stock of a shop (not a purchase).
+// Mirrors the backend /inventory/opening schemas; quantities/amounts arrive as
+// strings (backend Decimal precision), so they are typed number | string.
+export type OpeningInventorySource = 'manual' | 'import';
+export type OpeningInventoryCostStatus = 'known' | 'estimated';
+
+export interface OpeningInventoryLineInput {
+  variant_id: string;
+  quantity: number | string | null;
+  unit_cost: number | string | null;
+  cost_status: string | null;
+}
+
+export interface OpeningInventoryPreviewLine {
+  index: number;
+  variant_id: string | null;
+  sku: string | null;
+  product_name: string | null;
+  unit: string | null;
+  quantity: number | string | null;
+  unit_cost: number | string | null;
+  cost_status: OpeningInventoryCostStatus | null;
+  value: number | string | null;
+  current_quantity: number | string;
+  current_weighted_average_cost: number | string;
+  projected_weighted_average_cost: number | string | null;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface OpeningInventoryPreview {
+  valid: boolean;
+  total_value: number | string;
+  entry_count: number;
+  estimated_entry_count: number;
+  lines: OpeningInventoryPreviewLine[];
+}
+
+export interface PostOpeningInventoryRequest {
+  idempotency_key: string;
+  lines: OpeningInventoryLineInput[];
+  source?: OpeningInventorySource;
+  notes?: string | null;
+}
+
+export interface OpeningInventoryMovement {
+  id: string;
+  movement_type: MovementType;
+  quantity: number | string;
+  unit_cost?: number | string | null;
+  reference_type?: string | null;
+  reference_id?: string | null;
+  created_at: string;
+}
+
+export interface OpeningInventoryEntry {
+  id: string;
+  variant_id: string;
+  sku?: string | null;
+  product_name?: string | null;
+  unit: string;
+  quantity: number | string;
+  unit_cost: number | string;
+  cost_status: OpeningInventoryCostStatus;
+  value: number | string;
+  created_at: string;
+  movement?: OpeningInventoryMovement | null;
+}
+
+export interface OpeningInventoryBatch {
+  id: string;
+  shop_id: string;
+  source: OpeningInventorySource;
+  notes?: string | null;
+  entry_count: number;
+  estimated_entry_count: number;
+  total_value: number | string;
+  created_by_user_id?: string | null;
+  created_at: string;
+}
+
+export interface OpeningInventoryBatchDetail extends OpeningInventoryBatch {
+  entries: OpeningInventoryEntry[];
 }
 
 // Customer & Khata
