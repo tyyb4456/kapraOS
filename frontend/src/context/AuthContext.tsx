@@ -15,6 +15,7 @@ export interface AuthContextType {
   user: CurrentUser | null;
   shopId: string | null;
   role: string | null;
+  isPlatformAdmin: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -103,6 +104,7 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
         clerkUserId: meData.clerk_user_id,
         shopId: meData.shop_id,
         role: meData.role,
+        isPlatformAdmin: Boolean(meData.is_platform_admin),
         email: clerkUser?.primaryEmailAddress?.emailAddress,
         fullName: clerkUser?.fullName || clerkUser?.firstName || 'Shop User',
       });
@@ -141,6 +143,7 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
       user: backendUser,
       shopId: backendUser?.shopId || null,
       role: backendUser?.role || null,
+      isPlatformAdmin: backendUser?.isPlatformAdmin ?? false,
       // Require BOTH Clerk sign-in AND a provisioned backend identity.
       // Previously `isSignedIn` alone granted access, so a failed /sync
       // (or a duplicate-account 409) still let users into the dashboard
@@ -164,6 +167,7 @@ function FallbackAuthProvider({ children }: { children: React.ReactNode }) {
     clerkUserId: 'user_dev_local',
     shopId: 'shop_default_local',
     role: 'owner',
+    isPlatformAdmin: false,
     email: 'dev@kapraos.local',
     fullName: 'KapraOS Store Manager',
   });
@@ -180,6 +184,7 @@ function FallbackAuthProvider({ children }: { children: React.ReactNode }) {
         clerkUserId: meData.clerk_user_id,
         shopId: meData.shop_id,
         role: meData.role,
+        isPlatformAdmin: Boolean(meData.is_platform_admin),
         email: 'shop@kapraos.local',
         fullName: 'Store Admin',
       });
@@ -200,6 +205,7 @@ function FallbackAuthProvider({ children }: { children: React.ReactNode }) {
       user: mockUser,
       shopId: mockUser?.shopId || null,
       role: mockUser?.role || null,
+      isPlatformAdmin: mockUser?.isPlatformAdmin ?? false,
       isAuthenticated: Boolean(mockUser),
       isLoading,
       error,

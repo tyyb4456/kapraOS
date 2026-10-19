@@ -6,6 +6,7 @@ export interface AuthMeResponse {
   clerk_user_id: string;
   shop_id: string;
   role: UserRole | string | null;
+  is_platform_admin?: boolean;
 }
 
 export interface CurrentUser {
@@ -13,6 +14,7 @@ export interface CurrentUser {
   clerkUserId: string;
   shopId: string;
   role: UserRole | string | null;
+  isPlatformAdmin: boolean;
   email?: string;
   fullName?: string;
 }
@@ -511,4 +513,133 @@ export interface DashboardSummary {
   low_stock_variant_count: number | null;
   low_stock_available: boolean;
   notes: string[];
+}
+
+// Platform Administration (Super Admin Panel) - mirrors app/schemas/admin.py.
+// Data is only returned to users whose server-side is_platform_admin flag is
+// set; these types are inert on their own.
+export interface AdminDailyCount {
+  day: string;
+  count: number;
+}
+
+export interface AdminUnavailableMetric {
+  key: string;
+  reason: string;
+}
+
+export interface AdminOverview {
+  generated_at: string;
+  total_users: number;
+  total_owners: number;
+  total_staff: number;
+  platform_admin_count: number;
+  total_shops: number;
+  new_users_last_7_days: number;
+  new_users_last_30_days: number;
+  new_shops_last_7_days: number;
+  new_shops_last_30_days: number;
+  total_sales: number;
+  sales_last_30_days: number;
+  total_purchases: number;
+  purchases_last_30_days: number;
+  total_payments: number;
+  payments_last_30_days: number;
+  total_customers: number;
+  total_suppliers: number;
+  total_products: number;
+  user_registrations_by_day: AdminDailyCount[];
+  shop_creations_by_day: AdminDailyCount[];
+  unavailable_metrics: AdminUnavailableMetric[];
+}
+
+export interface AdminHealthCheck {
+  name: string;
+  status: string;
+  detail: string | null;
+  latency_ms: number | null;
+}
+
+export interface AdminHealth {
+  status: string;
+  checked_at: string;
+  checks: AdminHealthCheck[];
+}
+
+export interface AdminUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  clerk_user_id: string | null;
+  role: UserRole | string;
+  is_platform_admin: boolean;
+  shop_id: string;
+  shop_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminUserListResponse {
+  users: AdminUserSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminUserShopSummary {
+  id: string;
+  name: string;
+  currency: string;
+  created_at: string;
+}
+
+export interface AdminUserDetailResponse {
+  user: AdminUserSummary;
+  shop: AdminUserShopSummary;
+  shop_members_count: number;
+}
+
+export interface AdminShopOwner {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface AdminShopSummary {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  currency: string;
+  created_at: string;
+  owner: AdminShopOwner | null;
+  user_count: number;
+  sales_count: number;
+  purchases_count: number;
+  products_count: number;
+}
+
+export interface AdminShopListResponse {
+  shops: AdminShopSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminShopMember {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole | string;
+  is_platform_admin: boolean;
+  created_at: string;
+}
+
+export interface AdminShopDetailResponse {
+  shop: AdminShopSummary;
+  members: AdminShopMember[];
+  customers_count: number;
+  suppliers_count: number;
+  expenses_count: number;
+  last_sale_at: string | null;
 }

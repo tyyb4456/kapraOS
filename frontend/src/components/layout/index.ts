@@ -4,6 +4,7 @@ export * from './SectionHeader.tsx';
 export * from './LoadingState.tsx';
 export * from './ErrorState.tsx';
 export * from './ProtectedRoute.tsx';
+export * from './AdminRoute.tsx';
 export * from './Sidebar.tsx';
 export * from './TopHeader.tsx';
 export * from './AppLayout.tsx';

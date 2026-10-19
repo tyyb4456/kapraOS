@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout.tsx';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute.tsx';
+import { AdminRoute } from '../components/layout/AdminRoute.tsx';
 
 import { DashboardPage } from '../pages/DashboardPage.tsx';
 import { ProductsPage } from '../pages/catalog/ProductsPage.tsx';
@@ -29,6 +30,11 @@ const AnalyticsPage = lazy(() =>
 );
 import { SettingsPage } from '../pages/settings/SettingsPage.tsx';
 import { AiChatPage } from '../pages/ai/AiChatPage.tsx';
+import { AdminOverviewPage } from '../pages/admin/AdminOverviewPage.tsx';
+import { AdminUsersPage } from '../pages/admin/AdminUsersPage.tsx';
+import { AdminUserDetailPage } from '../pages/admin/AdminUserDetailPage.tsx';
+import { AdminShopsPage } from '../pages/admin/AdminShopsPage.tsx';
+import { AdminShopDetailPage } from '../pages/admin/AdminShopDetailPage.tsx';
 import { LoginPage } from '../pages/auth/LoginPage.tsx';
 import { SignUpPage } from '../pages/auth/SignUpPage.tsx';
 import { LandingPage } from '../pages/LandingPage.tsx';
@@ -101,6 +107,48 @@ export function AppRouter() {
 
         {/* AI Assistant (live shop-assistant chat) */}
         <Route path="/ai-chat" element={<AiChatPage />} />
+
+        {/* Platform Administration (Super Admin Panel) - platform admins only */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminOverviewPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute>
+              <AdminUsersPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/users/:userId"
+          element={
+            <AdminRoute>
+              <AdminUserDetailPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/shops"
+          element={
+            <AdminRoute>
+              <AdminShopsPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/shops/:shopId"
+          element={
+            <AdminRoute>
+              <AdminShopDetailPage />
+            </AdminRoute>
+          }
+        />
       </Route>
 
       {/* 404 Catch-all */}

@@ -10,6 +10,7 @@ Fields:
     role        - OWNER or STAFF
     name        - display name (optional, populated at provisioning)
     email       - optional, kept for compatibility
+    is_platform_admin - KapraOS platform-operator flag (default: false)
 """
 
 import uuid
@@ -17,7 +18,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, String, UniqueConstraint, false
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -69,6 +70,16 @@ class User(Base, UUIDMixin, TimestampMixin):
         ),
         nullable=False,
         server_default=UserRole.STAFF.value,
+    )
+
+    # Platform-operator flag. False for every normal shop user; only a
+    # direct database operation (the `grant_platform_admin` script) may
+    # set it. It is intentionally NOT derived from `role` or from any
+    # client-supplied value.
+    is_platform_admin: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        server_default=false(),
     )
 
     shop: Mapped["Shop"] = relationship(

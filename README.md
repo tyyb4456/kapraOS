@@ -297,6 +297,48 @@ GET /reports/balance-sheet       ?end_date=
 GET /reports/dashboard
 ```
 
+## Platform administration (Super Admin)
+
+Platform operators are users with the server-side flag
+`users.is_platform_admin = true` (migration `0025`). The flag is
+independent of shop roles: an OWNER of any shop is **not** a platform
+admin. All `/admin/*` APIs require the flag via `require_platform_admin`;
+no client-supplied role, shop id or header is trusted, and there is no
+HTTP endpoint that grants the flag.
+
+### Bootstrap / granting access
+
+The initial administrator is established by an operator with database
+access running the bootstrap script (same environment as migrations):
+
+```bash
+cd backend
+python -m app.scripts.grant_platform_admin user_2abc123        # by Clerk id
+python -m app.scripts.grant_platform_admin owner@example.com   # by email
+python -m app.scripts.grant_platform_admin owner@example.com --revoke
+python -m app.scripts.grant_platform_admin --list
+```
+
+The script only flips the flag on an already-provisioned user, refuses to
+revoke the last remaining administrator, and appends a row to
+`admin_audit_logs` for every change.
+
+### Admin endpoints (read-only)
+
+```text
+GET /admin/overview          platform KPIs + 30-day registration/shop trends
+GET /admin/health            database + redis dependency checks
+GET /admin/users             ?search=&role=&limit=&offset=
+GET /admin/users/{user_id}
+GET /admin/shops             ?search=&limit=&offset=
+GET /admin/shops/{shop_id}
+```
+
+Aggregates are computed in PostgreSQL (never by loading rows into
+Python). Metrics the schema cannot support (active/inactive users,
+subscriptions/billing) are reported explicitly as unavailable instead of
+fabricated zeroes.
+
 ## Stack
 
 - Python 3.11+

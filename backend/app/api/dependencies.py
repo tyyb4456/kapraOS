@@ -12,15 +12,17 @@ Clerk handles authentication. The `get_current_shop_id()` dependency derives
 No client-provided header, query param, or body field may select the tenant.
 """
 
-import uuid
 from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.auth import CurrentUser, ShopId as AuthShopId
+from app.auth.auth import CurrentUser
+from app.auth.auth import PlatformAdmin as AuthPlatformAdmin
+from app.auth.auth import ShopId as AuthShopId
 from app.database import get_db
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUserDep = CurrentUser
 ShopId = AuthShopId
+PlatformAdmin = AuthPlatformAdmin

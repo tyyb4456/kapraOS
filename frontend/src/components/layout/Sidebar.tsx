@@ -24,6 +24,7 @@ import {
   ChevronRight,
   LogOut,
   Store,
+  Shield,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { Badge } from '../ui/Badge.tsx';
@@ -39,6 +40,7 @@ interface NavItem {
   label: string;
   path: string;
   icon: React.ComponentType<{ className?: string }>;
+  end?: boolean;
 }
 
 interface NavGroup {
@@ -111,13 +113,27 @@ const navigationGroups: NavGroup[] = [
   },
 ];
 
+// Visible only for holders of the server-side platform-admin flag.
+const platformAdminGroup: NavGroup = {
+  groupTitle: 'PLATFORM ADMIN',
+  items: [
+    { label: 'Platform Overview', path: '/admin', icon: Shield, end: true },
+    { label: 'All Users', path: '/admin/users', icon: Users },
+    { label: 'All Shops', path: '/admin/shops', icon: Building2 },
+  ],
+};
+
 export function Sidebar({
   collapsed,
   onToggleCollapse,
   mobileOpen = false,
   onCloseMobile,
 }: SidebarProps) {
-  const { user, signOut, role } = useAuth();
+  const { user, signOut, role, isPlatformAdmin } = useAuth();
+
+  const groups = isPlatformAdmin
+    ? [...navigationGroups, platformAdminGroup]
+    : navigationGroups;
 
   const sidebarContent = (
     <div className="clay-sidebar flex flex-col h-full select-none">
@@ -152,7 +168,7 @@ export function Sidebar({
 
       {/* Navigation Links (Scrollable) */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
-        {navigationGroups.map((group, groupIdx) => (
+        {groups.map((group, groupIdx) => (
           <div key={groupIdx} className="space-y-0.5">
             {group.groupTitle && !collapsed && (
               <h4 className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase">
@@ -165,6 +181,7 @@ export function Sidebar({
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  end={item.end}
                   onClick={onCloseMobile}
                   className={({ isActive }) =>
                     `flex items-center gap-2.5 px-2.5 py-1.5 text-xs rounded-xl transition-all ${

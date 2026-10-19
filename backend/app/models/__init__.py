@@ -12,6 +12,7 @@ import them here too.
 """
 
 from app.models.account import Account, AccountType
+from app.models.admin_audit import AdminAuditLog
 from app.models.ai_operation import (
     AICustomerReturnReceipt,
     AIExpenseReceipt,
@@ -69,6 +70,7 @@ __all__ = [
     "AISupplierReturnReceipt",
     "Account",
     "AccountType",
+    "AdminAuditLog",
     "Attribute",
     "AttributeValue",
     "Base",

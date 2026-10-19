@@ -43,7 +43,7 @@ async def _verify_token(request: Request) -> dict | None:
                 accepts_token=["session_token"],
             ),
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - a bad token must never 500 the app
         return None
 
     if not state.is_signed_in:
@@ -145,5 +145,28 @@ async def require_owner(
     return current_user
 
 
+async def require_platform_admin(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Require the authenticated user to be a platform administrator.
+
+    Platform-admin status is a server-side flag on the application User
+    (`users.is_platform_admin`). It is intentionally independent of the
+    shop-level `role`: an OWNER of any shop is *not* a platform admin,
+    and no request header, body field, or query parameter can influence
+    this check.
+
+    Raises 403 for every non-admin (shop owners, staff, unprovisioned
+    identities never get here - they fail earlier with 401).
+    """
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform administrator access required",
+        )
+    return current_user
+
+
 ShopId = Annotated[uuid.UUID, Depends(get_current_shop_id)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+PlatformAdmin = Annotated[User, Depends(require_platform_admin)]

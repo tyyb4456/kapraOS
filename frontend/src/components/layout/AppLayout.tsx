@@ -21,14 +21,36 @@ const routeTitleMap: Record<string, string> = {
   '/reports': 'Financial & Operational Reports',
   '/analytics': 'Sales Analytics',
   '/settings': 'Shop Settings',
+  '/admin': 'Platform Overview',
+  '/admin/users': 'Platform Users',
+  '/admin/shops': 'Platform Shops',
 };
+
+/**
+ * Exact map hit, else the longest known prefix match (so detail routes like
+ * /admin/users/:id or /customers/khata/:id inherit their parent's title).
+ */
+function resolvePageTitle(pathname: string): string {
+  const exact = routeTitleMap[pathname];
+  if (exact) return exact;
+
+  let best = 'KapraOS';
+  let bestLength = 0;
+  for (const [prefix, title] of Object.entries(routeTitleMap)) {
+    if (pathname.startsWith(`${prefix}/`) && prefix.length > bestLength) {
+      best = title;
+      bestLength = prefix.length;
+    }
+  }
+  return best;
+}
 
 export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
-  const pageTitle = routeTitleMap[location.pathname] || 'KapraOS';
+  const pageTitle = resolvePageTitle(location.pathname);
 
   return (
     <div className="flex min-h-screen bg-[var(--clay-bg)] text-zinc-900 dark:text-zinc-100">

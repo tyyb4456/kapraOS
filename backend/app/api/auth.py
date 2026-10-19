@@ -6,7 +6,7 @@ Clerk SDK. The backend only verifies tokens and returns application
 identity.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -41,6 +41,9 @@ async def me(
         "clerk_user_id": current_user.clerk_user_id,
         "shop_id": str(shop_id),
         "role": current_user.role.value if current_user.role else None,
+        # Platform-operator flag, server-derived. The frontend uses it only
+        # to show/hide admin navigation; every admin API re-checks it.
+        "is_platform_admin": bool(current_user.is_platform_admin),
     }
 
 
@@ -86,6 +89,7 @@ async def sync(
             "clerk_user_id": user_obj.clerk_user_id,
             "shop_id": str(user_obj.shop_id),
             "role": user_obj.role.value if user_obj.role else None,
+            "is_platform_admin": bool(user_obj.is_platform_admin),
         }
 
     raw_name = (body.name if body and body.name else None) or ""
@@ -152,6 +156,7 @@ async def sync(
                 "clerk_user_id": retry.clerk_user_id,
                 "shop_id": str(retry.shop_id),
                 "role": retry.role.value if retry.role else None,
+                "is_platform_admin": bool(retry.is_platform_admin),
             }
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -164,4 +169,5 @@ async def sync(
         "clerk_user_id": user_obj.clerk_user_id,
         "shop_id": str(user_obj.shop_id),
         "role": user_obj.role.value if user_obj.role else None,
+        "is_platform_admin": bool(user_obj.is_platform_admin),
     }
