@@ -24,7 +24,6 @@ import {
   ChevronRight,
   LogOut,
   Store,
-  Shield,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { Badge } from '../ui/Badge.tsx';
@@ -113,27 +112,15 @@ const navigationGroups: NavGroup[] = [
   },
 ];
 
-// Visible only for holders of the server-side platform-admin flag.
-const platformAdminGroup: NavGroup = {
-  groupTitle: 'PLATFORM ADMIN',
-  items: [
-    { label: 'Platform Overview', path: '/admin', icon: Shield, end: true },
-    { label: 'All Users', path: '/admin/users', icon: Users },
-    { label: 'All Shops', path: '/admin/shops', icon: Building2 },
-  ],
-};
-
 export function Sidebar({
   collapsed,
   onToggleCollapse,
   mobileOpen = false,
   onCloseMobile,
 }: SidebarProps) {
-  const { user, signOut, role, isPlatformAdmin } = useAuth();
+  const { user, signOut, role } = useAuth();
 
-  const groups = isPlatformAdmin
-    ? [...navigationGroups, platformAdminGroup]
-    : navigationGroups;
+  const groups = navigationGroups;
 
   const sidebarContent = (
     <div className="clay-sidebar flex flex-col h-full select-none">

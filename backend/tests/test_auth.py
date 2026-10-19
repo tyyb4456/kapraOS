@@ -236,13 +236,36 @@ class TestTenantIsolation:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_user_without_shop_returns_403(
+    async def test_user_without_shop_cannot_access_tenant_data(
         self,
+        api_client: AsyncClient,
+        api_session: AsyncSession,
     ) -> None:
-        """Verify that shop_id is non-nullable in the User model,
-        which ensures the 403 guard is meaningful."""
+        """A shop-less identity may read /auth/me but no tenant route.
+
+        `users.shop_id` is nullable (platform administrators need no
+        shop); the 403 guard lives in `get_current_shop_id`.
+        """
         col = User.__table__.c.shop_id
-        assert col.nullable is False
+        assert col.nullable is True
+
+        user = User(
+            shop_id=None,
+            clerk_user_id="clerk_no_shop_plain",
+            name="No Shop",
+            email="no-shop@example.com",
+            role=UserRole.STAFF,
+        )
+        api_session.add(user)
+        await api_session.flush()
+
+        with _mock_verify(user.clerk_user_id):
+            me = await api_client.get("/auth/me")
+            customers = await api_client.get("/customers")
+
+        assert me.status_code == 200
+        assert me.json()["shop_id"] is None
+        assert customers.status_code == 403
 
 
 class TestAuthMechanism:

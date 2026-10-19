@@ -77,7 +77,10 @@ async def get_current_user(
     application User by `clerk_user_id`, and returns it.
 
     Raises 401 if the token is invalid or the user is not provisioned.
-    Raises 403 if the user has no shop association.
+
+    The user may have no shop: a platform administrator is a valid
+    identity without a tenant. Tenant-scoped routes enforce the shop
+    association separately via `get_current_shop_id`.
     """
     payload = await require_auth(request)
     clerk_user_id = payload.get("sub")
@@ -101,13 +104,6 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if user_obj.shop_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User has no shop association",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     return user_obj
 
 
@@ -126,7 +122,16 @@ async def get_current_shop_id(
     This is the **only** legitimate source of `shop_id` for tenant-scoped
     routes. Client-provided `X-Shop-Id`, query params, or body fields are
     ignored entirely.
+
+    Raises 403 for a shop-less identity (a platform administrator without
+    a tenant): platform administration never grants access to shop data.
     """
+    if current_user.shop_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User has no shop association",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return current_user.shop_id
 
 

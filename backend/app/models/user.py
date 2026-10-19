@@ -1,11 +1,13 @@
 """User model.
 
 Clerk owns authentication; this table stores the application-level
-identity that links a Clerk user to exactly one Shop (tenant).
+identity that links a Clerk user to their tenant Shop - or to no shop at
+all for a platform administrator operating the Super Admin Panel.
 
 Fields:
     id          - UUID primary key
-    shop_id     - FK to the tenant Shop (server-derived, never client-supplied)
+    shop_id     - FK to the tenant Shop (server-derived, never client-supplied);
+                  NULL only for platform administrators without a shop
     clerk_user_id - stable Clerk user identifier (unique)
     role        - OWNER or STAFF
     name        - display name (optional, populated at provisioning)
@@ -36,7 +38,7 @@ class UserRole(str, Enum):
 
 
 class User(Base, UUIDMixin, TimestampMixin):
-    """An application user bound to exactly one Shop."""
+    """An application user bound to a Shop, or a shop-less platform admin."""
 
     __tablename__ = "users"
 
@@ -45,10 +47,10 @@ class User(Base, UUIDMixin, TimestampMixin):
         UniqueConstraint("email", name="uq_users_email"),
     )
 
-    shop_id: Mapped[uuid.UUID] = mapped_column(
+    shop_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("shops.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -82,7 +84,7 @@ class User(Base, UUIDMixin, TimestampMixin):
         server_default=false(),
     )
 
-    shop: Mapped["Shop"] = relationship(
+    shop: Mapped["Shop | None"] = relationship(
         "Shop",
         back_populates="users",
     )

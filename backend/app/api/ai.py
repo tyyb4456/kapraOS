@@ -62,7 +62,7 @@ from app.ai.tools.purchases_write import build_purchase_write_tools
 from app.ai.tools.returns_write import build_return_write_tools
 from app.ai.tools.sales_write import build_sale_write_tools
 from app.ai.tools.supplier_payments_write import build_supplier_payment_write_tools
-from app.api.dependencies import CurrentUserDep, DbSession
+from app.api.dependencies import CurrentUserDep, DbSession, ShopId
 from app.cache import service as cache_service
 from app.models.user import User
 
@@ -228,6 +228,7 @@ def _chat_response(
 async def ai_chat(
     body: ChatRequest,
     current_user: CurrentUserDep,
+    shop_id: ShopId,
     model: ChatModelDep,
     db: DbSession,
 ) -> dict[str, Any]:
@@ -272,6 +273,7 @@ async def ai_chat(
 async def ai_chat_resume(
     body: ChatResumeRequest,
     current_user: CurrentUserDep,
+    shop_id: ShopId,
     model: ChatModelDep,
     db: DbSession,
 ) -> dict[str, Any]:

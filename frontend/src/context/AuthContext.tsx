@@ -9,6 +9,7 @@ import React, {
 import { ClerkProvider, useAuth as useClerkAuth, useUser as useClerkUser } from '@clerk/clerk-react';
 import { setApiTokenGetter, ApiError } from '../lib/api/client.ts';
 import { getAuthMe, syncAuth } from '../lib/api/auth.ts';
+import { isUsableIdentity } from './identity.ts';
 import type { CurrentUser } from '../types/index.ts';
 
 export interface AuthContextType {
@@ -96,7 +97,8 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
       }
       // Defensive: never accept a placeholder shop -- that masked the
       // tenant-reuse bug and let broken sessions into the dashboard.
-      if (!meData?.shop_id || meData.shop_id === 'pending_sync') {
+      // Platform admins are the one identity allowed to have no shop.
+      if (!isUsableIdentity(meData)) {
         throw new Error('Backend returned an invalid shop identity');
       }
       setBackendUser({

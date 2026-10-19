@@ -43,7 +43,15 @@ def tenant_context_from_user(user: User) -> TenantContext:
     This is the **only** legitimate way to create a :class:`TenantContext`.
     ``user.shop_id`` comes from ``get_current_shop_id()``; client-supplied
     headers, query params, body fields, and any LLM output are ignored.
+
+    AI entrypoints depend on ``ShopId``, which already rejects shop-less
+    identities with 403; this guard keeps the invariant explicit for any
+    future caller.
     """
+    if user.shop_id is None:
+        raise ValueError(
+            "Cannot build a tenant context for a user without a shop"
+        )
     return TenantContext(
         shop_id=user.shop_id,
         user_id=user.id,

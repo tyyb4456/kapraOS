@@ -117,6 +117,23 @@ async def _create_admin(
     return await _create_user(session, clerk_id, is_platform_admin=True)
 
 
+async def _create_shopless_admin(
+    session: AsyncSession, clerk_id: str = "clerk_shopless_admin"
+) -> User:
+    """Provision a platform administrator with no shop (`shop_id = NULL`)."""
+    user = User(
+        shop_id=None,
+        clerk_user_id=clerk_id,
+        name=f"User {clerk_id}",
+        email=f"{clerk_id}@example.com",
+        role=UserRole.OWNER,
+        is_platform_admin=True,
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
 # ---------------------------------------------------------------------------
 # Authorization
 # ---------------------------------------------------------------------------
@@ -998,3 +1015,104 @@ class TestShopLevelAuthorizationUnchanged:
             assert me.status_code == 200
             assert me.json()["id"] == str(shop.id)
             assert denied.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Platform administrators without a shop
+# ---------------------------------------------------------------------------
+
+
+class TestShoplessPlatformAdmin:
+    """A platform admin needs no shop to sign in or to use /admin.
+
+    The backend always allowed `shop_id = NULL` for platform admins via
+    `is_platform_admin`; these tests pin that contract end to end.
+    """
+
+    @pytest.mark.asyncio
+    async def test_me_returns_null_shop_and_admin_flag(
+        self, api_client: AsyncClient, api_session: AsyncSession
+    ) -> None:
+        admin = await _create_shopless_admin(api_session, "clerk_admin_me")
+
+        with _mock_verify(admin.clerk_user_id or ""):
+            response = await api_client.get("/auth/me")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["shop_id"] is None
+        assert body["is_platform_admin"] is True
+        assert body["clerk_user_id"] == admin.clerk_user_id
+
+    @pytest.mark.asyncio
+    async def test_sync_returns_shopless_admin_without_provisioning_shop(
+        self, api_client: AsyncClient, api_session: AsyncSession
+    ) -> None:
+        admin = await _create_shopless_admin(api_session, "clerk_admin_sync")
+        shops_before = (
+            await api_session.execute(select(func.count(Shop.id)))
+        ).scalar()
+
+        with _mock_verify(admin.clerk_user_id or ""):
+            response = await api_client.post("/auth/sync")
+
+        assert response.status_code == 200
+        assert response.json()["shop_id"] is None
+        shops_after = (await api_session.execute(select(func.count(Shop.id)))).scalar()
+        # Syncing a pre-provisioned identity never silently creates a tenant.
+        assert shops_after == shops_before
+
+    @pytest.mark.asyncio
+    async def test_tenant_routes_forbidden_without_shop(
+        self, api_client: AsyncClient, api_session: AsyncSession
+    ) -> None:
+        admin = await _create_shopless_admin(api_session, "clerk_admin_tenant")
+
+        with _mock_verify(admin.clerk_user_id or ""):
+            me = await api_client.get("/auth/me")
+            shops_me = await api_client.get("/shops/me")
+            customers = await api_client.get("/customers")
+            voice = await api_client.post("/ai/voice/token", json={})
+
+        # Identity stays readable; every shop-scoped route is refused.
+        assert me.status_code == 200
+        assert shops_me.status_code == 403
+        assert customers.status_code == 403
+        assert voice.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_admin_endpoints_available_without_shop(
+        self, api_client: AsyncClient, api_session: AsyncSession
+    ) -> None:
+        admin = await _create_shopless_admin(api_session, "clerk_admin_api")
+        shop = await _create_shop(api_session, name="Tenant A")
+        await _create_user(api_session, "clerk_admin_api_owner", shop=shop)
+
+        paths = (
+            "/admin/overview",
+            "/admin/health",
+            "/admin/users",
+            "/admin/shops",
+            f"/admin/shops/{shop.id}",
+            f"/admin/users/{admin.id}",
+        )
+        with _mock_verify(admin.clerk_user_id or ""):
+            responses = {}
+            for path in paths:
+                responses[path] = await api_client.get(path)
+
+        for path in paths:
+            assert responses[path].status_code == 200, path
+
+        detail = responses[f"/admin/users/{admin.id}"].json()
+        assert detail["user"]["shop_id"] is None
+        assert detail["user"]["is_platform_admin"] is True
+        assert detail["shop"] is None
+        assert detail["shop_members_count"] == 0
+
+        users = responses["/admin/users"].json()["users"]
+        admin_row = next(
+            row for row in users if row["clerk_user_id"] == admin.clerk_user_id
+        )
+        assert admin_row["shop_id"] is None
+        assert admin_row["shop_name"] is None

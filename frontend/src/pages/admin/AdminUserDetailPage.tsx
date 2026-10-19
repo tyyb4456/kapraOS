@@ -138,24 +138,32 @@ export function AdminUserDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="divide-y divide-[var(--clay-border-soft)]">
-              <DetailRow label="Shop Name">
-                <Link
-                  to={`/admin/shops/${data.shop.id}`}
-                  className="text-[var(--clay-primary-active)] hover:underline inline-flex items-center gap-1.5"
-                >
-                  <Store className="w-3.5 h-3.5" />
-                  {data.shop.name}
-                </Link>
-              </DetailRow>
-              <DetailRow label="Shop ID">{data.shop.id}</DetailRow>
-              <DetailRow label="Currency">{data.shop.currency}</DetailRow>
-              <DetailRow label="Shop Created">{formatDate(data.shop.created_at)}</DetailRow>
-              <DetailRow label="Members in Shop">
-                <span className="inline-flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-zinc-400" />
-                  {data.shop_members_count}
-                </span>
-              </DetailRow>
+              {data.shop ? (
+                <>
+                  <DetailRow label="Shop Name">
+                    <Link
+                      to={`/admin/shops/${data.shop.id}`}
+                      className="text-[var(--clay-primary-active)] hover:underline inline-flex items-center gap-1.5"
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      {data.shop.name}
+                    </Link>
+                  </DetailRow>
+                  <DetailRow label="Shop ID">{data.shop.id}</DetailRow>
+                  <DetailRow label="Currency">{data.shop.currency}</DetailRow>
+                  <DetailRow label="Shop Created">{formatDate(data.shop.created_at)}</DetailRow>
+                  <DetailRow label="Members in Shop">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-zinc-400" />
+                      {data.shop_members_count}
+                    </span>
+                  </DetailRow>
+                </>
+              ) : (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 py-2">
+                  No shop. This platform administrator does not belong to a shop.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

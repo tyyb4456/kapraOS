@@ -172,12 +172,16 @@ export function AdminUsersPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Link
-                      to={`/admin/shops/${user.shop_id}`}
-                      className="text-xs text-[var(--clay-primary-active)] hover:underline"
-                    >
-                      {user.shop_name}
-                    </Link>
+                    {user.shop_id && user.shop_name ? (
+                      <Link
+                        to={`/admin/shops/${user.shop_id}`}
+                        className="text-xs text-[var(--clay-primary-active)] hover:underline"
+                      >
+                        {user.shop_name}
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500">No shop</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {user.is_platform_admin ? (

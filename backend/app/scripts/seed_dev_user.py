@@ -24,9 +24,12 @@ async def seed_user(clerk_user_id: str, name: str = "Store Owner", email: str = 
             print(f"    User ID: {existing_user.id}")
             print(f"    Shop ID: {existing_user.shop_id}")
             print(f"    Role:    {existing_user.role}")
-            from app.services.accounting import ensure_system_accounts
-            await ensure_system_accounts(db, shop_id=existing_user.shop_id)
-            await db.commit()
+            if existing_user.shop_id is not None:
+                from app.services.accounting import ensure_system_accounts
+                await ensure_system_accounts(db, shop_id=existing_user.shop_id)
+                await db.commit()
+            else:
+                print("    (No shop bound; skipping chart-of-accounts init.)")
             return
 
         # Duplicate-email guard: same email, different Clerk identity.

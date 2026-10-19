@@ -1,8 +1,10 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout.tsx';
+import { AdminLayout } from '../components/layout/AdminLayout.tsx';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute.tsx';
 import { AdminRoute } from '../components/layout/AdminRoute.tsx';
+import { ShopRoute } from '../components/layout/ShopRoute.tsx';
 
 import { DashboardPage } from '../pages/DashboardPage.tsx';
 import { ProductsPage } from '../pages/catalog/ProductsPage.tsx';
@@ -31,6 +33,7 @@ const AnalyticsPage = lazy(() =>
 import { SettingsPage } from '../pages/settings/SettingsPage.tsx';
 import { AiChatPage } from '../pages/ai/AiChatPage.tsx';
 import { AdminOverviewPage } from '../pages/admin/AdminOverviewPage.tsx';
+import { AdminHealthPage } from '../pages/admin/AdminHealthPage.tsx';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage.tsx';
 import { AdminUserDetailPage } from '../pages/admin/AdminUserDetailPage.tsx';
 import { AdminShopsPage } from '../pages/admin/AdminShopsPage.tsx';
@@ -52,11 +55,13 @@ export function AppRouter() {
       <Route path="/sign-in/*" element={<Navigate to="/login" replace />} />
       <Route path="/sign-up/*" element={<Navigate to="/signup" replace />} />
 
-      {/* Protected Application Routes inside AppLayout */}
+      {/* Shop-facing application - platform admins are sent to /admin */}
       <Route
         element={
           <ProtectedRoute>
-            <AppLayout />
+            <ShopRoute>
+              <AppLayout />
+            </ShopRoute>
           </ProtectedRoute>
         }
       >
@@ -107,48 +112,22 @@ export function AppRouter() {
 
         {/* AI Assistant (live shop-assistant chat) */}
         <Route path="/ai-chat" element={<AiChatPage />} />
+      </Route>
 
-        {/* Platform Administration (Super Admin Panel) - platform admins only */}
-        <Route
-          path="/admin"
-          element={
-            <AdminRoute>
-              <AdminOverviewPage />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/users"
-          element={
-            <AdminRoute>
-              <AdminUsersPage />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/users/:userId"
-          element={
-            <AdminRoute>
-              <AdminUserDetailPage />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/shops"
-          element={
-            <AdminRoute>
-              <AdminShopsPage />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/admin/shops/:shopId"
-          element={
-            <AdminRoute>
-              <AdminShopDetailPage />
-            </AdminRoute>
-          }
-        />
+      {/* Platform Administration (Super Admin Panel) - platform-only layout */}
+      <Route
+        element={
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
+        }
+      >
+        <Route path="/admin" element={<AdminOverviewPage />} />
+        <Route path="/admin/health" element={<AdminHealthPage />} />
+        <Route path="/admin/users" element={<AdminUsersPage />} />
+        <Route path="/admin/users/:userId" element={<AdminUserDetailPage />} />
+        <Route path="/admin/shops" element={<AdminShopsPage />} />
+        <Route path="/admin/shops/:shopId" element={<AdminShopDetailPage />} />
       </Route>
 
       {/* 404 Catch-all */}

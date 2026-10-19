@@ -83,7 +83,10 @@ class AdminHealthResponse(BaseModel):
 
 
 class AdminUserItem(BaseModel):
-    """One user row in the platform user index."""
+    """One user row in the platform user index.
+
+    A shop-less platform administrator has ``shop_id``/``shop_name`` null.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -93,8 +96,8 @@ class AdminUserItem(BaseModel):
     clerk_user_id: str | None = None
     role: UserRole
     is_platform_admin: bool
-    shop_id: uuid.UUID
-    shop_name: str
+    shop_id: uuid.UUID | None = None
+    shop_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -122,12 +125,16 @@ class AdminUserShopSummary(BaseModel):
 
 
 class AdminUserDetailResponse(BaseModel):
-    """One user plus their (single) shop relationship."""
+    """One user plus their (single) shop relationship.
+
+    ``shop`` is null and ``shop_members_count`` is 0 for a shop-less
+    platform administrator.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     user: AdminUserItem
-    shop: AdminUserShopSummary
+    shop: AdminUserShopSummary | None = None
     shop_members_count: int
 
 

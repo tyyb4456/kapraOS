@@ -164,7 +164,11 @@ class PlatformHealth:
 
 @dataclass(frozen=True)
 class AdminUserRow:
-    """One user row for the platform user index/detail."""
+    """One user row for the platform user index/detail.
+
+    ``shop_id``/``shop_name`` are ``None`` for a platform administrator
+    who is not bound to a tenant.
+    """
 
     id: uuid.UUID
     name: str
@@ -172,8 +176,8 @@ class AdminUserRow:
     clerk_user_id: str | None
     role: UserRole
     is_platform_admin: bool
-    shop_id: uuid.UUID
-    shop_name: str
+    shop_id: uuid.UUID | None
+    shop_name: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -200,10 +204,13 @@ class AdminShopSummary:
 
 @dataclass(frozen=True)
 class AdminUserDetail:
-    """One user plus the real relationship model (a user -> one shop)."""
+    """One user plus the real relationship model (a user -> one shop).
+
+    ``shop`` is ``None`` for a shop-less platform administrator.
+    """
 
     user: AdminUserRow
-    shop: AdminShopSummary
+    shop: AdminShopSummary | None
     shop_members_count: int
 
 
@@ -381,6 +388,8 @@ async def _owners_for_shops(
     )
     owners: dict[uuid.UUID, AdminShopOwner] = {}
     for user in rows:
+        if user.shop_id is None:  # pragma: no cover - query is shop-scoped
+            continue
         owners.setdefault(
             user.shop_id,
             AdminShopOwner(id=user.id, name=user.name, email=user.email),
@@ -585,7 +594,9 @@ async def list_users(
     rows = (
         await session.execute(
             select(User, Shop.name)
-            .join(Shop, Shop.id == User.shop_id)
+            # LEFT JOIN: a shop-less platform administrator must still
+            # appear in the platform user index (with no shop name).
+            .outerjoin(Shop, Shop.id == User.shop_id)
             .where(*filters)
             .order_by(User.created_at.desc(), User.id.desc())
             .limit(limit)
@@ -614,19 +625,41 @@ async def list_users(
 async def get_user_detail(
     session: AsyncSession, *, user_id: uuid.UUID
 ) -> AdminUserDetail:
-    """One user plus the shop relationship that actually exists in the model."""
+    """One user plus the shop relationship that actually exists in the model.
+
+    A platform administrator without a tenant has no shop: the detail is
+    returned with ``shop=None`` and zero members.
+    """
     user = (
         await session.execute(select(User).where(User.id == user_id))
     ).scalar_one_or_none()
     if user is None:
         raise AdminUserNotFoundError(f"User {user_id} was not found")
 
+    if user.shop_id is None:
+        return AdminUserDetail(
+            user=AdminUserRow(
+                id=user.id,
+                name=user.name,
+                email=user.email,
+                clerk_user_id=user.clerk_user_id,
+                role=user.role,
+                is_platform_admin=bool(user.is_platform_admin),
+                shop_id=None,
+                shop_name=None,
+                created_at=user.created_at,
+                updated_at=user.updated_at,
+            ),
+            shop=None,
+            shop_members_count=0,
+        )
+
     shop = (
         await session.execute(select(Shop).where(Shop.id == user.shop_id))
     ).scalar_one_or_none()
     if shop is None:
-        # shop_id is a NOT NULL FK, so this can only mean a concurrently
-        # deleted tenant; treat it the same as a missing user.
+        # A set shop_id is protected by the FK, so this can only mean a
+        # concurrently deleted tenant; treat it the same as a missing user.
         raise AdminUserNotFoundError(f"User {user_id} was not found")
 
     member_count = await _scalar_count(

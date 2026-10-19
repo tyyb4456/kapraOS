@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.dependencies import CurrentUserDep, DbSession, ShopId
+from app.api.dependencies import CurrentUserDep, DbSession
 from app.auth.auth import require_auth
 from app.models.shop import Shop
 from app.models.user import User, UserRole
@@ -27,19 +27,17 @@ class SyncUserRequest(BaseModel):
 
 
 @router.get("/me")
-async def me(
-    current_user: CurrentUserDep,
-    shop_id: ShopId,
-) -> dict:
+async def me(current_user: CurrentUserDep) -> dict:
     """Return the authenticated application user and their shop context.
 
     The `shop_id` here is server-derived from the Clerk token, never
-    client-supplied.
+    client-supplied. It is `null` for a platform administrator who is not
+    bound to a tenant - platform administration does not require a shop.
     """
     return {
         "id": str(current_user.id),
         "clerk_user_id": current_user.clerk_user_id,
-        "shop_id": str(shop_id),
+        "shop_id": str(current_user.shop_id) if current_user.shop_id else None,
         "role": current_user.role.value if current_user.role else None,
         # Platform-operator flag, server-derived. The frontend uses it only
         # to show/hide admin navigation; every admin API re-checks it.
@@ -60,6 +58,10 @@ async def sync(
 
     Otherwise provisions a brand-new isolated tenant: a fresh `Shop` + an
     `OWNER` `User` bound to it, then initializes system accounts.
+
+    A pre-provisioned identity is returned as-is - including a platform
+    administrator with no shop (`shop_id: null`), for whom no tenant is
+    created.
 
     A `clerk_user_id` must NEVER be attached to another user's `Shop` --
     reusing `SELECT Shop LIMIT 1` caused every account to see the same data.
@@ -87,7 +89,7 @@ async def sync(
         return {
             "id": str(user_obj.id),
             "clerk_user_id": user_obj.clerk_user_id,
-            "shop_id": str(user_obj.shop_id),
+            "shop_id": str(user_obj.shop_id) if user_obj.shop_id else None,
             "role": user_obj.role.value if user_obj.role else None,
             "is_platform_admin": bool(user_obj.is_platform_admin),
         }
@@ -154,7 +156,7 @@ async def sync(
             return {
                 "id": str(retry.id),
                 "clerk_user_id": retry.clerk_user_id,
-                "shop_id": str(retry.shop_id),
+                "shop_id": str(retry.shop_id) if retry.shop_id else None,
                 "role": retry.role.value if retry.role else None,
                 "is_platform_admin": bool(retry.is_platform_admin),
             }
@@ -167,7 +169,7 @@ async def sync(
     return {
         "id": str(user_obj.id),
         "clerk_user_id": user_obj.clerk_user_id,
-        "shop_id": str(user_obj.shop_id),
+        "shop_id": str(user_obj.shop_id) if user_obj.shop_id else None,
         "role": user_obj.role.value if user_obj.role else None,
         "is_platform_admin": bool(user_obj.is_platform_admin),
     }

@@ -4,7 +4,7 @@ export type UserRole = 'owner' | 'admin' | 'manager' | 'cashier';
 export interface AuthMeResponse {
   id: string;
   clerk_user_id: string;
-  shop_id: string;
+  shop_id: string | null;
   role: UserRole | string | null;
   is_platform_admin?: boolean;
 }
@@ -12,7 +12,7 @@ export interface AuthMeResponse {
 export interface CurrentUser {
   id: string;
   clerkUserId: string;
-  shopId: string;
+  shopId: string | null;
   role: UserRole | string | null;
   isPlatformAdmin: boolean;
   email?: string;
@@ -573,8 +573,8 @@ export interface AdminUserSummary {
   clerk_user_id: string | null;
   role: UserRole | string;
   is_platform_admin: boolean;
-  shop_id: string;
-  shop_name: string;
+  shop_id: string | null;
+  shop_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -595,7 +595,7 @@ export interface AdminUserShopSummary {
 
 export interface AdminUserDetailResponse {
   user: AdminUserSummary;
-  shop: AdminUserShopSummary;
+  shop: AdminUserShopSummary | null;
   shop_members_count: number;
 }
 

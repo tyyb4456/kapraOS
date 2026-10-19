@@ -35,7 +35,7 @@ from app.ai.voice_config import (
     VoiceNotConfiguredError,
     get_voice_settings,
 )
-from app.api.dependencies import CurrentUserDep
+from app.api.dependencies import CurrentUserDep, ShopId
 
 router = APIRouter(prefix="/ai/voice", tags=["ai-voice"])
 
@@ -101,7 +101,7 @@ async def voice_config(current_user: CurrentUserDep) -> VoiceConfigResponse:
     "/token", response_model=VoiceTokenResponse, status_code=status.HTTP_201_CREATED
 )
 async def voice_token(
-    body: VoiceTokenRequest, current_user: CurrentUserDep
+    body: VoiceTokenRequest, current_user: CurrentUserDep, shop_id: ShopId
 ) -> VoiceTokenResponse:
     """Mint a LiveKit room token bound to the authenticated tenant."""
     settings = get_voice_settings()
@@ -131,7 +131,7 @@ async def voice_token(
 
     # All session identifiers are minted here from the authenticated user.
     # Nothing from the request body influences tenant selection.
-    shop_part = _short(current_user.shop_id)
+    shop_part = _short(shop_id)
     user_part = _short(current_user.id)
     room_name = f"voice-{shop_part}-{user_part}-{uuid.uuid4().hex[:8]}"
     participant_identity = f"user-{current_user.id}"
@@ -162,7 +162,7 @@ async def voice_token(
             {
                 "kapraos_thread_id": thread_id,
                 "kapraos_user_id": str(current_user.id),
-                "kapraos_shop_id": str(current_user.shop_id),
+                "kapraos_shop_id": str(shop_id),
             }
         )
         # Ask LiveKit to dispatch our voice worker into this room. Even
