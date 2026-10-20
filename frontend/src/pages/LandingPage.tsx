@@ -8,12 +8,11 @@ import {
   BookOpenText,
   Truck,
   BarChart3,
-  Sparkles,
   Check,
   Menu,
   X,
   Receipt,
-  MessageCircleQuestion,
+  Send,
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -86,14 +85,6 @@ function LayoutDashboardIcon() {
   );
 }
 
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="clay-badge mb-3 inline-flex items-center gap-2 border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-      {children}
-    </p>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* Data                                                                */
 /* ------------------------------------------------------------------ */
@@ -152,19 +143,19 @@ const features: Feature[] = [
 
 const steps = [
   {
-    n: '01',
-    title: 'Subah — Dashboard kholo',
-    desc: 'Aaj ki sale, kharcha, udhaar recovery aur low-stock — sab ek screen par. Din plan ho gaya.',
+    time: 'Subah',
+    title: 'Dashboard kholo',
+    desc: 'Aaj ki sale, kharcha, udhaar recovery aur low-stock ek screen par.',
   },
   {
-    n: '02',
-    title: 'Din — Sale + Purchase',
-    desc: 'New Sale par meter kaat ke bill, New Purchase par stock auto-plus. Khata entries khud ban jati hain.',
+    time: 'Din',
+    title: 'Sale aur purchase',
+    desc: 'New Sale par meter kaat ke bill. Purchase par stock khud barhta hai.',
   },
   {
-    n: '03',
-    title: 'Shaam — Reports band karo',
-    desc: 'Daily sales, P&L aur AI se poocho “Aaj kitni sale hui?” — hisaab clear, tension khatam.',
+    time: 'Shaam',
+    title: 'Reports band karo',
+    desc: 'Daily sales, P&L, aur AI se poocho: aaj kitni sale hui?',
   },
 ];
 
@@ -178,6 +169,7 @@ export function LandingPage() {
   const navigate = useNavigate();
 
   const primaryCta = () => navigate(isAuthenticated ? '/dashboard' : '/signup');
+  const openAi = () => navigate(isAuthenticated ? '/ai-chat' : '/signup');
 
   return (
     <div className="min-h-screen bg-[var(--clay-bg)] text-zinc-900 antialiased dark:text-zinc-100">
@@ -891,69 +883,137 @@ export function LandingPage() {
 
       {/* ================= HOW IT WORKS ================= */}
       <section id="how" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="mx-auto max-w-2xl text-center">
-          <SectionEyebrow>Subah se shaam tak</SectionEyebrow>
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Dukaan ka routine, KapraOS ke saath</h2>
-        </div>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {steps.map((s) => (
-            <div key={s.n} className="clay-card relative overflow-hidden p-6">
-              <span className="font-tabular text-5xl font-extrabold text-zinc-200 dark:text-zinc-800">{s.n}</span>
-              <h3 className="mt-2 text-base font-bold">{s.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{s.desc}</p>
-            </div>
-          ))}
-        </div>
+        <div className="feature-reveal">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent-ink)]">
+              Subah se shaam tak
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
+              Dukaan ka routine, KapraOS ke saath.
+            </h2>
+          </div>
 
-        {/* AI band */}
-        <div id="ai" className="relative mt-10 overflow-hidden rounded-3xl border border-zinc-800 bg-[#1e222b] text-white dark:border-zinc-700">
-          <img
-            src="/pexels-teona-swift-6850486.jpg"
-            alt="Colorful fabric texture close-up"
-            className="absolute inset-0 h-full w-full object-cover opacity-35"
-            loading="lazy"
-          />
-          <div className="absolute inset-0 bg-linear-to-r from-[#1e222b] via-[#1e222b]/70 to-[#1e222b]/40" />
-          <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1.1fr_0.9fr] lg:p-12">
-            <div>
-              <p className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
-                <Sparkles className="h-3.5 w-3.5 text-blue-300" /> AI Munshi — live on your data
-              </p>
-              <h3 className="mt-4 text-2xl font-extrabold tracking-tight sm:text-3xl">Bas poocho: “Aaj kitni sale hui?”</h3>
-              <p className="mt-3 max-w-lg text-sm leading-relaxed text-zinc-300">
-                KapraOS ka shop-assistant aapke asal stock, sale aur khate par jawab deta hai —
-                low-stock warning, udhaar reminder, profit summary. Jaise purana munshi, par jo sota nahi.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2 text-xs">
-                {['“Lawn mein kya khatam ho raha hai?”', '“Ahmed ka udhaar kitna hai?”', '“Is hafte ka profit batao”'].map((q) => (
-                  <span key={q} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 font-medium text-zinc-200">
-                    <MessageCircleQuestion className="h-3.5 w-3.5 text-blue-300" /> {q}
-                  </span>
+          {/* One clay rail, three moments of the day */}
+          <div className="mt-8 rounded-[24px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface)] p-7 shadow-[var(--clay-highlight),var(--clay-shadow-md)] sm:mt-10 sm:p-8">
+            <div className="relative">
+              <span
+                aria-hidden="true"
+                className="absolute top-1 left-[3px] right-[calc(33.333%-1.6875rem)] hidden h-px bg-[var(--clay-border)] sm:block lg:right-[calc(33.333%-1.9375rem)]"
+              />
+              <ol className="grid gap-0 sm:grid-cols-3">
+                {steps.map((s, i) => (
+                  <li
+                    key={s.time}
+                    className={`relative min-w-0 py-5 first:pt-0 last:pb-0 sm:border-l sm:border-[var(--clay-border-soft)] sm:py-0 sm:pl-6 lg:pl-7 ${
+                      i === 0 ? 'sm:border-l-0 sm:pl-0' : ''
+                    } ${i > 0 ? 'border-t border-[var(--clay-border-soft)] sm:border-t-0' : ''}`}
+                  >
+                    <div className="flex h-2 items-center">
+                      <span
+                        aria-hidden="true"
+                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)] ring-4 ring-[var(--clay-surface)]"
+                      />
+                    </div>
+                    <span className="mt-2 block text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--accent-ink)] dark:text-[var(--accent)]">
+                      {s.time}
+                    </span>
+                    <h3 className="mt-2 text-[15px] font-semibold leading-snug">{s.title}</h3>
+                    <p className="mt-1.5 max-w-[34ch] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                      {s.desc}
+                    </p>
+                  </li>
                 ))}
-              </div>
+              </ol>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/6 p-4 backdrop-blur">
-              <div className="space-y-3 text-sm">
-                <div className="ml-auto w-fit max-w-[85%] rounded-xl rounded-br-sm bg-white px-3.5 py-2.5 font-medium text-zinc-900">
-                  Aaj kitni sale hui?
-                </div>
-                <div className="w-fit max-w-[90%] rounded-xl rounded-bl-sm border border-white/10 bg-zinc-900 px-3.5 py-2.5 text-zinc-100">
-                  Aaj <strong className="font-tabular">Rs 86,400</strong> ki 23 sales hui — 6 udhaar (Rs 21,300). Net profit <strong className="font-tabular text-emerald-300">Rs 19,750</strong>. 
-                </div>
-                <div className="ml-auto w-fit max-w-[85%] rounded-xl rounded-br-sm bg-white px-3.5 py-2.5 font-medium text-zinc-900">
-                  Aur kya khatam ho raha hai?
-                </div>
-                <div className="w-fit max-w-[90%] rounded-xl rounded-bl-sm border border-white/10 bg-zinc-900 px-3.5 py-2.5 text-zinc-100">
-                  Lawn Sky Blue — sirf 4m bacha hai. Dobara order kar lo?
+          </div>
+
+          {/* AI Munshi — flat clay, no glass */}
+          <div
+            id="ai"
+            className="mt-12 rounded-[26px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface)] px-6 py-8 shadow-[var(--clay-highlight),var(--clay-shadow-md)] sm:mt-14 sm:px-8 sm:py-9 lg:mt-16 lg:px-10 lg:py-10"
+          >
+            <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12">
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent-ink)]">
+                  AI Munshi, aapke data par
+                </p>
+                <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
+                  Bas poocho: Aaj kitni sale hui?
+                </h2>
+                <p className="mt-3 max-w-[46ch] text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-[15px]">
+                  AI Munshi aapka asal stock, sale aur khata dekh kar jawab deta hai. Low-stock warning, udhaar reminder, profit summary.
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {[
+                    'Lawn mein kya khatam ho raha hai?',
+                    'Ahmed ka udhaar kitna hai?',
+                    'Is hafte ka profit batao',
+                  ].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={openAi}
+                      className="clay-btn cursor-pointer rounded-xl border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] px-3 py-2 text-left text-xs font-normal text-zinc-700 shadow-[var(--clay-highlight),var(--clay-shadow-sm)] transition-colors hover:border-[var(--clay-border)] hover:bg-[var(--clay-surface)] dark:text-zinc-300"
+                    >
+                      {q}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <button
-                onClick={() => navigate(isAuthenticated ? '/ai-chat' : '/signup')}
-                className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 text-sm font-bold text-white shadow-lg shadow-indigo-900/20 transition-all hover:-translate-y-0.5 hover:from-indigo-500 hover:to-blue-400"
-              >
-                <Sparkles className="h-4 w-4" />
-                {isAuthenticated ? 'AI Munshi se baat karo' : 'AI Munshi try karo — free'}
-              </button>
+
+              <div className="w-full min-w-0 max-w-[30rem] lg:justify-self-end">
+                <div className="rounded-[22px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] p-4 shadow-[var(--clay-highlight),var(--clay-shadow-sm)] sm:p-5">
+                  <div className="flex items-center gap-2.5 border-b border-[var(--clay-border-soft)] pb-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[13px] font-semibold text-[var(--accent-on)] shadow-[var(--clay-highlight),var(--clay-shadow-sm)]">
+                      M
+                    </span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate text-sm font-medium">AI Munshi</p>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400">
+                        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        online
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pt-3 text-sm">
+                    <div className="ml-auto w-fit max-w-[85%] rounded-[14px_14px_4px_14px] bg-[var(--accent-soft)] px-3.5 py-2.5 text-zinc-800 dark:text-zinc-100">
+                      Aaj kitni sale hui?
+                    </div>
+                    <div className="w-fit max-w-[90%] rounded-[14px_14px_14px_4px] border border-[var(--clay-border)] bg-[var(--clay-surface)] px-3.5 py-2.5 text-zinc-700 shadow-[var(--clay-highlight),var(--clay-shadow-sm)] dark:text-zinc-200">
+                      Aaj <span className="font-tabular font-medium">Rs 86,400</span> ki{' '}
+                      <span className="font-tabular font-medium">23</span> sales hui.{' '}
+                      <span className="font-tabular font-medium">6</span> udhaar (
+                      <span className="font-tabular font-medium">Rs 21,300</span>). Net profit{' '}
+                      <span className="font-tabular font-medium">Rs 19,750</span>.
+                    </div>
+                    <div className="ml-auto w-fit max-w-[85%] rounded-[14px_14px_4px_14px] bg-[var(--accent-soft)] px-3.5 py-2.5 text-zinc-800 dark:text-zinc-100">
+                      Aur kya khatam ho raha hai?
+                    </div>
+                    <div className="w-fit max-w-[90%] rounded-[14px_14px_14px_4px] border border-[var(--clay-border)] bg-[var(--clay-surface)] px-3.5 py-2.5 text-zinc-700 shadow-[var(--clay-highlight),var(--clay-shadow-sm)] dark:text-zinc-200">
+                      Lawn Sky Blue sirf <span className="font-tabular font-medium">4m</span> bacha hai. Dobara order kar lo?
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2 rounded-xl border border-[var(--clay-border)] bg-[var(--clay-surface)] py-1.5 pr-1.5 pl-3 shadow-[var(--clay-input-inset)]">
+                    <input
+                      type="text"
+                      aria-label="AI Munshi se sawal poochho"
+                      placeholder="Kuch poochho..."
+                      className="h-8 min-w-0 flex-1 bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 dark:text-zinc-100 dark:placeholder:text-zinc-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={openAi}
+                      aria-label="Send message"
+                      className="clay-btn inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--accent-on)]"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
