@@ -13,7 +13,6 @@ import {
   X,
   Receipt,
   Send,
-  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { ThemeToggle } from '../components/ui/ThemeToggle.tsx';
@@ -1020,93 +1019,124 @@ export function LandingPage() {
       </section>
 
       {/* ================= FINAL CTA ================= */}
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8 lg:pb-24">
-        <div className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-[#1e222b] text-white shadow-2xl dark:border-zinc-700">
-          <div aria-hidden className="pointer-events-none absolute inset-0">
-            <div className="absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-indigo-500/25 blur-3xl" />
-            <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
-          </div>
-          <div className="relative px-6 py-14 text-center sm:px-12 lg:py-18">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Apni bahi ko digital karo</p>
-            <h2 className="mx-auto mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">
-              {isAuthenticated ? 'Dashboard tayyar hai — dukaan kholo.' : 'Aaj hi apni dukaan KapraOS par lao.'}
-            </h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-zinc-300 sm:text-base">
-              Stock, sale, khata aur profit — sab ek jagah. Chahe ek counter ho ya teen godown.
-            </p>
-            <div className="mt-7 flex flex-col items-center justify-center gap-3">
+      <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-6 lg:px-8 lg:pb-12">
+        <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#232936] text-white shadow-[inset_0_1px_0_rgb(255_255_255_/_0.07),var(--clay-shadow-md)]">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[var(--accent)] opacity-[0.035]"
+          />
+          <div className="feature-reveal relative grid gap-7 px-4 py-9 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_29rem] lg:items-center lg:gap-10 lg:px-[60px] lg:py-11">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent)]">
+                Apni bahi ko digital karo
+              </p>
+              <h2 className="mt-3 max-w-none text-balance text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
+                {isAuthenticated ? (
+                  <>
+                    <span className="inline-block">Dashboard tayyar hai,</span>{' '}
+                    <span className="inline-block">dukaan kholo.</span>
+                  </>
+                ) : (
+                  'Aaj hi apni dukaan KapraOS par lao.'
+                )}
+              </h2>
+              <p className="mt-3 max-w-[60ch] text-balance text-sm leading-relaxed text-zinc-300 sm:text-[15px]">
+                Stock, sale, khata aur profit, sab ek jagah. Ek counter ho ya teen godown.
+              </p>
+            </div>
+
+            <div className="flex min-w-0 flex-col items-start gap-3 lg:items-end lg:justify-self-end">
               <button
                 onClick={primaryCta}
-                className="inline-flex h-12 cursor-pointer items-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-7 text-[15px] font-bold text-white shadow-lg shadow-indigo-900/30 transition-all hover:-translate-y-0.5 hover:from-indigo-500 hover:to-blue-400"
+                className="clay-btn clay-btn-accent inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 text-sm font-semibold text-[var(--accent-on)] sm:text-[15px]"
               >
                 {isAuthenticated ? 'Open Dashboard' : 'Create free account'}
-                <ArrowRight className="h-4.5 w-4.5" />
+                <ArrowRight className="h-4 w-4" />
               </button>
               {!isAuthenticated && (
                 <Link
                   to="/login"
-                  className="text-sm font-medium text-zinc-300 underline-offset-4 hover:text-white hover:underline"
+                  className="text-sm font-medium text-zinc-400 underline-offset-4 transition-colors hover:text-zinc-200 hover:underline"
                 >
                   I already have an account
                 </Link>
               )}
+              <ul className="mt-1 flex flex-wrap gap-1.5 lg:justify-end">
+                {['Credit card nahi chahiye', 'Urdu-friendly', 'Mobile par bhi chalega'].map((chip) => (
+                  <li
+                    key={chip}
+                    className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[13px] font-normal whitespace-nowrap text-zinc-300 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.06),0_1px_2px_rgb(0_0_0_/_0.25)]"
+                  >
+                    {chip}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <p className="mt-5 text-xs text-zinc-400">No credit card • Urdu-friendly • Mobile par bhi chalega</p>
           </div>
         </div>
       </section>
 
       {/* ================= FOOTER ================= */}
-      <footer className="border-t border-[var(--clay-border-soft)] bg-[var(--clay-surface)]">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_1fr_1fr_1fr] lg:px-8">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="clay-icon-tile h-9 w-9 bg-[var(--clay-primary)] text-white border-transparent">
-                <Store className="h-4.5 w-4.5" />
-              </span>
-              <span className="text-[15px] font-bold">KapraOS</span>
+      <footer className="border-t border-[var(--clay-border-soft)] bg-[var(--clay-bg)]">
+        <div className="footer-reveal mx-auto max-w-7xl px-4 pt-8 pb-6 sm:px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-16">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5">
+                <span className="clay-icon-tile h-9 w-9 border-transparent bg-[var(--accent)] text-[var(--accent-on)]">
+                  <Store className="h-4.5 w-4.5" />
+                </span>
+                <span className="text-[15px] font-bold tracking-tight">KapraOS</span>
+              </div>
+              <p className="mt-2.5 max-w-[32ch] text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                Kapra dukaan ka hisaab, ek jagah.
+              </p>
+              <button
+                onClick={primaryCta}
+                className="clay-btn clay-btn-accent mt-3 inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-on)]"
+              >
+                {isAuthenticated ? 'Open Dashboard' : 'Create free account'}
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-              Fabric & Fashion Retail Management — POS, inventory, khata, accounting aur AI. Apni bahi ko digital karo.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <Users_Widget />
+
+            <div className="grid grid-cols-2 gap-x-8 gap-y-7 max-[360px]:grid-cols-1 md:gap-x-16 lg:justify-self-end">
+              <FooterCol
+                title="Product"
+                links={[
+                  ['Products & Variants', '/products'],
+                  ['Inventory', '/inventory'],
+                  ['New Sale (POS)', '/sales/new'],
+                  ['Expenses', '/expenses'],
+                ]}
+              />
+              <FooterCol
+                title="Hisaab"
+                links={[
+                  ['Khata system', '#khata'],
+                  ['Daily Reports', '/reports'],
+                  ['Analytics', '/analytics'],
+                  ['AI Munshi', '#ai'],
+                ]}
+              />
             </div>
           </div>
-          <FooterCol
-            title="Dukaan"
-            links={[
-              ['Features', '#features'],
-              ['Khata system', '#khata'],
-              ['Dukaan flow', '#how'],
-              ['AI Munshi', '#ai'],
-            ]}
-          />
-          <FooterCol
-            title="App"
-            links={[
-              [isAuthenticated ? 'Open Dashboard' : 'Sign in', isAuthenticated ? '/dashboard' : '/login'],
-              [isAuthenticated ? 'AI Chat' : 'Create account', isAuthenticated ? '/ai-chat' : '/signup'],
-              ['Daily Reports', '/reports'],
-              ['Analytics', '/analytics'],
-            ]}
-          />
-          <FooterCol
-            title="Hisaab"
-            links={[
-              ['Products & Variants', '/products'],
-              ['Inventory', '/inventory'],
-              ['New Sale (POS)', '/sales/new'],
-              ['Expenses', '/expenses'],
-            ]}
-          />
-        </div>
-        <div className="border-t border-zinc-200 dark:border-zinc-800">
-          <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs text-zinc-500 sm:flex-row sm:px-6 lg:px-8 dark:text-zinc-400">
-            <p>© {new Date().getFullYear()} KapraOS — Retail Management System. All rights reserved.</p>
-            <p className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-              <ShieldCheck className="h-3.5 w-3.5" /> Secure • Ledger-balanced • Shop-first • No register needed • Meters, yards & pieces • Easypaisa / JazzCash ready
-            </p>
+
+          <div className="mt-7 flex flex-col gap-3 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between dark:text-zinc-400">
+            <p>© {new Date().getFullYear()} KapraOS. Sab haq mehfooz.</p>
+            <ul className="flex flex-wrap gap-1.5">
+              {[
+                'Easypaisa / JazzCash ready',
+                'Meter, yard aur piece',
+                'Cash, card, bank transfer',
+              ].map((chip) => (
+                <li
+                  key={chip}
+                  className="rounded-full bg-[var(--clay-surface-soft)] px-3 py-1.5 text-[13px] font-normal whitespace-nowrap text-zinc-600 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.06),0_1px_2px_rgb(0_0_0_/_0.25)] dark:text-zinc-300"
+                >
+                  {chip}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </footer>
@@ -1117,40 +1147,22 @@ export function LandingPage() {
 function FooterCol({ title, links }: { title: string; links: [string, string][] }) {
   return (
     <div>
-      <p className="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">{title}</p>
-      <ul className="mt-3 space-y-2">
+      <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{title}</p>
+      <ul className="mt-2.5 space-y-1.5">
         {links.map(([label, href]) => (
           <li key={label + href}>
             {href.startsWith('#') ? (
-              <a href={href} className="text-sm text-zinc-600 transition-colors hover:text-indigo-700 dark:text-zinc-400 dark:hover:text-indigo-300">
+              <a href={href} className="text-sm font-normal text-zinc-600 transition-colors hover:text-[var(--accent-ink)] dark:text-zinc-400 dark:hover:text-[var(--accent)]">
                 {label}
               </a>
             ) : (
-              <Link to={href} className="text-sm text-zinc-600 transition-colors hover:text-indigo-700 dark:text-zinc-400 dark:hover:text-indigo-300">
+              <Link to={href} className="text-sm font-normal text-zinc-600 transition-colors hover:text-[var(--accent-ink)] dark:text-zinc-400 dark:hover:text-[var(--accent)]">
                 {label}
               </Link>
             )}
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function Users_Widget() {
-  return (
-    <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-      <span className="flex -space-x-2">
-        {['AB', 'IK', 'SR'].map((t) => (
-          <span
-            key={t}
-            className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-zinc-800 text-[10px] font-bold text-white dark:border-zinc-950 dark:bg-zinc-700"
-          >
-            {t}
-          </span>
-        ))}
-      </span>
-      <span>Dukandaaron ka bharosa — Lahore • Karachi • Faisalabad</span>
     </div>
   );
 }
