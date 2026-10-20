@@ -598,3 +598,49 @@ body {
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Features — asymmetric bento, reusing the clay tokens                */
+/* ------------------------------------------------------------------ */
+
+.feature-card {
+  background: var(--clay-surface);
+  border: 1px solid var(--clay-border-soft);
+  box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-highlight), var(--clay-shadow-md);
+}
+
+@keyframes feature-rise {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.feature-reveal {
+  animation: feature-rise 460ms cubic-bezier(0.22, 0.7, 0.24, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-reveal {
+    animation: none;
+  }
+
+  .feature-card {
+    transition: none;
+  }
+
+  .feature-card:hover {
+    transform: none;
+    box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
+  }
+}

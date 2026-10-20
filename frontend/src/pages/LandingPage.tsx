@@ -98,42 +98,55 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 /* Data                                                                */
 /* ------------------------------------------------------------------ */
 
-/* Single accent system: indigo → blue gradient for CTAs / highlights.
-   Feature icons use ONE tone (accent tint). Neutral zinc is the second tone.
-   Green is reserved for success states only (recovery / profit). */
-const FEATURE_ICON_STYLE =
-  'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30';
+type Feature = {
+  icon: typeof Receipt;
+  title: string;
+  desc: string;
+  layout: 'featured' | 'wide' | 'standard' | 'wide-end';
+  detail?: 'stock' | 'khata' | 'flow' | 'supplier' | 'pl';
+};
 
-const features = [
+const features: Feature[] = [
   {
     icon: Receipt,
     title: 'POS built for kapra',
-    desc: 'Meter-cut or ready-piece billing in seconds. Cash, card, bank, Easypaisa, JazzCash — plus udhaar in one tap.',
+    desc: 'Meter ya piece, bill seconds mein. Cash, Easypaisa ya udhaar.',
+    layout: 'featured',
   },
   {
     icon: Scissors,
-    title: 'Open fabric → ready suits',
-    desc: 'Category → Product → Variant model handles thaans, 3-piece suits and boutique pieces with meters, yards & pieces.',
+    title: 'Thaan se ready suit tak',
+    desc: 'Open fabric, 3-piece aur boutique pieces. Har variant alag.',
+    layout: 'wide',
+    detail: 'flow',
   },
   {
     icon: Package,
-    title: 'Inventory that warns you',
-    desc: 'Live stock by variant, low-stock alerts and every meter movement tracked — sale, purchase, adjustment.',
+    title: 'Inventory jo alert de',
+    desc: 'Live stock har variant ka. Kam ho to khabar, bina ginne ke.',
+    layout: 'standard',
+    detail: 'stock',
   },
   {
     icon: BookOpenText,
-    title: 'Customer Khata, zero diary',
-    desc: 'Every udhaar auto-posted to the ledger. Balances, recoveries and khata history per customer — no more lost pages.',
+    title: 'Customer khata, zero diary',
+    desc: 'Udhaar sale khud khate mein chadh jati hai. Recovery tareekh ke saath.',
+    layout: 'standard',
+    detail: 'khata',
   },
   {
     icon: Truck,
-    title: 'Supplier Khata & purchases',
-    desc: 'Purchase bills, supplier credit and payables in one flow. Know exactly what you owe, to whom, since when.',
+    title: 'Supplier khata & purchases',
+    desc: 'Purchase bill, payables aur supplier credit, ek hi flow mein.',
+    layout: 'standard',
+    detail: 'supplier',
   },
   {
     icon: BarChart3,
-    title: 'Real hisaab, not guesswork',
-    desc: 'Double-entry ledger powers P&L, trial balance, daily sales, COGS and net profit. Evening closing in one glance.',
+    title: 'Real hisaab, guesswork nahi',
+    desc: 'P&L, COGS aur net profit. Shaam ka hisaab ek nazar mein.',
+    layout: 'wide-end',
+    detail: 'pl',
   },
 ];
 
@@ -415,28 +428,201 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ================= FEATURES GRID ================= */}
+      {/* ================= FEATURES BENTO ================= */}
       <section id="features" className="border-y border-[var(--clay-border-soft)]">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-          <div className="mx-auto max-w-2xl text-center">
-            <SectionEyebrow>Jo dukaan chalata hai — sab kuch</SectionEyebrow>
-            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Counter se godown tak, poora control</h2>
-            <p className="mt-3 text-zinc-600 dark:text-zinc-400">Six modules, one ledger. Har entry double-checked, har rupaya traceable.</p>
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent-ink)]">
+              Jo dukaan chalata hai
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
+              Counter se godown tak, poora control.
+            </h2>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400 sm:text-[15px]">
+              Chhe modules, ek hi hisaab. Har entry traceable.
+            </p>
           </div>
 
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <div
-                key={f.title}
-                className="group clay-tile p-6 hover:-translate-y-1"
-              >
-                <span className={`clay-chip-accent inline-flex h-11 w-11 items-center justify-center rounded-xl border ${FEATURE_ICON_STYLE}`}>
-                  <f.icon className="h-5 w-5" />
-                </span>
-                <h3 className="mt-4 text-[15px] font-bold">{f.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{f.desc}</p>
-              </div>
-            ))}
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+            {features.map((f, i) => {
+              const isPos = f.layout === 'featured';
+              const layoutClass = isPos
+                ? 'rounded-[28px] p-6 sm:col-span-2 sm:p-7 lg:col-span-2 lg:row-span-2'
+                : f.layout === 'wide'
+                  ? 'rounded-[24px] p-5 sm:col-span-2 sm:p-6 lg:col-span-2'
+                  : f.layout === 'wide-end'
+                    ? 'rounded-[24px] p-5 sm:p-6 lg:col-span-3'
+                    : 'rounded-[20px] p-5 sm:p-6';
+
+              return (
+                <article
+                  key={f.title}
+                  style={{ animationDelay: `${i * 45}ms` }}
+                  className={`feature-card feature-reveal flex flex-col ${layoutClass}`}
+                >
+                  <f.icon
+                    className={`shrink-0 text-[var(--accent)] ${isPos ? 'h-6 w-6' : 'h-5 w-5'}`}
+                    strokeWidth={1.75}
+                  />
+                  <h3 className={`mt-3 font-semibold leading-snug ${isPos ? 'text-xl sm:text-2xl' : 'text-[15px]'}`}>
+                    {f.title}
+                  </h3>
+                  <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                    {f.desc}
+                  </p>
+
+                  {isPos && (
+                    <div className="mt-6 flex flex-1 items-end">
+                      <div className="w-full rounded-[18px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] p-3.5 shadow-[var(--clay-highlight)]">
+                        <div className="grid grid-cols-[1fr_56px_88px] items-center gap-2 border-b border-dashed border-[var(--clay-border)] pb-2">
+                          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                            Bill #1042
+                          </span>
+                          <span aria-hidden="true" />
+                          <span className="text-right text-[11px] text-zinc-500 dark:text-zinc-400">Aaj</span>
+                        </div>
+                        <div className="grid grid-cols-[1fr_56px_88px] items-center gap-2 border-b border-[var(--clay-border-soft)] pt-2 pb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+                          <span>Item</span>
+                          <span className="text-right">Qty</span>
+                          <span className="text-right">Amount</span>
+                        </div>
+                        <ul className="divide-y divide-[var(--clay-border-soft)]">
+                          {[
+                            ['Lawn 3pc', '2.5m', '4,850'],
+                            ['Cotton kurta', '1 pc', '1,650'],
+                            ['Stitching', '1 pc', '800'],
+                          ].map(([item, qty, amount]) => (
+                            <li
+                              key={item}
+                              className="grid grid-cols-[1fr_56px_88px] items-center gap-2 py-2 text-[13px]"
+                            >
+                              <span className="min-w-0 truncate font-medium text-zinc-800 dark:text-zinc-200">
+                                {item}
+                              </span>
+                              <span className="text-right font-tabular text-[11px] text-zinc-500 dark:text-zinc-400">
+                                {qty}
+                              </span>
+                              <span className="text-right font-tabular font-semibold">Rs {amount}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="grid grid-cols-[1fr_56px_88px] items-center gap-2 border-t border-[var(--clay-border)] pt-2.5">
+                          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                            Total
+                          </span>
+                          <span aria-hidden="true" />
+                          <span className="text-right font-tabular text-sm font-semibold">Rs 7,300</span>
+                        </div>
+                        <div className="mt-2.5 flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-ink)]">
+                            <Check className="h-3 w-3" strokeWidth={3} />
+                            Cash
+                          </span>
+                          <span className="rounded-full border border-[var(--clay-border-soft)] bg-[var(--clay-surface)] px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                            Easypaisa
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {f.detail === 'flow' && (
+                    <div className="mt-auto pt-3">
+                      <div className="flex min-h-11 flex-wrap items-center gap-1.5 border-t border-[var(--clay-border-soft)] pt-3">
+                        <span className="rounded-full border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                          Lawn thaan
+                        </span>
+                        <span aria-hidden="true" className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          →
+                        </span>
+                        <span className="rounded-full border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                          Cut
+                        </span>
+                        <span aria-hidden="true" className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          →
+                        </span>
+                        <span className="rounded-full border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                          3pc suit
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {f.detail === 'stock' && (
+                    <div className="mt-auto flex min-h-11 items-center justify-between gap-3 border-t border-[var(--clay-border-soft)] pt-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium">Lawn 3pc · Sky blue</p>
+                        <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Meter stock</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-ink)]">
+                        4m bacha
+                      </span>
+                    </div>
+                  )}
+
+                  {f.detail === 'khata' && (
+                    <div className="mt-auto flex min-h-11 items-center justify-between gap-3 border-t border-[var(--clay-border-soft)] pt-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium">Ayesha Bibi</p>
+                        <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">12 din se pending</p>
+                      </div>
+                      <span className="shrink-0 font-tabular text-xs font-semibold text-[var(--accent-ink)]">
+                        Rs 6,200 pending
+                      </span>
+                    </div>
+                  )}
+
+                  {f.detail === 'supplier' && (
+                    <div className="mt-auto flex min-h-11 items-center justify-between gap-3 border-t border-[var(--clay-border-soft)] pt-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium">Imran Fabrics</p>
+                        <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Is hafte dena hai</p>
+                      </div>
+                      <span className="shrink-0 font-tabular text-xs font-semibold text-[var(--accent-ink)] dark:text-[var(--accent)]">
+                        Rs 48,000
+                      </span>
+                    </div>
+                  )}
+
+                  {f.detail === 'pl' && (
+                    <div className="mt-auto pt-4">
+                      <div className="grid grid-cols-2 gap-x-4 border-t border-[var(--clay-border-soft)] pt-3 lg:grid-cols-4 lg:gap-x-0">
+                        {[
+                          { label: 'Sale', value: 'Rs 86,400', accent: false },
+                          { label: 'COGS', value: 'Rs 58,250', accent: false },
+                          { label: 'Kharcha', value: 'Rs 4,200', accent: false },
+                          { label: 'Net profit', value: 'Rs 19,750', accent: true },
+                        ].map((item, idx) => {
+                          const divider =
+                            idx === 0
+                              ? ''
+                              : idx === 1
+                                ? 'border-l border-[var(--clay-border-soft)] pl-3'
+                                : idx === 2
+                                  ? 'border-t border-[var(--clay-border-soft)] pt-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0'
+                                  : 'border-l border-t border-[var(--clay-border-soft)] pl-3 pt-3 lg:border-t-0 lg:pt-0';
+
+                          return (
+                            <div key={item.label} className={divider}>
+                              <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+                                {item.label}
+                              </p>
+                              <p
+                                className={`mt-0.5 font-tabular text-sm font-semibold ${
+                                  item.accent ? 'text-[var(--accent-ink)] dark:text-[var(--accent)]' : ''
+                                }`}
+                              >
+                                {item.value}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
