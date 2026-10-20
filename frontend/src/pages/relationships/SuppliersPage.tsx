@@ -229,7 +229,7 @@ export function SuppliersPage() {
                   <TableCell className="font-medium text-zinc-900">
                     <Link
                       to={`/suppliers/${supplier.id}`}
-                      className="hover:text-indigo-600 hover:underline underline-offset-2"
+                      className="hover:text-[var(--accent-ink)] dark:hover:text-[var(--accent)] hover:underline underline-offset-2"
                     >
                       {supplier.name}
                     </Link>

@@ -165,7 +165,7 @@ export function OpeningInventoryPage() {
                     <TableCell align="right">
                       <Link
                         to={`/inventory/opening/${batch.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-[var(--clay-primary-active)] hover:underline"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent-ink)] dark:text-[var(--accent)] hover:underline"
                       >
                         View
                         <ArrowRight className="w-3.5 h-3.5" />

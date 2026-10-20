@@ -60,7 +60,7 @@ export function TabTrigger({
       type="button"
       onClick={() => context.setActiveTab(value)}
       className={`inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
-        isActive ? 'clay-tab-active text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+        isActive ? 'clay-tab-active text-[var(--accent-ink)] dark:text-[var(--accent)]' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
       } ${className}`}
     >
       {children}

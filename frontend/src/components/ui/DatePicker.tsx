@@ -118,9 +118,9 @@ export function DatePicker({ value, onChange, placeholder = 'Pick a date' }: Dat
                   }}
                   className={`h-8 w-8 mx-auto rounded-lg text-xs transition-colors ${
                     selected
-                      ? 'bg-[var(--clay-primary)] text-white font-semibold'
+                      ? 'bg-[var(--accent)] text-[var(--accent-on)] font-semibold'
                       : isToday
-                        ? 'border border-[var(--clay-primary)] text-[var(--clay-primary)] font-semibold'
+                        ? 'border border-[var(--accent)] text-[var(--accent-ink)] dark:text-[var(--accent)] font-semibold'
                         : current
                           ? 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                           : 'text-zinc-300 dark:text-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
@@ -150,7 +150,7 @@ export function DatePicker({ value, onChange, placeholder = 'Pick a date' }: Dat
                 setView(new Date());
                 setOpen(false);
               }}
-              className="text-xs font-medium text-[var(--clay-primary)]"
+              className="text-xs font-medium text-[var(--accent-ink)] dark:text-[var(--accent)]"
             >
               Today
             </button>

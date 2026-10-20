@@ -173,7 +173,7 @@ export function EmployeesPage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
-            <UserPlus className="w-4 h-4 text-[var(--clay-primary-active)]" />
+            <UserPlus className="w-4 h-4 text-[var(--accent-ink)] dark:text-[var(--accent)]" />
             <CardTitle className="text-sm font-semibold">Invite an employee</CardTitle>
           </div>
           <CardDescription className="text-xs">

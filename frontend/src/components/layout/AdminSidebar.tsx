@@ -40,14 +40,14 @@ export function AdminSidebar({ mobileOpen = false, onCloseMobile }: AdminSidebar
       {/* Brand Header */}
       <div className="flex items-center h-14 px-4 border-b border-[var(--clay-border-soft)] shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="clay-icon-tile w-8 h-8 bg-[var(--clay-primary)] text-white border-transparent rounded-[14px]">
+          <div className="clay-icon-tile w-8 h-8 bg-[var(--accent)] text-[var(--accent-on)] border-transparent rounded-[14px]">
             <Store className="w-4 h-4" />
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-50 truncate">
               KapraOS
             </span>
-            <span className="text-[10px] font-medium text-[var(--clay-primary-active)] uppercase tracking-wider truncate">
+            <span className="text-[10px] font-medium text-[var(--accent-ink)] dark:text-[var(--accent)] uppercase tracking-wider truncate">
               Platform Admin
             </span>
           </div>
@@ -88,7 +88,7 @@ export function AdminSidebar({ mobileOpen = false, onCloseMobile }: AdminSidebar
       <div className="p-3 border-t border-[var(--clay-border-soft)] shrink-0 bg-[var(--clay-surface-soft)]">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-primary-soft)] text-[var(--clay-primary-active)] dark:text-[#c7c7fb] font-semibold text-xs flex items-center justify-center shrink-0">
+            <div className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-surface-soft)] text-[var(--accent-ink)] dark:text-[var(--accent)] font-semibold text-xs flex items-center justify-center shrink-0">
               {user?.fullName?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div className="flex flex-col min-w-0 flex-1">

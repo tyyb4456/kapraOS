@@ -143,7 +143,7 @@ export function AdminUserDetailPage() {
                   <DetailRow label="Shop Name">
                     <Link
                       to={`/admin/shops/${data.shop.id}`}
-                      className="text-[var(--clay-primary-active)] hover:underline inline-flex items-center gap-1.5"
+                      className="text-[var(--accent-ink)] dark:text-[var(--accent)] hover:underline inline-flex items-center gap-1.5"
                     >
                       <Store className="w-3.5 h-3.5" />
                       {data.shop.name}

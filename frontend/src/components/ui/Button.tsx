@@ -14,13 +14,13 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'clay-btn clay-btn-primary bg-[var(--clay-primary)] hover:bg-[var(--clay-primary-hover)] active:bg-[var(--clay-primary-active)] text-white border border-transparent focus-visible:ring-[var(--clay-primary)]',
+    'clay-btn clay-btn-accent text-[var(--accent-on)] border border-transparent focus-visible:ring-[var(--accent)]',
   secondary:
-    'clay-btn bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 active:bg-zinc-100 dark:active:bg-zinc-800 border border-[var(--clay-border-soft)] dark:border-zinc-700 focus-visible:ring-[var(--clay-primary)]',
+    'clay-btn bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-[var(--accent-border)] active:bg-zinc-100 dark:active:bg-zinc-800 border border-[var(--clay-border-soft)] dark:border-zinc-700 focus-visible:ring-[var(--accent)]',
   outline:
-    'clay-btn bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 active:bg-zinc-100 dark:active:bg-zinc-800 border border-[var(--clay-border)] dark:border-zinc-700 focus-visible:ring-[var(--clay-primary)]',
+    'clay-btn bg-white dark:bg-transparent text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-[var(--accent-border)] active:bg-zinc-100 dark:active:bg-zinc-800 border border-[var(--clay-border)] dark:border-zinc-700 focus-visible:ring-[var(--accent)]',
   ghost:
-    'bg-transparent text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200/60 dark:active:bg-zinc-800 border border-transparent focus-visible:ring-[var(--clay-primary)] rounded-[14px]',
+    'bg-transparent text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200/60 dark:active:bg-zinc-800 border border-transparent focus-visible:ring-[var(--accent)] rounded-[14px]',
   danger:
     'clay-btn bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 border border-rose-600 focus-visible:ring-rose-600',
 };

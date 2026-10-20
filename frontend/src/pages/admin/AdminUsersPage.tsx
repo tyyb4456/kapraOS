@@ -175,7 +175,7 @@ export function AdminUsersPage() {
                     {user.shop_id && user.shop_name ? (
                       <Link
                         to={`/admin/shops/${user.shop_id}`}
-                        className="text-xs text-[var(--clay-primary-active)] hover:underline"
+                        className="text-xs text-[var(--accent-ink)] dark:text-[var(--accent)] hover:underline"
                       >
                         {user.shop_name}
                       </Link>

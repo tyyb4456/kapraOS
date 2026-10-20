@@ -142,7 +142,7 @@ export function Sidebar({
       {/* Brand Header */}
       <div className="flex items-center justify-between h-14 px-4 border-b border-[var(--clay-border-soft)] shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="clay-icon-tile w-8 h-8 bg-[var(--clay-primary)] text-white border-transparent rounded-[14px]">
+          <div className="clay-icon-tile w-8 h-8 bg-[var(--accent)] text-[var(--accent-on)] border-transparent rounded-[14px]">
             <Store className="w-4 h-4" />
           </div>
           {!collapsed && (
@@ -208,7 +208,7 @@ export function Sidebar({
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between gap-2'}`}>
           {!collapsed ? (
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-primary-soft)] text-[var(--clay-primary-active)] dark:text-[#c7c7fb] font-semibold text-xs flex items-center justify-center shrink-0">
+              <div className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-surface-soft)] text-[var(--accent-ink)] dark:text-[var(--accent)] font-semibold text-xs flex items-center justify-center shrink-0">
                 {user?.fullName?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div className="flex flex-col min-w-0 flex-1">
@@ -227,7 +227,7 @@ export function Sidebar({
             </div>
           ) : (
             <div
-              className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-primary-soft)] text-[var(--clay-primary-active)] dark:text-[#c7c7fb] font-semibold text-xs flex items-center justify-center shrink-0"
+              className="clay-chip-accent w-7 h-7 rounded-full bg-[var(--clay-surface-soft)] text-[var(--accent-ink)] dark:text-[var(--accent)] font-semibold text-xs flex items-center justify-center shrink-0"
               title={user?.fullName || 'User'}
             >
               {user?.fullName?.charAt(0).toUpperCase() || 'U'}

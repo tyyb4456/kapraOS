@@ -44,7 +44,7 @@ function StatCard({
   return (
     <Card>
       <CardContent className="p-4 flex items-start gap-3">
-        <div className="clay-icon-tile w-9 h-9 shrink-0 bg-[var(--clay-primary-soft)] text-[var(--clay-primary-active)] dark:text-[#c7c7fb]">
+        <div className="clay-icon-tile w-9 h-9 shrink-0 bg-[var(--accent-soft)] text-[var(--accent-ink)] dark:text-[var(--accent)]">
           {icon}
         </div>
         <div className="min-w-0">
@@ -95,7 +95,7 @@ function TrendList({
                 </span>
                 <div className="flex-1 h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-[var(--clay-primary)]"
+                    className="h-full rounded-full bg-[var(--accent)]"
                     style={{ width: `${Math.max(4, (point.count / max) * 100)}%` }}
                   />
                 </div>

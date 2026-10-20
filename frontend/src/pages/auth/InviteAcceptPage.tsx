@@ -94,7 +94,7 @@ export function InviteAcceptPage() {
   return (
     <div className="min-h-screen bg-[var(--clay-bg)] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6">
-        <div className="clay-icon-tile w-10 h-10 bg-[var(--clay-primary)] text-white border-transparent rounded-[14px] mx-auto mb-3">
+        <div className="clay-icon-tile w-10 h-10 bg-[var(--accent)] text-[var(--accent-on)] border-transparent rounded-[14px] mx-auto mb-3">
           <Store className="w-5 h-5" />
         </div>
         <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -110,7 +110,7 @@ export function InviteAcceptPage() {
           (state === 'accepting' || isLoading || (state === 'waiting' && isSignedIn)) && (
           <Card className="shadow-xs border-zinc-200">
             <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-              <Loader2 className="w-5 h-5 animate-spin text-[var(--clay-primary-active)]" />
+              <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-ink)] dark:text-[var(--accent)]" />
               <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                 {isLoading ? 'Checking your session…' : 'Accepting invitation…'}
               </p>

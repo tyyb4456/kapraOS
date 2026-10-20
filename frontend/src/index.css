@@ -7,10 +7,10 @@
   --color-clay-surface: #ffffff;
   --color-clay-soft: #f6f7fc;
   --color-clay-border: #e2e6f1;
-  --color-clay-primary: #6c6ce5;
-  --color-clay-primary-hover: #5d5dde;
-  --color-clay-primary-active: #5050c8;
-  --color-clay-primary-soft: #e9e9fd;
+  --color-clay-primary: var(--accent);
+  --color-clay-primary-hover: var(--accent-hover);
+  --color-clay-primary-active: var(--accent-active);
+  --color-clay-primary-soft: var(--accent-soft);
   --shadow-clay-sm: 0 1px 2px rgb(28 30 70 / 0.05), 0 4px 12px -4px rgb(90 95 165 / 0.12);
   --shadow-clay-md: 0 1px 2px rgb(28 30 70 / 0.05), 0 12px 28px -12px rgb(90 95 165 / 0.18);
   --shadow-clay-lg: 0 2px 4px rgb(28 30 70 / 0.06), 0 20px 44px -16px rgb(90 95 165 / 0.22);
@@ -27,11 +27,11 @@
   --clay-surface-soft: #f6f7fc;
   --clay-border: #e2e6f1;
   --clay-border-soft: #eceff6;
-  --clay-primary: #6c6ce5;
-  --clay-primary-hover: #5d5dde;
-  --clay-primary-active: #5050c8;
-  --clay-primary-soft: #e9e9fd;
-  --clay-primary-border: #c9c9f8;
+  --clay-primary: var(--accent);
+  --clay-primary-hover: var(--accent-hover);
+  --clay-primary-active: var(--accent-active);
+  --clay-primary-soft: var(--accent-soft);
+  --clay-primary-border: var(--accent-border);
   --clay-shadow-sm:
     0 1px 2px rgb(28 30 70 / 0.05),
     0 4px 12px -4px rgb(90 95 165 / 0.12);
@@ -43,7 +43,7 @@
     0 20px 44px -16px rgb(90 95 165 / 0.22);
   --clay-highlight: inset 0 1px 0 rgb(255 255 255 / 0.9);
   --clay-input-inset: inset 0 1.5px 3px rgb(28 30 70 / 0.06);
-  --clay-focus-ring: rgb(108 108 229 / 0.35);
+  --clay-focus-ring: color-mix(in srgb, var(--accent) 35%, transparent);
 
   /* Warm accent — muted marigold, picked from the red-ochre hero photo.
      Solid fills only: no gradients, no glow. */
@@ -83,11 +83,11 @@
   --clay-surface-soft: #232936;
   --clay-border: rgb(255 255 255 / 0.08);
   --clay-border-soft: rgb(255 255 255 / 0.06);
-  --clay-primary: #8383f0;
-  --clay-primary-hover: #9292f3;
-  --clay-primary-active: #6c6ce5;
-  --clay-primary-soft: rgb(108 108 229 / 0.18);
-  --clay-primary-border: rgb(108 108 229 / 0.4);
+  --clay-primary: var(--accent);
+  --clay-primary-hover: var(--accent-hover);
+  --clay-primary-active: var(--accent-active);
+  --clay-primary-soft: var(--accent-soft);
+  --clay-primary-border: var(--accent-border);
   --clay-shadow-sm:
     0 1px 2px rgb(0 0 0 / 0.35),
     0 6px 16px -6px rgb(0 0 0 / 0.5);
@@ -99,7 +99,7 @@
     0 24px 48px -16px rgb(0 0 0 / 0.6);
   --clay-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07);
   --clay-input-inset: inset 0 1.5px 3px rgb(0 0 0 / 0.35);
-  --clay-focus-ring: rgb(131 131 240 / 0.45);
+  --clay-focus-ring: color-mix(in srgb, var(--accent) 35%, transparent);
   --accent: #dda235;
   --accent-hover: #c98f27;
   --accent-active: #b57a1c;
@@ -140,7 +140,7 @@ body {
 }
 
 ::selection {
-  background: rgb(108 108 229 / 0.22);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .font-tabular {
@@ -253,29 +253,6 @@ body {
   box-shadow: var(--clay-input-inset), 0 2px 8px -4px rgb(90 95 165 / 0.14);
 }
 
-.clay-btn-primary {
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.28),
-    inset 0 -1px 0 rgb(0 0 0 / 0.08),
-    0 1px 2px rgb(80 80 200 / 0.25),
-    0 10px 22px -10px rgb(108 108 229 / 0.55);
-}
-
-.clay-btn-primary:hover {
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.32),
-    inset 0 -1px 0 rgb(0 0 0 / 0.08),
-    0 1px 2px rgb(80 80 200 / 0.28),
-    0 14px 28px -10px rgb(108 108 229 / 0.6);
-}
-
-.clay-btn-primary:active {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 2px 6px rgb(30 30 90 / 0.35),
-    0 2px 8px -4px rgb(108 108 229 / 0.4);
-}
-
 /* Warm accent CTA — solid marigold clay. Dark text keeps AA contrast. */
 .clay-btn-accent {
   background-color: var(--accent);
@@ -322,10 +299,10 @@ body {
 .clay-input:focus,
 .clay-select:focus,
 .clay-textarea:focus {
-  border-color: var(--clay-primary);
+  border-color: var(--accent);
   box-shadow:
     var(--clay-input-inset),
-    0 0 0 3px var(--clay-focus-ring);
+    0 0 0 2px var(--clay-focus-ring);
   outline: none;
 }
 
@@ -430,14 +407,14 @@ body {
 }
 
 .clay-nav-active {
-  background: var(--clay-primary-soft);
-  border: 1px solid var(--clay-primary-border);
-  color: var(--clay-primary-active);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-ink);
   box-shadow: var(--clay-highlight), var(--clay-shadow-sm);
 }
 
 .dark .clay-nav-active {
-  color: #c7c7fb;
+  color: var(--accent);
 }
 
 /* Soft pastel icon chips keep depth without going toy-like */
@@ -448,7 +425,7 @@ body {
 
 /* Accessible focus that matches the clay palette */
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--clay-primary);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 

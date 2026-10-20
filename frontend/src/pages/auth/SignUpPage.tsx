@@ -26,7 +26,7 @@ export function SignUpPage() {
     <div className="min-h-screen bg-[var(--clay-bg)] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6">
-        <div className="clay-icon-tile w-10 h-10 bg-[var(--clay-primary)] text-white border-transparent rounded-[14px] mx-auto mb-3">
+        <div className="clay-icon-tile w-10 h-10 bg-[var(--accent)] text-[var(--accent-on)] border-transparent rounded-[14px] mx-auto mb-3">
           <Store className="w-5 h-5" />
         </div>
         <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
