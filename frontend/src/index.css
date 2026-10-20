@@ -44,6 +44,16 @@
   --clay-highlight: inset 0 1px 0 rgb(255 255 255 / 0.9);
   --clay-input-inset: inset 0 1.5px 3px rgb(28 30 70 / 0.06);
   --clay-focus-ring: rgb(108 108 229 / 0.35);
+
+  /* Warm accent — muted marigold, picked from the red-ochre hero photo.
+     Solid fills only: no gradients, no glow. */
+  --accent: #d99a2b;
+  --accent-hover: #c88a23;
+  --accent-active: #b57a1c;
+  --accent-ink: #8f5a0c;
+  --accent-soft: #f6ead3;
+  --accent-border: #e6cf9f;
+  --accent-on: #2a1b07;
 }
 
 .dark {
@@ -81,6 +91,13 @@
   --clay-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07);
   --clay-input-inset: inset 0 1.5px 3px rgb(0 0 0 / 0.35);
   --clay-focus-ring: rgb(131 131 240 / 0.45);
+  --accent: #dda235;
+  --accent-hover: #c98f27;
+  --accent-active: #b57a1c;
+  --accent-ink: #e8b45c;
+  --accent-soft: rgb(217 154 43 / 0.14);
+  --accent-border: rgb(217 154 43 / 0.3);
+  --accent-on: #2a1b07;
 }
 
 html,
@@ -240,6 +257,38 @@ body {
   box-shadow:
     inset 0 2px 6px rgb(30 30 90 / 0.35),
     0 2px 8px -4px rgb(108 108 229 / 0.4);
+}
+
+/* Warm accent CTA — solid marigold clay. Dark text keeps AA contrast. */
+.clay-btn-accent {
+  background-color: var(--accent);
+  color: var(--accent-on);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    inset 0 -1px 0 rgb(0 0 0 / 0.06),
+    0 1px 2px rgb(70 45 10 / 0.18),
+    0 8px 18px -10px rgb(70 45 10 / 0.5);
+}
+
+.clay-btn-accent:hover {
+  background-color: var(--accent-hover);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.34),
+    inset 0 -1px 0 rgb(0 0 0 / 0.06),
+    0 1px 2px rgb(70 45 10 / 0.2),
+    0 12px 24px -12px rgb(70 45 10 / 0.55);
+}
+
+.clay-btn-accent:active {
+  background-color: var(--accent-active);
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 5px rgb(60 35 5 / 0.3),
+    0 2px 6px -4px rgb(70 45 10 / 0.4);
+}
+
+.clay-btn-accent:focus-visible {
+  outline-color: var(--accent-ink);
 }
 
 /* Inputs / selects / textareas — gently tactile, never deeply recessed */
@@ -524,3 +573,28 @@ body {
 .dark .text-rose-900 { color: var(--color-rose-200); }
 .dark .border-rose-200,
 .dark .border-rose-300 { border-color: color-mix(in srgb, var(--color-rose-500) 30%, transparent); }
+
+/* ------------------------------------------------------------------ */
+/* Hero — single, purposeful entrance (fade + 10px rise)               */
+/* ------------------------------------------------------------------ */
+
+@keyframes hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-enter {
+  animation: hero-enter 520ms cubic-bezier(0.22, 0.7, 0.24, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter {
+    animation: none;
+  }
+}

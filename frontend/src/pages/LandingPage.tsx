@@ -46,7 +46,7 @@ function AuthButtons({ mobile = false }: { mobile?: boolean }) {
         )}
         <button
           onClick={() => navigate('/dashboard')}
-          className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-4 text-sm font-medium text-white shadow-sm shadow-indigo-900/20 transition-all hover:from-indigo-700 hover:to-blue-600 ${mobile ? 'w-full' : ''}`}
+          className={`clay-btn inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--accent-border)] bg-[var(--clay-surface)] px-4 text-sm font-semibold text-[var(--accent-ink)] transition-colors hover:bg-[var(--accent-soft)] ${mobile ? 'w-full' : ''}`}
         >
           <LayoutDashboardIcon />
           Open Dashboard
@@ -66,7 +66,7 @@ function AuthButtons({ mobile = false }: { mobile?: boolean }) {
       </Link>
       <Link
         to="/signup"
-        className={`inline-flex h-9 items-center justify-center gap-1.5 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-4 text-sm font-medium text-white shadow-sm shadow-indigo-900/20 transition-all hover:from-indigo-700 hover:to-blue-600 ${mobile ? 'w-full' : ''}`}
+        className={`clay-btn clay-btn-accent inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-on)] ${mobile ? 'w-full' : ''}`}
       >
         Get started free
         <ArrowRight className="h-4 w-4" />
@@ -172,7 +172,7 @@ export function LandingPage() {
       <header className="clay-topbar sticky top-0 z-50">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="clay-icon-tile h-9 w-9 bg-[var(--clay-primary)] text-white border-transparent">
+            <span className="clay-icon-tile h-9 w-9 bg-[var(--accent)] text-[var(--accent-on)] border-transparent">
               <Store className="h-4.5 w-4.5" />
             </span>
             <span className="leading-tight">
@@ -236,95 +236,99 @@ export function LandingPage() {
       </header>
 
       {/* ================= HERO ================= */}
-      <section className="relative overflow-hidden">
-        {/* soft accent glow — single indigo→blue family */}
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-32 right-[-10%] h-105 w-130 rounded-full bg-indigo-200/50 blur-3xl dark:bg-indigo-500/10" />
-          <div className="absolute top-40 left-[-12%] h-95 w-115 rounded-full bg-blue-200/50 blur-3xl dark:bg-blue-500/10" />
-        </div>
-
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pt-14 pb-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:px-8 lg:pt-20 lg:pb-24">
-          {/* copy — 1 badge, headline, subtext, 1 primary CTA */}
-          <div>
-    
-
-            <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.6rem]">
+      <section className="relative lg:flex lg:min-h-[calc(100svh-65px)] lg:items-center">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[var(--accent)] opacity-[0.035]" />
+        <div className="hero-enter relative mx-auto grid w-full max-w-7xl items-start gap-10 px-4 pt-12 pb-20 sm:px-6 sm:pt-16 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-14 lg:px-8 lg:py-8">
+          {/* copy — headline, one short line, one CTA */}
+          <div className="lg:-translate-y-8">
+            <h1 className="text-[1.9rem] font-semibold leading-[1.16] tracking-[-0.01em] text-zinc-900 sm:text-[2.6rem] lg:text-[clamp(2.35rem,3.3vw,2.95rem)] dark:text-zinc-100">
               Aapki poori kapra dukaan,
-              <span className="block bg-linear-to-r from-indigo-600 to-blue-500 bg-clip-text text-transparent dark:from-indigo-400 dark:to-blue-300">
-                ab ek hi screen par.
+              <span className="block pb-2 text-[var(--accent-ink)]">
+                <span className="relative inline-block">
+                  ab ek hi screen par.
+                  <span
+                    aria-hidden="true"
+                    className="absolute -bottom-1 left-0 h-0.5 w-full rounded-full bg-[var(--accent)]"
+                  />
+                </span>
               </span>
             </h1>
 
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-zinc-600 sm:text-lg dark:text-zinc-400">
-              Thaan ho ya 3-piece, udhaar ho ya cash — <strong className="font-semibold text-zinc-900 dark:text-zinc-100">KapraOS</strong> stock,
-              sale, customer khata, supplier hisaab aur daily profit ko ek hi jagah jor deta hai. Register band, tension khatam.
+            <p className="mt-5 max-w-[31rem] text-base leading-relaxed text-zinc-600 sm:text-[17px] dark:text-zinc-300">
+              Thaan ho ya suit, udhaar ya cash. KapraOS stock, sale, khata aur profit sab ek hi jagah rakhta hai.
             </p>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
               <button
                 onClick={primaryCta}
                 disabled={isLoading}
-                className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-6 text-[15px] font-semibold text-white shadow-lg shadow-indigo-900/20 transition-all hover:-translate-y-0.5 hover:from-indigo-700 hover:to-blue-600 disabled:opacity-60"
+                className="clay-btn clay-btn-accent inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 text-[15px] font-semibold text-[var(--accent-on)] disabled:opacity-60 sm:w-auto"
               >
-                {isLoading ? 'Loading…' : isAuthenticated ? 'Open Dashboard' : 'Start free — Apni dukaan joro'}
+                {isLoading ? 'Loading…' : isAuthenticated ? 'Open Dashboard' : 'Apni dukaan joro'}
                 <ArrowRight className="h-4.5 w-4.5" />
               </button>
-            </div>
-            {!isLoading && (
-              <div className="mt-3">
-                {!isAuthenticated ? (
-                  <Link
-                    to="/login"
-                    className="text-sm font-medium text-indigo-700 underline-offset-4 hover:text-indigo-800 hover:underline dark:text-indigo-300 dark:hover:text-indigo-200"
-                  >
-                    Already have an account? Sign in →
-                  </Link>
-                ) : (
+
+              {!isLoading && (
+                isAuthenticated ? (
                   <a
                     href="#features"
-                    className="text-sm font-medium text-indigo-700 underline-offset-4 hover:text-indigo-800 hover:underline dark:text-indigo-300 dark:hover:text-indigo-200"
+                    className="text-sm font-medium text-zinc-600 underline-offset-4 transition-colors hover:text-zinc-900 hover:underline dark:text-zinc-300 dark:hover:text-zinc-100"
                   >
                     Explore features ↓
                   </a>
-                )}
-              </div>
-            )}
+                ) : (
+                  <Link
+                    to="/login"
+                    className="text-sm font-medium text-zinc-600 underline-offset-4 transition-colors hover:text-zinc-900 hover:underline dark:text-zinc-300 dark:hover:text-zinc-100"
+                  >
+                    Already have an account? Sign in
+                  </Link>
+                )
+              )}
+            </div>
 
-            {/* mini stats — kept; checkmarks removed to avoid duplication */}
-            <dl className="mt-8 grid max-w-lg grid-cols-3 gap-3">
-              {[
-                ['POS', '30-sec billing'],
-                ['Khata', 'Auto udhaar'],
-                ['P&L', 'Daily profit'],
-              ].map(([k, v]) => (
-                <div key={k} className="clay-tile p-3.5">
-                  <dt className="text-lg font-extrabold tracking-tight">{k}</dt>
-                  <dd className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{v}</dd>
-                </div>
-              ))}
-            </dl>
+            <p className="mt-10 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-zinc-700 dark:text-zinc-100">
+              <span>POS billing</span>
+              <span aria-hidden="true" className="text-zinc-400 dark:text-zinc-500">·</span>
+              <span>Udhaar khata</span>
+              <span aria-hidden="true" className="text-zinc-400 dark:text-zinc-500">·</span>
+              <span>Daily P&amp;L</span>
+            </p>
           </div>
 
-          {/* visual — boutique hero pic, single overlay (price tag as product proof) */}
-          <div className="relative">
-            <div className="relative overflow-hidden rounded-3xl border border-zinc-200 shadow-2xl shadow-zinc-900/15 dark:border-zinc-800">
+          {/* visual — offset boutique photo with two purposeful clay tags */}
+          <div className="relative mx-auto w-full max-w-[34rem] pb-12 lg:max-w-none">
+            <div className="relative overflow-hidden rounded-[2rem_2rem_1.85rem_0.75rem] border border-[var(--clay-border)] shadow-[0_18px_50px_-24px_rgb(30_34_43_/_0.45)] dark:shadow-[0_24px_60px_-28px_rgb(0_0_0_/_0.75)]">
               <img
                 src="/pexels-arina-dmitrieva-66352626-14440412.jpg"
                 alt="Boutique suit and woven shawl hanging in a fabric shop — managed in KapraOS"
-                className="h-105 w-full object-cover sm:h-130 lg:h-150"
+                className="h-[25rem] w-full object-cover sm:h-[30rem] lg:h-[min(70svh,560px)]"
                 loading="eager"
               />
-              <div className="absolute inset-0 bg-linear-to-t from-zinc-950/55 via-transparent to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
-                <div className="rounded-xl bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:bg-zinc-900/95">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Ready suit • Boutique</p>
-                  <p className="text-sm font-bold">Embroidered kurta — Variant tracked</p>
-                </div>
-                <div className="hidden rounded-xl bg-zinc-900/90 px-4 py-3 text-white shadow-lg backdrop-blur sm:block dark:bg-white/95 dark:text-zinc-900">
-                  <p className="font-tabular text-lg font-extrabold leading-none">Rs 4,850</p>
-                  <p className="mt-1 text-[11px] opacity-80">POS billed in 30 sec</p>
-                </div>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgb(255_255_255_/_0.22),inset_0_-48px_56px_-52px_rgb(20_20_20_/_0.55)]"
+              />
+            </div>
+
+            {/* price tag — small, overlapping the left edge */}
+            <div className="absolute top-7 -left-2 z-10 min-w-[8.5rem] rotate-[-1.5deg] rounded-[14px_14px_5px_14px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface)] px-3.5 py-2.5 shadow-[var(--clay-highlight),var(--clay-shadow-sm)]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">Lawn 3pc</p>
+              <p className="font-tabular text-base font-bold leading-none text-zinc-900 dark:text-zinc-100">Rs 4,850</p>
+              <p className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400">Meter cut · 2.5 m</p>
+            </div>
+
+            {/* sale card — larger, bottom-right edge overlap */}
+            <div className="absolute -right-4 -bottom-1.5 w-[15.5rem] max-w-[calc(100%-1rem)] rotate-[1deg] rounded-[18px_18px_18px_6px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface)] px-4 py-3 shadow-[var(--clay-highlight),var(--clay-shadow-md)]">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">Aaj ki sale</p>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Live
+                </span>
               </div>
+              <p className="mt-1 font-tabular text-xl font-bold leading-none text-zinc-900 dark:text-zinc-100">Rs 86,400</p>
+              <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">23 bills · 6 udhaar</p>
             </div>
           </div>
         </div>

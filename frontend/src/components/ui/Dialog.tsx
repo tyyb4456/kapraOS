@@ -40,7 +40,7 @@ export function Dialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
       <div
         className="fixed inset-0 bg-zinc-950/40 backdrop-blur-xs"
         onClick={onClose}
@@ -50,7 +50,7 @@ export function Dialog({
       <div
         role="dialog"
         aria-modal="true"
-        className={`clay-dialog relative w-full ${getWidthClass(maxWidth)} p-6 transition-all z-10`}
+        className={`clay-dialog relative flex max-h-[calc(100dvh-2rem)] w-full ${getWidthClass(maxWidth)} flex-col p-6 transition-all z-10`}
       >
         <button
           type="button"
@@ -62,16 +62,18 @@ export function Dialog({
         </button>
 
         {(title || description) && (
-          <div className="mb-4 space-y-1">
+          <div className="mb-4 shrink-0 space-y-1">
             {title && <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>}
             {description && <p className="text-xs text-zinc-500 dark:text-zinc-400">{description}</p>}
           </div>
         )}
 
-        <div className="py-2 text-sm text-zinc-800 dark:text-zinc-200">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto py-2 pr-1 text-sm text-zinc-800 dark:text-zinc-200">
+          {children}
+        </div>
 
         {footer && (
-          <div className="mt-5 flex items-center justify-end gap-2 border-t border-[var(--clay-border-soft)] pt-4">
+          <div className="mt-5 flex shrink-0 items-center justify-end gap-2 border-t border-[var(--clay-border-soft)] pt-4">
             {footer}
           </div>
         )}
