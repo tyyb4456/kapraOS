@@ -24,8 +24,10 @@ import {
   ChevronRight,
   LogOut,
   Store,
+  UserCog,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { isOwnerRole } from '../../context/identity.ts';
 import { Badge } from '../ui/Badge.tsx';
 
 interface SidebarProps {
@@ -40,6 +42,7 @@ interface NavItem {
   path: string;
   icon: React.ComponentType<{ className?: string }>;
   end?: boolean;
+  ownerOnly?: boolean;
 }
 
 interface NavGroup {
@@ -50,22 +53,22 @@ interface NavGroup {
 const navigationGroups: NavGroup[] = [
   {
     items: [
-      { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, ownerOnly: true },
     ],
   },
   {
     groupTitle: 'CATALOG',
     items: [
-      { label: 'Products', path: '/products', icon: Package },
-      { label: 'Categories', path: '/categories', icon: FolderTree },
+      { label: 'Products', path: '/products', icon: Package, ownerOnly: true },
+      { label: 'Categories', path: '/categories', icon: FolderTree, ownerOnly: true },
     ],
   },
   {
     groupTitle: 'INVENTORY',
     items: [
-      { label: 'Inventory', path: '/inventory', icon: Warehouse },
-      { label: 'Opening Stock', path: '/inventory/opening', icon: PackagePlus },
-      { label: 'Stock Movements', path: '/inventory/movements', icon: ArrowLeftRight },
+      { label: 'Inventory', path: '/inventory', icon: Warehouse, ownerOnly: true },
+      { label: 'Opening Stock', path: '/inventory/opening', icon: PackagePlus, ownerOnly: true },
+      { label: 'Stock Movements', path: '/inventory/movements', icon: ArrowLeftRight, ownerOnly: true },
     ],
   },
   {
@@ -78,36 +81,42 @@ const navigationGroups: NavGroup[] = [
   {
     groupTitle: 'PURCHASING',
     items: [
-      { label: 'New Purchase', path: '/purchases/new', icon: ShoppingCart },
-      { label: 'Purchases', path: '/purchases', icon: ShoppingBag },
+      { label: 'New Purchase', path: '/purchases/new', icon: ShoppingCart, ownerOnly: true },
+      { label: 'Purchases', path: '/purchases', icon: ShoppingBag, ownerOnly: true },
     ],
   },
   {
     groupTitle: 'RELATIONSHIPS',
     items: [
       { label: 'Customers', path: '/customers', icon: Users },
-      { label: 'Customer Khata', path: '/customers/khata', icon: BookOpen },
-      { label: 'Suppliers', path: '/suppliers', icon: Truck },
-      { label: 'Supplier Khata', path: '/suppliers/khata', icon: Building2 },
+      { label: 'Customer Khata', path: '/customers/khata', icon: BookOpen, ownerOnly: true },
+      { label: 'Suppliers', path: '/suppliers', icon: Truck, ownerOnly: true },
+      { label: 'Supplier Khata', path: '/suppliers/khata', icon: Building2, ownerOnly: true },
     ],
   },
   {
     groupTitle: 'FINANCE',
     items: [
-      { label: 'Expenses', path: '/expenses', icon: Wallet },
-      { label: 'Reports', path: '/reports', icon: ChartNoAxesCombined },
-      { label: 'Analytics', path: '/analytics', icon: TrendingUp },
+      { label: 'Expenses', path: '/expenses', icon: Wallet, ownerOnly: true },
+      { label: 'Reports', path: '/reports', icon: ChartNoAxesCombined, ownerOnly: true },
+      { label: 'Analytics', path: '/analytics', icon: TrendingUp, ownerOnly: true },
     ],
   },
   {
     groupTitle: 'AI',
     items: [
-      { label: 'AI Assistant', path: '/ai-chat', icon: Sparkles },
+      { label: 'AI Assistant', path: '/ai-chat', icon: Sparkles, ownerOnly: true },
+    ],
+  },
+  {
+    groupTitle: 'TEAM',
+    items: [
+      { label: 'Employees', path: '/employees', icon: UserCog, ownerOnly: true },
     ],
   },
   {
     items: [
-      { label: 'Settings', path: '/settings', icon: Settings },
+      { label: 'Settings', path: '/settings', icon: Settings, ownerOnly: true },
     ],
   },
 ];
@@ -119,8 +128,14 @@ export function Sidebar({
   onCloseMobile,
 }: SidebarProps) {
   const { user, signOut, role } = useAuth();
+  const isOwner = isOwnerRole(role);
 
-  const groups = navigationGroups;
+  const groups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.ownerOnly || isOwner),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const sidebarContent = (
     <div className="clay-sidebar flex flex-col h-full select-none">

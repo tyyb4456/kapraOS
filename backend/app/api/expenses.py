@@ -21,7 +21,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import keys as cache_keys
 from app.cache import service as cache_service
 from app.schemas.expenses import CreateExpenseRequest, ExpenseResponse, UpdateExpenseRequest
@@ -58,6 +58,7 @@ def _unprocessable(exc: Exception) -> HTTPException:
     summary="Record an expense",
 )
 async def create_expense(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateExpenseRequest,
@@ -93,6 +94,7 @@ async def create_expense(
     summary="List expenses",
 )
 async def list_expenses(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     start_date: Annotated[
@@ -144,6 +146,7 @@ async def list_expenses(
 )
 async def read_expense(
     expense_id: ExpenseId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> ExpenseResponse:
@@ -163,6 +166,7 @@ async def read_expense(
 )
 async def update_expense(
     expense_id: ExpenseId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateExpenseRequest,
@@ -203,6 +207,7 @@ async def update_expense(
 )
 async def delete_expense(
     expense_id: ExpenseId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:

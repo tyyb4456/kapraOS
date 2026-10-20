@@ -122,6 +122,15 @@ class Sale(Base, UUIDMixin, TimestampMixin):
             "customer_id",
             "created_at",
         ),
+        # Employee attribution read pattern: "my sales" for a cashier. NULL
+        # for legacy rows and for sales written before this column existed;
+        # those are visible to the owner (shop-scoped) but to no cashier.
+        Index(
+            "ix_sales_shop_created_by_user_id_created_at",
+            "shop_id",
+            "created_by_user_id",
+            "created_at",
+        ),
         CheckConstraint("subtotal >= 0", name="ck_sales_subtotal_non_negative"),
         CheckConstraint("discount >= 0", name="ck_sales_discount_non_negative"),
         CheckConstraint("total >= 0", name="ck_sales_total_non_negative"),
@@ -152,6 +161,16 @@ class Sale(Base, UUIDMixin, TimestampMixin):
     # NULL == walk-in / anonymous customer. Never a synthetic row.
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    # The logged-in user who rang up the sale (server-derived from the
+    # verified token, never client-supplied). NULL means "legacy/unknown
+    # author"; such sales are owner-visible only. ON DELETE SET NULL keeps
+    # sale history intact if the user row is ever removed.
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
 

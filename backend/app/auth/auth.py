@@ -138,16 +138,73 @@ async def get_current_shop_id(
 async def require_owner(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-    """Require the authenticated user to be an OWNER.
+    """Require the authenticated user to be the OWNER of a shop.
 
-    Raises 403 if the user is a STAFF member.
+    Raises 403 for employees (cashier/staff) and for platform
+    administrators, who are deliberately shop-less and must never act on
+    tenant data.
     """
-    if current_user.role != UserRole.OWNER:
+    if current_user.is_platform_admin or current_user.role != UserRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner access required",
         )
     return current_user
+
+
+async def resolve_verified_email(payload: dict) -> str | None:
+    """Return the verified email for a Clerk token payload, normalized.
+
+    Trusted sources only:
+
+    1. the `email` claim of the signed Clerk session token, when present;
+    2. failing that, Clerk's Backend API (`GET /v1/users/{sub}`) using the
+       server-side secret, which returns the identity's primary address.
+
+    Never the request body. Returns None when neither source can provide an
+    address (for example a local/dev token with no Clerk secret configured),
+    and callers that require an email must then refuse the request.
+    """
+    claim = payload.get("email")
+    if isinstance(claim, str) and claim.strip():
+        return claim.strip().lower()
+
+    clerk_user_id = payload.get("sub")
+    settings = get_settings()
+    if not clerk_user_id or not settings.clerk_secret_key:
+        return None
+
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(
+                f"https://api.clerk.com/v1/users/{clerk_user_id}",
+                headers={"Authorization": f"Bearer {settings.clerk_secret_key}"},
+            )
+    except Exception:  # noqa: BLE001 - verification failure means "unknown"
+        return None
+
+    if response.status_code != 200:
+        return None
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+
+    primary_id = data.get("primary_email_address_id")
+    addresses = data.get("email_addresses") or []
+    if primary_id is not None:
+        for address in addresses:
+            if address.get("id") == primary_id:
+                email = address.get("email_address")
+                if isinstance(email, str) and email.strip():
+                    return email.strip().lower()
+    for address in addresses:
+        email = address.get("email_address")
+        if isinstance(email, str) and email.strip():
+            return email.strip().lower()
+    return None
 
 
 async def require_platform_admin(
@@ -174,4 +231,5 @@ async def require_platform_admin(
 
 ShopId = Annotated[uuid.UUID, Depends(get_current_shop_id)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+Owner = Annotated[User, Depends(require_owner)]
 PlatformAdmin = Annotated[User, Depends(require_platform_admin)]

@@ -35,7 +35,7 @@ from app.ai.voice_config import (
     VoiceNotConfiguredError,
     get_voice_settings,
 )
-from app.api.dependencies import CurrentUserDep, ShopId
+from app.api.dependencies import CurrentUserDep, Owner, ShopId
 
 router = APIRouter(prefix="/ai/voice", tags=["ai-voice"])
 
@@ -85,7 +85,7 @@ def _dispatch_config(agent_name: str) -> Any:
 
 
 @router.get("/config", response_model=VoiceConfigResponse)
-async def voice_config(current_user: CurrentUserDep) -> VoiceConfigResponse:
+async def voice_config(owner: Owner, current_user: CurrentUserDep) -> VoiceConfigResponse:
     """Report whether realtime voice is available for this backend."""
     _ = current_user  # auth required; no per-user variation in V1.
     settings = get_voice_settings()
@@ -101,7 +101,7 @@ async def voice_config(current_user: CurrentUserDep) -> VoiceConfigResponse:
     "/token", response_model=VoiceTokenResponse, status_code=status.HTTP_201_CREATED
 )
 async def voice_token(
-    body: VoiceTokenRequest, current_user: CurrentUserDep, shop_id: ShopId
+    body: VoiceTokenRequest, owner: Owner, current_user: CurrentUserDep, shop_id: ShopId
 ) -> VoiceTokenResponse:
     """Mint a LiveKit room token bound to the authenticated tenant."""
     settings = get_voice_settings()

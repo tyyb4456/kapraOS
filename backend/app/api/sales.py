@@ -16,12 +16,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import CurrentUserDep, DbSession, Owner, ShopId
 from app.cache import keys as cache_keys
 from app.cache import service as cache_service
 from app.models.customer import Customer
 from app.models.payment import Payment
 from app.models.sale import Sale, SaleItem, SaleStatus
+from app.models.user import UserRole
 from app.schemas.returns import (
     CreateSaleReturnRequest,
     SaleReturnResponse,
@@ -77,6 +78,7 @@ def _unprocessable(exc: Exception) -> HTTPException:
 @router.post("", response_model=SaleResponse, status_code=status.HTTP_201_CREATED)
 async def create_sale(
     shop_id: ShopId,
+    current_user: CurrentUserDep,
     db: DbSession,
     body: CreateSaleRequest,
 ) -> SaleResponse:
@@ -106,6 +108,7 @@ async def create_sale(
             invoice_number=body.invoice_number,
             discount=body.discount,
             payments=payments if payments else None,
+            created_by_user_id=current_user.id,
         )
     except ShopNotFoundError as exc:
         raise _not_found(exc) from exc
@@ -148,6 +151,7 @@ async def create_sale(
 @router.get("", response_model=list[SaleListItemResponse])
 async def list_sales(
     shop_id: ShopId,
+    current_user: CurrentUserDep,
     db: DbSession,
     customer_id: UUID | None = None,
     status_filter: SaleStatus | None = None,
@@ -156,6 +160,13 @@ async def list_sales(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SaleListItemResponse]:
+    # Owners see the shop's whole history. Employees (cashier/salesman) see
+    # only sales they rang up; legacy rows with no attribution stay private
+    # to the owner. The filter is server-derived, never a query parameter.
+    author_filter: UUID | None = None
+    if current_user.role != UserRole.OWNER:
+        author_filter = current_user.id
+
     # Key includes every filter affecting the response.
     cache_key = cache_keys.sales_list_key(
         shop_id,
@@ -165,6 +176,7 @@ async def list_sales(
         end=end_date.isoformat() if end_date is not None else None,
         limit=limit,
         offset=offset,
+        created_by_user_id=str(author_filter) if author_filter else None,
     )
     cached = await cache_service.get_json(cache_key)
     if isinstance(cached, list):
@@ -173,6 +185,8 @@ async def list_sales(
         except Exception:  # noqa: BLE001 — stale payload degrades to a miss
             pass
     stmt = select(Sale).where(Sale.shop_id == shop_id)
+    if author_filter is not None:
+        stmt = stmt.where(Sale.created_by_user_id == author_filter)
     if customer_id is not None:
         stmt = stmt.where(Sale.customer_id == customer_id)
     if status_filter is not None:
@@ -271,6 +285,7 @@ async def list_sales(
 
 @router.get("/summary", response_model=SaleSummaryResponse)
 async def sales_summary(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> SaleSummaryResponse:
@@ -326,6 +341,7 @@ async def sales_summary(
 async def get_sale(
     sale_id: UUID,
     shop_id: ShopId,
+    current_user: CurrentUserDep,
     db: DbSession,
 ) -> SaleResponse:
     # Eager-load items + customer: async sessions can't lazy-load inside
@@ -338,6 +354,13 @@ async def get_sale(
     )
     sale = result.scalars().first()
     if sale is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
+    # Employees may only read the sales they authored (404 - no cross-shop or
+    # cross-employee existence oracle).
+    if (
+        current_user.role != UserRole.OWNER
+        and sale.created_by_user_id != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
     response = SaleResponse.model_validate(sale)
     if sale.customer is not None:
@@ -363,6 +386,7 @@ async def get_sale(
 @router.patch("/{sale_id}", response_model=SaleResponse)
 async def update_sale(
     sale_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateSaleRequest,
@@ -453,6 +477,7 @@ async def update_sale(
 @router.delete("/{sale_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sale(
     sale_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
@@ -487,6 +512,7 @@ async def delete_sale(
 )
 async def create_sale_return(
     sale_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateSaleReturnRequest,
@@ -560,6 +586,7 @@ async def create_sale_return(
 @router.get("/{sale_id}/returns", response_model=list[SaleReturnResponse])
 async def list_sale_returns(
     sale_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> list[SaleReturnResponse]:

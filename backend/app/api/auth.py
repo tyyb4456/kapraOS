@@ -12,9 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.dependencies import CurrentUserDep, DbSession
-from app.auth.auth import require_auth
+from app.auth.auth import require_auth, resolve_verified_email
 from app.models.shop import Shop
 from app.models.user import User, UserRole
+from app.services import employees as employees_service
 from app.services.accounting import ensure_system_accounts
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -24,6 +25,20 @@ class SyncUserRequest(BaseModel):
     name: str | None = None
     email: str | None = None
     shop_name: str | None = None
+    # Set by the invite-acceptance screen / stored invite link. When present
+    # and valid, sync joins the invited shop instead of creating a new one.
+    invitation_token: str | None = None
+
+
+def _identity_payload(user_obj: User) -> dict:
+    """Shared response shape for /auth/me and /auth/sync."""
+    return {
+        "id": str(user_obj.id),
+        "clerk_user_id": user_obj.clerk_user_id,
+        "shop_id": str(user_obj.shop_id) if user_obj.shop_id else None,
+        "role": user_obj.role.value if user_obj.role else None,
+        "is_platform_admin": bool(user_obj.is_platform_admin),
+    }
 
 
 @router.get("/me")
@@ -80,19 +95,69 @@ async def sync(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Invitation-based onboarding: never create a shop for an invited
+    # employee. A bad/expired/revoked/mismatched token fails loudly instead
+    # of silently falling back to owner provisioning.
+    if body and body.invitation_token:
+        verified_email = await resolve_verified_email(payload)
+        if verified_email is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Could not verify the email address of this identity; "
+                    "sign in with a verified email to accept the invitation"
+                ),
+            )
+        try:
+            await employees_service.accept_invitation(
+                db,
+                clerk_user_id=clerk_user_id,
+                verified_email=verified_email,
+                token=body.invitation_token,
+                display_name=body.name,
+            )
+        except employees_service.InvitationNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (
+            employees_service.InvitationExpiredError,
+            employees_service.InvitationRevokedError,
+        ) as exc:
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail=str(exc)) from exc
+        except (
+            employees_service.InvitationAlreadyUsedError,
+            employees_service.ExistingMembershipError,
+            employees_service.EmailBoundToDifferentIdentityError,
+        ) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            ) from exc
+        except (
+            employees_service.InvitationEmailMismatchError,
+            employees_service.PlatformAdminCannotAcceptError,
+        ) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+            ) from exc
+
+        accepted_user = (
+            await db.execute(
+                select(User).where(User.clerk_user_id == clerk_user_id)
+            )
+        ).scalar_one_or_none()
+        if accepted_user is None:  # pragma: no cover - defensive
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not provisioned",
+            )
+        return _identity_payload(accepted_user)
+
     result = await db.execute(
         select(User).where(User.clerk_user_id == clerk_user_id)
     )
     user_obj = result.scalar_one_or_none()
 
     if user_obj is not None:
-        return {
-            "id": str(user_obj.id),
-            "clerk_user_id": user_obj.clerk_user_id,
-            "shop_id": str(user_obj.shop_id) if user_obj.shop_id else None,
-            "role": user_obj.role.value if user_obj.role else None,
-            "is_platform_admin": bool(user_obj.is_platform_admin),
-        }
+        return _identity_payload(user_obj)
 
     raw_name = (body.name if body and body.name else None) or ""
     raw_name = raw_name.strip()
@@ -153,23 +218,11 @@ async def sync(
             )
         ).scalar_one_or_none()
         if retry is not None:
-            return {
-                "id": str(retry.id),
-                "clerk_user_id": retry.clerk_user_id,
-                "shop_id": str(retry.shop_id) if retry.shop_id else None,
-                "role": retry.role.value if retry.role else None,
-                "is_platform_admin": bool(retry.is_platform_admin),
-            }
+            return _identity_payload(retry)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Account already exists for this email. Kindly sign in instead.",
         )
     await db.refresh(user_obj)
 
-    return {
-        "id": str(user_obj.id),
-        "clerk_user_id": user_obj.clerk_user_id,
-        "shop_id": str(user_obj.shop_id) if user_obj.shop_id else None,
-        "role": user_obj.role.value if user_obj.role else None,
-        "is_platform_admin": bool(user_obj.is_platform_admin),
-    }
+    return _identity_payload(user_obj)

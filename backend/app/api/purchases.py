@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import keys as cache_keys
 from app.cache import service as cache_service
 from app.models.purchase import Purchase, PurchaseItem
@@ -68,6 +68,7 @@ def _unprocessable(exc: Exception) -> HTTPException:
 
 @router.post("", response_model=PurchaseResponse, status_code=status.HTTP_201_CREATED)
 async def create_purchase(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreatePurchaseRequest,
@@ -150,6 +151,7 @@ async def create_purchase(
 
 @router.get("", response_model=list[PurchaseListItemResponse])
 async def list_purchases(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     supplier_id: UUID | None = None,
@@ -264,6 +266,7 @@ async def list_purchases(
 @router.get("/{purchase_id}", response_model=PurchaseResponse)
 async def get_purchase(
     purchase_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> PurchaseResponse:
@@ -354,6 +357,7 @@ def _purchase_to_response(
 @router.patch("/{purchase_id}", response_model=PurchaseResponse)
 async def update_purchase(
     purchase_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdatePurchaseRequest,
@@ -433,6 +437,7 @@ async def update_purchase(
 @router.delete("/{purchase_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_purchase(
     purchase_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
@@ -466,6 +471,7 @@ async def delete_purchase(
 )
 async def create_purchase_return(
     purchase_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreatePurchaseReturnRequest,
@@ -537,6 +543,7 @@ async def create_purchase_return(
 @router.get("/{purchase_id}/returns", response_model=list[PurchaseReturnResponse])
 async def list_purchase_returns(
     purchase_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> list[PurchaseReturnResponse]:

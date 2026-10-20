@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import keys as cache_keys
 from app.cache import service as cache_service
 from app.services import inventory as inventory_service
@@ -282,6 +282,7 @@ async def get_inventory(
 @router.post("/{variant_id}/adjust", response_model=InventoryResponse)
 async def adjust_stock(
     variant_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     quantity_delta: Annotated[Decimal, Query()],

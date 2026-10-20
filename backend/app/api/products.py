@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import keys as cache_keys
 from app.cache import service as cache_service
 from app.models.category import Category
@@ -121,6 +121,7 @@ async def get_category_tree(
 
 @router.post("/categories", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 async def create_category(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateCategoryRequest,
@@ -153,6 +154,7 @@ async def create_category(
 @router.patch("/categories/{category_id}", response_model=CategoryResponse)
 async def update_category(
     category_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateCategoryRequest,
@@ -198,6 +200,7 @@ async def update_category(
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_category(
     category_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     force: bool = Query(default=False, description="Also permanently delete the category's products and their stock history."),
@@ -259,6 +262,7 @@ async def list_brands(
 
 @router.post("/brands", response_model=BrandResponse, status_code=status.HTTP_201_CREATED)
 async def create_brand(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateBrandRequest,
@@ -279,6 +283,7 @@ async def create_brand(
 @router.patch("/brands/{brand_id}", response_model=BrandResponse)
 async def update_brand(
     brand_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateBrandRequest,
@@ -305,6 +310,7 @@ async def update_brand(
 @router.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_brand(
     brand_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
@@ -339,6 +345,7 @@ async def list_attributes(
 
 @router.post("/attributes", response_model=AttributeResponse, status_code=status.HTTP_201_CREATED)
 async def create_attribute(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateAttributeRequest,
@@ -359,6 +366,7 @@ async def create_attribute(
 @router.patch("/attributes/{attribute_id}", response_model=AttributeResponse)
 async def update_attribute(
     attribute_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateAttributeRequest,
@@ -387,6 +395,7 @@ async def update_attribute(
 @router.delete("/attributes/{attribute_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_attribute(
     attribute_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
@@ -425,6 +434,7 @@ async def list_attribute_values(
 
 @router.post("/attribute-values", response_model=AttributeValueResponse, status_code=status.HTTP_201_CREATED)
 async def create_attribute_value(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateAttributeValueRequest,
@@ -455,6 +465,7 @@ async def create_attribute_value(
 @router.patch("/attribute-values/{value_id}", response_model=AttributeValueResponse)
 async def update_attribute_value(
     value_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateAttributeValueRequest,
@@ -483,6 +494,7 @@ async def update_attribute_value(
 @router.delete("/attribute-values/{value_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_attribute_value(
     value_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
@@ -559,6 +571,7 @@ async def get_variant(
 
 @router.post("/variants", response_model=ProductVariantResponse, status_code=status.HTTP_201_CREATED)
 async def create_variant(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateProductVariantRequest,
@@ -600,6 +613,7 @@ async def create_variant(
 @router.patch("/variants/{variant_id}", response_model=ProductVariantResponse)
 async def update_variant(
     variant_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateProductVariantRequest,
@@ -794,6 +808,7 @@ async def _delete_product_row(
 @router.delete("/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_variant(
     variant_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     force: bool = Query(default=False, description="Permanently wipe leftover stock history too."),
@@ -905,6 +920,7 @@ def _resolve_unit(unit_str: str) -> str:
 
 @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateProductRequest,
@@ -967,6 +983,7 @@ async def create_product(
 @router.patch("/{product_id}", response_model=ProductDetailResponse)
 async def update_product(
     product_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateProductRequest,
@@ -1059,6 +1076,7 @@ async def update_product(
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
     product_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     force: bool = Query(default=False, description="Permanently wipe leftover stock history too."),

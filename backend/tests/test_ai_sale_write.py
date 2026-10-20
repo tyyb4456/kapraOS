@@ -69,6 +69,7 @@ from app.models import (
     Shop,
     Supplier,
     Unit,
+    User,
 )
 from app.services import receivables as receivables_service
 from app.services import sales as sales_service
@@ -84,11 +85,13 @@ class SaleFixture:
         variant: ProductVariant,
         supplier: Supplier,
         customer: Customer,
+        user: User,
     ) -> None:
         self.shop = shop
         self.variant = variant
         self.supplier = supplier
         self.customer = customer
+        self.user = user
 
 
 async def _make_sale_shop(
@@ -100,6 +103,14 @@ async def _make_sale_shop(
 ) -> SaleFixture:
     shop = Shop(name=f"{name} {uuid.uuid4().hex[:6]}")
     db.add(shop)
+    await db.flush()
+    user = User(
+        shop_id=shop.id,
+        clerk_user_id=f"clerk_{uuid.uuid4().hex[:12]}",
+        name="AI Sale Owner",
+        email=f"owner_{uuid.uuid4().hex[:12]}@example.com",
+    )
+    db.add(user)
     await db.flush()
     category = Category(shop_id=shop.id, shop=shop, name="Lawn")
     db.add(category)
@@ -136,11 +147,11 @@ async def _make_sale_shop(
             )
         ],
     )
-    return SaleFixture(shop, variant, supplier, customer)
+    return SaleFixture(shop, variant, supplier, customer, user)
 
 
 def _ctx(fix: SaleFixture) -> TenantContext:
-    return TenantContext(shop_id=fix.shop.id, user_id=uuid.uuid4())
+    return TenantContext(shop_id=fix.shop.id, user_id=fix.user.id)
 
 
 def _write_tool(db: AsyncSession, fix: SaleFixture) -> Any:

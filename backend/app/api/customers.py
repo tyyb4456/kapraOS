@@ -26,7 +26,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import cached_reads
 from app.cache import service as cache_service
 from app.models.customer import Customer
@@ -103,6 +103,7 @@ async def list_customers(
 
 @router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
 async def create_customer(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateCustomerRequest,
@@ -181,6 +182,7 @@ async def read_customer(
 )
 async def update_customer(
     customer_id: CustomerId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateCustomerRequest,
@@ -241,6 +243,7 @@ async def update_customer(
 )
 async def delete_customer(
     customer_id: CustomerId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
@@ -309,6 +312,7 @@ async def read_customer_balance(
 )
 async def read_customer_statement(
     customer_id: CustomerId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     start_date: Annotated[
@@ -344,6 +348,7 @@ async def read_customer_statement(
 )
 async def read_customer_summary(
     customer_id: CustomerId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> CustomerSummaryResponse:
@@ -364,6 +369,7 @@ async def read_customer_summary(
 )
 async def create_customer_payment(
     customer_id: CustomerId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: RecordCustomerPaymentRequest,

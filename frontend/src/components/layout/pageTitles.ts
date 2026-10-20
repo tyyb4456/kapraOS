@@ -18,6 +18,7 @@ export const shopRouteTitleMap: Record<string, string> = {
   '/expenses': 'Shop Expenses',
   '/reports': 'Financial & Operational Reports',
   '/analytics': 'Sales Analytics',
+  '/employees': 'Employees & Invitations',
   '/settings': 'Shop Settings',
 };
 

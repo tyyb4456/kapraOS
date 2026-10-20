@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     # Shop timezone for date-based reporting (e.g. "Asia/Karachi")
     shop_timezone: str = "UTC"
 
+    # Employee invitations. The link lifetime is configurable; tokens are
+    # always single-use and stored only as SHA-256 digests.
+    employee_invitation_expiry_days: int = 7
+    # Optional absolute frontend origin used to build copyable invite links
+    # (e.g. "https://app.kapraos.com"). When empty the API returns only the
+    # relative path and the frontend builds the URL from window.location.
+    frontend_base_url: str = ""
+
     # Clerk configuration
     clerk_secret_key: str = ""
     clerk_jwt_key: str = ""

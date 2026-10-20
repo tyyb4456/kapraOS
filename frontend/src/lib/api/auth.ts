@@ -5,7 +5,12 @@ export async function getAuthMe(): Promise<AuthMeResponse> {
   return apiClient.get<AuthMeResponse>('/auth/me');
 }
 
-export async function syncAuth(data?: { name?: string; email?: string; shop_name?: string }): Promise<AuthMeResponse> {
+export async function syncAuth(data?: {
+  name?: string;
+  email?: string;
+  shop_name?: string;
+  invitation_token?: string;
+}): Promise<AuthMeResponse> {
   return apiClient.post<AuthMeResponse>('/auth/sync', data);
 }
 

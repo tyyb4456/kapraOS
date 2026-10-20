@@ -19,7 +19,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import cached_reads
 from app.schemas.reporting import (
     BalanceSheetResponse,
@@ -60,6 +60,7 @@ def _unprocessable(exc: Exception) -> HTTPException:
     summary="Trial balance",
 )
 async def read_trial_balance(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     start_date: StartDate = None,
@@ -80,6 +81,7 @@ async def read_trial_balance(
     summary="Profit & loss",
 )
 async def read_profit_and_loss(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     start_date: StartDate = None,
@@ -100,6 +102,7 @@ async def read_profit_and_loss(
     summary="Balance sheet",
 )
 async def read_balance_sheet(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     end_date: EndDate = None,
@@ -116,6 +119,7 @@ async def read_balance_sheet(
     summary="Business dashboard",
 )
 async def read_dashboard(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> DashboardResponse:
@@ -149,6 +153,7 @@ async def _financial_summary(
     summary="Financial summary for the Reports page",
 )
 async def read_financial_summary(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     period: str | None = Query(
@@ -169,6 +174,7 @@ async def read_financial_summary(
     summary="Revenue/profit/order time series",
 )
 async def read_sales_trend(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     granularity: str | None = Query(
@@ -198,6 +204,7 @@ async def read_sales_trend(
     include_in_schema=False,
 )
 async def read_financial_summary_compat(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     period: str | None = Query(default=None),

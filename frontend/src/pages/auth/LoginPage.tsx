@@ -1,16 +1,22 @@
 import { SignIn } from '@clerk/clerk-react';
 import { Store, ArrowRight, ShieldCheck } from 'lucide-react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { Button } from '../../components/ui/Button.tsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card.tsx';
 
+function safeRedirect(value: string | null): string {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/dashboard';
+}
+
 export function LoginPage() {
   const { isClerkConfigured, isAuthenticated, isLoading, error } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectUrl = safeRedirect(searchParams.get('redirect_url'));
 
   if (!isLoading && isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectUrl} replace />;
   }
 
   return (
@@ -39,8 +45,8 @@ export function LoginPage() {
             <SignIn
               routing="path"
               path="/login"
-              signUpUrl="/signup"
-              forceRedirectUrl="/dashboard"
+              signUpUrl={`/signup?redirect_url=${encodeURIComponent(redirectUrl)}`}
+              forceRedirectUrl={redirectUrl}
             />
           </div>
         ) : (
@@ -65,7 +71,7 @@ export function LoginPage() {
                 size="md"
                 className="w-full justify-center"
                 rightIcon={<ArrowRight className="w-4 h-4" />}
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate(redirectUrl)}
               >
                 Continue to Dashboard
               </Button>

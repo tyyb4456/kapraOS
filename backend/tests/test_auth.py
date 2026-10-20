@@ -273,8 +273,11 @@ class TestAuthMechanism:
 
     def test_user_role_enum_values(self) -> None:
         assert UserRole.OWNER.value == "owner"
+        assert UserRole.CASHIER.value == "cashier"
         assert UserRole.STAFF.value == "staff"
-        assert len(list(UserRole)) == 2
+        # CASHIER is the invited salesman role; STAFF remains as the legacy
+        # non-owner value. Both are refused by the owner-only dependencies.
+        assert len(list(UserRole)) == 3
 
     def test_clerk_user_id_unique_constraint(self) -> None:
         from app.models import User as UserModel

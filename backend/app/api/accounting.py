@@ -19,7 +19,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.schemas.accounting import (
     AccountBalanceResponse,
     AccountLedgerResponse,
@@ -53,6 +53,7 @@ def _unprocessable(exc: Exception) -> HTTPException:
     summary="Chart of accounts",
 )
 async def list_accounts(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> list[AccountResponse]:
@@ -67,6 +68,7 @@ async def list_accounts(
 )
 async def read_account_balance(
     account_id: AccountId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> AccountBalanceResponse:
@@ -86,6 +88,7 @@ async def read_account_balance(
 )
 async def read_account_ledger(
     account_id: AccountId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     start_date: Annotated[

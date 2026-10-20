@@ -1,5 +1,5 @@
 // Auth & Identity
-export type UserRole = 'owner' | 'admin' | 'manager' | 'cashier';
+export type UserRole = 'owner' | 'admin' | 'manager' | 'cashier' | 'staff';
 
 export interface AuthMeResponse {
   id: string;
@@ -17,6 +17,41 @@ export interface CurrentUser {
   isPlatformAdmin: boolean;
   email?: string;
   fullName?: string;
+}
+
+// Employees & invitations
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+
+export interface EmployeeInvitation {
+  id: string;
+  email: string;
+  role: string;
+  status: InvitationStatus;
+  expires_at: string;
+  accepted_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+}
+
+export interface EmployeeInvitationCreated extends EmployeeInvitation {
+  token: string;
+  invite_path: string;
+  invite_url: string;
+}
+
+export interface AcceptInvitationResult {
+  shop_id: string;
+  shop_name: string;
+  role: string;
+  already_member: boolean;
+}
+
+export interface ShopEmployee {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  created_at: string;
 }
 
 // Product & Catalog

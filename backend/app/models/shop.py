@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.models.brand import Brand
     from app.models.category import Category
     from app.models.customer import Customer
+    from app.models.employee_invitation import EmployeeInvitation
     from app.models.expense import Expense
     from app.models.ledger_entry import LedgerEntry
     from app.models.opening_inventory import OpeningInventoryBatch
@@ -167,6 +168,13 @@ class Shop(Base, UUIDMixin, TimestampMixin):
         back_populates="shop",
         cascade="all, delete-orphan",
         overlaps="opening_inventory_batches,shop",
+    )
+
+    # Owner-authorized employee invitations (tenant-scoped).
+    employee_invitations: Mapped[list["EmployeeInvitation"]] = relationship(
+        "EmployeeInvitation",
+        back_populates="shop",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid only

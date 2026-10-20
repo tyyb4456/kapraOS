@@ -345,6 +345,7 @@ async def create_sale(
     invoice_number: str | None = None,
     discount: Decimal = Decimal("0"),
     payments: list[PaymentInput] | None = None,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> Sale:
     """Create a sale, decrement stock and record payments, atomically.
 
@@ -433,6 +434,7 @@ async def create_sale(
         id=uuid.uuid4(),
         shop_id=shop_id,
         customer_id=customer_id,
+        created_by_user_id=created_by_user_id,
         invoice_number=invoice_number,
         subtotal=subtotal,
         discount=discount,

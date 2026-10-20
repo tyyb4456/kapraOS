@@ -22,9 +22,13 @@ import {
 } from '../../components/ui/index.ts';
 import { formatCurrency } from '../../lib/formatters.ts';
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from '../../lib/api/customers.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
+import { isOwnerRole } from '../../context/identity.ts';
 import type { Customer } from '../../types/index.ts';
 
 export function CustomersPage() {
+  const { role } = useAuth();
+  const isOwner = isOwnerRole(role);
   const [searchTerm, setSearchTerm] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,21 +166,23 @@ export function CustomersPage() {
           { label: 'Customers' },
         ]}
         actions={
-          <div className="flex items-center gap-2">
-            <Link to="/customers/khata">
-              <Button variant="outline" size="sm" leftIcon={<BookOpen className="w-4 h-4" />}>
-                Khata Ledger
+          isOwner ? (
+            <div className="flex items-center gap-2">
+              <Link to="/customers/khata">
+                <Button variant="outline" size="sm" leftIcon={<BookOpen className="w-4 h-4" />}>
+                  Khata Ledger
+                </Button>
+              </Link>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Plus className="w-4 h-4" />}
+                onClick={() => setIsAddModalOpen(true)}
+              >
+                Add Customer
               </Button>
-            </Link>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Plus className="w-4 h-4" />}
-              onClick={() => setIsAddModalOpen(true)}
-            >
-              Add Customer
-            </Button>
-          </div>
+            </div>
+          ) : undefined
         }
       />
 
@@ -206,7 +212,7 @@ export function CustomersPage() {
               <TableHead align="right">Credit Limit</TableHead>
               <TableHead align="right">Current Balance (Khata)</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead align="right">Actions</TableHead>
+              {isOwner && <TableHead align="right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -218,12 +224,12 @@ export function CustomersPage() {
                   <TableCell align="right"><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell align="right"><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell align="right"><Skeleton className="h-4 w-16" /></TableCell>
+                  {isOwner && <TableCell align="right"><Skeleton className="h-4 w-16" /></TableCell>}
                 </TableRow>
               ))
             ) : filteredCustomers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-zinc-500">
+                <TableCell colSpan={isOwner ? 6 : 5} className="text-center py-8 text-zinc-500">
                   {searchTerm ? 'No matching customers found' : 'No customers added yet'}
                 </TableCell>
               </TableRow>
@@ -245,34 +251,36 @@ export function CustomersPage() {
                   <TableCell>
                     {getStatusBadge(customer.current_balance, customer.credit_limit)}
                   </TableCell>
-                  <TableCell align="right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Link to={`/customers/khata/${customer.id}`}>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
-                          View Khata
+                  {isOwner && (
+                    <TableCell align="right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link to={`/customers/khata/${customer.id}`}>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+                            View Khata
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 px-0"
+                          title="Edit customer"
+                          onClick={() => openEdit(customer)}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 px-0"
-                        title="Edit customer"
-                        onClick={() => openEdit(customer)}
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
-                        title="Delete customer"
-                        disabled={deletingId === customer.id}
-                        onClick={() => handleDelete(customer)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 px-0 text-rose-600 hover:bg-rose-50"
+                          title="Delete customer"
+                          disabled={deletingId === customer.id}
+                          onClick={() => handleDelete(customer)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

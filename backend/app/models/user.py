@@ -7,12 +7,20 @@ all for a platform administrator operating the Super Admin Panel.
 Fields:
     id          - UUID primary key
     shop_id     - FK to the tenant Shop (server-derived, never client-supplied);
-                  NULL only for platform administrators without a shop
+                  NULL for platform administrators and for employees whose
+                  shop access has been revoked
     clerk_user_id - stable Clerk user identifier (unique)
-    role        - OWNER or STAFF
+    role        - OWNER, CASHIER or STAFF (legacy non-owner role)
     name        - display name (optional, populated at provisioning)
     email       - optional, kept for compatibility
     is_platform_admin - KapraOS platform-operator flag (default: false)
+
+Role semantics (enforced server-side in `app.auth.auth` / the API routers):
+    OWNER   - full access to their own shop.
+    CASHIER - employee invited by an owner; POS sales plus the read-only
+              catalog/inventory/customer data needed to make them.
+    STAFF   - legacy non-owner role; treated exactly like CASHIER. It is
+              never granted by signup - only pre-existing rows carry it.
 """
 
 import uuid
@@ -31,9 +39,15 @@ if TYPE_CHECKING:
 
 
 class UserRole(str, Enum):
-    """Minimal role set for V1: OWNER or STAFF."""
+    """Shop-level role set.
+
+    OWNER is the shop administrator. CASHIER is an invited employee
+    ("salesman") limited to POS workflows. STAFF is the legacy non-owner
+    role kept for backward compatibility and is treated as CASHIER.
+    """
 
     OWNER = "owner"
+    CASHIER = "cashier"
     STAFF = "staff"
 
 

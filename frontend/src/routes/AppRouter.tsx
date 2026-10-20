@@ -1,10 +1,11 @@
 import { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout.tsx';
 import { AdminLayout } from '../components/layout/AdminLayout.tsx';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute.tsx';
 import { AdminRoute } from '../components/layout/AdminRoute.tsx';
 import { ShopRoute } from '../components/layout/ShopRoute.tsx';
+import { OwnerRoute } from '../components/layout/OwnerRoute.tsx';
 
 import { DashboardPage } from '../pages/DashboardPage.tsx';
 import { ProductsPage } from '../pages/catalog/ProductsPage.tsx';
@@ -16,6 +17,7 @@ import { NewOpeningInventoryPage } from '../pages/inventory/NewOpeningInventoryP
 import { OpeningInventoryBatchPage } from '../pages/inventory/OpeningInventoryBatchPage.tsx';
 import { SalesPage } from '../pages/sales/SalesPage.tsx';
 import { NewSalePage } from '../pages/sales/NewSalePage.tsx';
+import { EmployeesPage } from '../pages/employees/EmployeesPage.tsx';
 import { PurchasesPage } from '../pages/purchasing/PurchasesPage.tsx';
 import { NewPurchasePage } from '../pages/purchasing/NewPurchasePage.tsx';
 import { CustomersPage } from '../pages/relationships/CustomersPage.tsx';
@@ -40,6 +42,7 @@ import { AdminShopsPage } from '../pages/admin/AdminShopsPage.tsx';
 import { AdminShopDetailPage } from '../pages/admin/AdminShopDetailPage.tsx';
 import { LoginPage } from '../pages/auth/LoginPage.tsx';
 import { SignUpPage } from '../pages/auth/SignUpPage.tsx';
+import { InviteAcceptPage } from '../pages/auth/InviteAcceptPage.tsx';
 import { LandingPage } from '../pages/LandingPage.tsx';
 import { NotFoundPage } from '../pages/NotFoundPage.tsx';
 
@@ -54,6 +57,7 @@ export function AppRouter() {
       <Route path="/signup/*" element={<SignUpPage />} />
       <Route path="/sign-in/*" element={<Navigate to="/login" replace />} />
       <Route path="/sign-up/*" element={<Navigate to="/signup" replace />} />
+      <Route path="/invite/:token" element={<InviteAcceptPage />} />
 
       {/* Shop-facing application - platform admins are sent to /admin */}
       <Route
@@ -65,53 +69,65 @@ export function AppRouter() {
           </ProtectedRoute>
         }
       >
-        <Route path="/dashboard" element={<DashboardPage />} />
-
-        {/* Catalog */}
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/categories" element={<CategoriesPage />} />
-
-        {/* Inventory */}
-        <Route path="/inventory" element={<InventoryPage />} />
-        <Route path="/inventory/movements" element={<StockMovementsPage />} />
-        <Route path="/inventory/opening" element={<OpeningInventoryPage />} />
-        <Route path="/inventory/opening/new" element={<NewOpeningInventoryPage />} />
-        <Route path="/inventory/opening/:batchId" element={<OpeningInventoryBatchPage />} />
-
-        {/* Sales & POS */}
+        {/* Sales & Customers: available to owners and cashiers/salesmen */}
         <Route path="/sales" element={<SalesPage />} />
         <Route path="/sales/new" element={<NewSalePage />} />
-
-        {/* Purchasing */}
-        <Route path="/purchases" element={<PurchasesPage />} />
-        <Route path="/purchases/new" element={<NewPurchasePage />} />
-
-        {/* Relationships & Khata */}
         <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/customers/khata" element={<CustomerKhataPage />} />
-        <Route path="/customers/khata/:id" element={<CustomerKhataPage />} />
-        <Route path="/suppliers" element={<SuppliersPage />} />
-        <Route path="/suppliers/khata" element={<SupplierKhataPage />} />
-        <Route path="/suppliers/:id" element={<SupplierProfilePage />} />
-        <Route path="/suppliers/khata/:id" element={<SupplierKhataPage />} />
 
-        {/* Finance */}
-        <Route path="/expenses" element={<ExpensesPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        {/* Owner-only: everything below is rejected server-side for cashiers */}
         <Route
-          path="/analytics"
           element={
-            <Suspense fallback={<div className="p-6 text-xs text-zinc-500">Loading analytics…</div>}>
-              <AnalyticsPage />
-            </Suspense>
+            <OwnerRoute>
+              <Outlet />
+            </OwnerRoute>
           }
-        />
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
 
-        {/* Settings */}
-        <Route path="/settings" element={<SettingsPage />} />
+          {/* Catalog */}
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
 
-        {/* AI Assistant (live shop-assistant chat) */}
-        <Route path="/ai-chat" element={<AiChatPage />} />
+          {/* Inventory */}
+          <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/inventory/movements" element={<StockMovementsPage />} />
+          <Route path="/inventory/opening" element={<OpeningInventoryPage />} />
+          <Route path="/inventory/opening/new" element={<NewOpeningInventoryPage />} />
+          <Route path="/inventory/opening/:batchId" element={<OpeningInventoryBatchPage />} />
+
+          {/* Purchasing */}
+          <Route path="/purchases" element={<PurchasesPage />} />
+          <Route path="/purchases/new" element={<NewPurchasePage />} />
+
+          {/* Relationships & Khata */}
+          <Route path="/customers/khata" element={<CustomerKhataPage />} />
+          <Route path="/customers/khata/:id" element={<CustomerKhataPage />} />
+          <Route path="/suppliers" element={<SuppliersPage />} />
+          <Route path="/suppliers/khata" element={<SupplierKhataPage />} />
+          <Route path="/suppliers/:id" element={<SupplierProfilePage />} />
+          <Route path="/suppliers/khata/:id" element={<SupplierKhataPage />} />
+
+          {/* Team */}
+          <Route path="/employees" element={<EmployeesPage />} />
+
+          {/* Finance */}
+          <Route path="/expenses" element={<ExpensesPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route
+            path="/analytics"
+            element={
+              <Suspense fallback={<div className="p-6 text-xs text-zinc-500">Loading analytics…</div>}>
+                <AnalyticsPage />
+              </Suspense>
+            }
+          />
+
+          {/* Settings */}
+          <Route path="/settings" element={<SettingsPage />} />
+
+          {/* AI Assistant (live shop-assistant chat) */}
+          <Route path="/ai-chat" element={<AiChatPage />} />
+        </Route>
       </Route>
 
       {/* Platform Administration (Super Admin Panel) - platform-only layout */}

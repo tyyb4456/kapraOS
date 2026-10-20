@@ -18,6 +18,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.auth import CurrentUser
+from app.auth.auth import Owner as AuthOwner
 from app.auth.auth import PlatformAdmin as AuthPlatformAdmin
 from app.auth.auth import ShopId as AuthShopId
 from app.database import get_db
@@ -25,4 +26,5 @@ from app.database import get_db
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUserDep = CurrentUser
 ShopId = AuthShopId
+Owner = AuthOwner
 PlatformAdmin = AuthPlatformAdmin

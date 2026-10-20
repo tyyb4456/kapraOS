@@ -6,6 +6,7 @@ export * from './ErrorState.tsx';
 export * from './ProtectedRoute.tsx';
 export * from './AdminRoute.tsx';
 export * from './ShopRoute.tsx';
+export * from './OwnerRoute.tsx';
 export * from './Sidebar.tsx';
 export * from './AdminSidebar.tsx';
 export * from './TopHeader.tsx';

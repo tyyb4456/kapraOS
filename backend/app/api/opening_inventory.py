@@ -34,7 +34,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import CurrentUserDep, DbSession, ShopId
+from app.api.dependencies import CurrentUserDep, DbSession, Owner, ShopId
 from app.cache import service as cache_service
 from app.models.inventory import InventoryMovement
 from app.models.opening_inventory import (
@@ -244,6 +244,7 @@ async def _post_once(
 
 @router.post("/preview", response_model=OpeningInventoryPreviewResponse)
 async def preview_opening_inventory(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: PreviewOpeningInventoryRequest,
@@ -277,6 +278,7 @@ async def preview_opening_inventory(
     status_code=status.HTTP_201_CREATED,
 )
 async def post_opening_inventory(
+    owner: Owner,
     shop_id: ShopId,
     current_user: CurrentUserDep,
     db: DbSession,
@@ -356,6 +358,7 @@ async def post_opening_inventory(
 
 @router.get("", response_model=list[OpeningInventoryBatchResponse])
 async def list_opening_inventory_batches(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     source: OpeningInventorySource | None = None,
@@ -378,6 +381,7 @@ async def list_opening_inventory_batches(
 @router.get("/{batch_id}", response_model=OpeningInventoryBatchDetailResponse)
 async def get_opening_inventory_batch(
     batch_id: UUID,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> OpeningInventoryBatchDetailResponse:

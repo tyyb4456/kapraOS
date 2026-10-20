@@ -27,7 +27,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import cached_reads
 from app.cache import service as cache_service
 from app.models.payment import Payment
@@ -64,6 +64,7 @@ SupplierId = Annotated[uuid.UUID, Path(description="Supplier to report on.")]
 
 @router.get("", response_model=list[SupplierResponse])
 async def list_suppliers(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> list[SupplierResponse]:
@@ -91,6 +92,7 @@ async def list_suppliers(
 
 @router.post("", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)
 async def create_supplier(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: CreateSupplierRequest,
@@ -130,6 +132,7 @@ async def create_supplier(
 )
 async def read_supplier(
     supplier_id: SupplierId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> SupplierResponse:
@@ -163,6 +166,7 @@ async def read_supplier(
 )
 async def update_supplier(
     supplier_id: SupplierId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateSupplierRequest,
@@ -216,6 +220,7 @@ async def update_supplier(
 )
 async def delete_supplier(
     supplier_id: SupplierId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
@@ -270,6 +275,7 @@ def _unprocessable(exc: Exception) -> HTTPException:
 )
 async def read_supplier_balance(
     supplier_id: SupplierId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> SupplierBalanceResponse:
@@ -294,6 +300,7 @@ async def read_supplier_balance(
 )
 async def read_supplier_statement(
     supplier_id: SupplierId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     start_date: Annotated[
@@ -329,6 +336,7 @@ async def read_supplier_statement(
 )
 async def read_supplier_summary(
     supplier_id: SupplierId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> SupplierSummaryResponse:
@@ -349,6 +357,7 @@ async def read_supplier_summary(
 )
 async def create_supplier_payment(
     supplier_id: SupplierId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: RecordSupplierPaymentRequest,

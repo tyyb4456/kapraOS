@@ -162,7 +162,10 @@ def sales_list_key(
     end: str | None = None,
     limit: int = 100,
     offset: int = 0,
+    created_by_user_id: str | None = None,
 ) -> str:
+    # The author filter is part of the key: the owner's "all sales" list and
+    # a cashier's "my sales" list must never share a cache entry.
     digest = filters_hash(
         {
             "customer_id": customer_id,
@@ -171,6 +174,7 @@ def sales_list_key(
             "end": end,
             "limit": limit,
             "offset": offset,
+            "created_by_user_id": created_by_user_id,
         }
     )
     return f"{shop_prefix(shop_id)}:sales:list:{digest}"

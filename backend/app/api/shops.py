@@ -12,7 +12,7 @@ translated here and nowhere else.
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.schemas.shops import ShopResponse, UpdateShopRequest
 from app.services import shops as shops_service
 from app.services.shops import InvalidShopSettingsError, ShopNotFoundError
@@ -52,6 +52,7 @@ async def read_shop(
     summary="Update shop settings",
 )
 async def update_shop(
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
     body: UpdateShopRequest,

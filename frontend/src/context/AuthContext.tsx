@@ -9,6 +9,7 @@ import React, {
 import { ClerkProvider, useAuth as useClerkAuth, useUser as useClerkUser } from '@clerk/clerk-react';
 import { setApiTokenGetter, ApiError } from '../lib/api/client.ts';
 import { getAuthMe, syncAuth } from '../lib/api/auth.ts';
+import { clearPendingInviteToken, getPendingInviteToken } from '../lib/inviteToken.ts';
 import { isUsableIdentity } from './identity.ts';
 import type { CurrentUser } from '../types/index.ts';
 
@@ -18,6 +19,7 @@ export interface AuthContextType {
   role: string | null;
   isPlatformAdmin: boolean;
   isAuthenticated: boolean;
+  isSignedIn: boolean;
   isLoading: boolean;
   error: string | null;
   refreshAuth: () => Promise<void>;
@@ -71,10 +73,18 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
         // Any other status (network, 500, ...) is re-thrown below.
         if (err instanceof ApiError && err.status === 401) {
           try {
+            // A pending invitation token is redeemed by /auth/sync itself, so
+            // an invited user is provisioned into the inviter's shop instead
+            // of being given a brand-new shop.
+            const inviteToken = getPendingInviteToken();
             meData = await syncAuth({
               name: clerkUser?.fullName || clerkUser?.firstName || undefined,
               email: clerkUser?.primaryEmailAddress?.emailAddress,
+              invitation_token: inviteToken || undefined,
             });
+            if (inviteToken) {
+              clearPendingInviteToken();
+            }
           } catch (syncErr) {
             if (
               syncErr instanceof ApiError &&
@@ -151,6 +161,7 @@ function ClerkAuthConsumer({ children }: { children: React.ReactNode }) {
       // (or a duplicate-account 409) still let users into the dashboard
       // with a fake `pending_sync` shop.
       isAuthenticated: Boolean(isSignedIn && backendUser),
+      isSignedIn: Boolean(isSignedIn),
       isLoading: !isClerkLoaded || isLoading,
       error,
       refreshAuth: loadBackendIdentity,
@@ -209,6 +220,7 @@ function FallbackAuthProvider({ children }: { children: React.ReactNode }) {
       role: mockUser?.role || null,
       isPlatformAdmin: mockUser?.isPlatformAdmin ?? false,
       isAuthenticated: Boolean(mockUser),
+      isSignedIn: Boolean(mockUser),
       isLoading,
       error,
       refreshAuth,

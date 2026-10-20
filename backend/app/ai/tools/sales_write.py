@@ -743,6 +743,7 @@ def build_sale_write_tools(
                     ],
                     customer_id=customer.id if customer is not None else None,
                     payments=payments,
+                    created_by_user_id=tenant.user_id,
                 )
                 # Claim the operation identity in the SAME transaction as
                 # the sale, so receipt + sale commit atomically. A

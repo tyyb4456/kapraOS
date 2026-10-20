@@ -1,19 +1,25 @@
 import { SignUp } from '@clerk/clerk-react';
 import { Store, ArrowRight, ShieldCheck } from 'lucide-react';
-import { useNavigate, Link, Navigate } from 'react-router-dom';
+import { useNavigate, Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { Button } from '../../components/ui/Button.tsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card.tsx';
 
+function safeRedirect(value: string | null): string {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/dashboard';
+}
+
 export function SignUpPage() {
   const { isClerkConfigured, isAuthenticated, isLoading, error, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectUrl = safeRedirect(searchParams.get('redirect_url'));
 
   // Already signed in with a provisioned backend identity -> no need to
   // sign up again. Prevents the "signed up again with the same account"
   // confusion.
   if (!isLoading && isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectUrl} replace />;
   }
 
   return (
@@ -58,8 +64,8 @@ export function SignUpPage() {
             <SignUp
               routing="path"
               path="/signup"
-              signInUrl="/login"
-              forceRedirectUrl="/dashboard"
+              signInUrl={`/login?redirect_url=${encodeURIComponent(redirectUrl)}`}
+              forceRedirectUrl={redirectUrl}
             />
           </div>
         ) : (
@@ -84,7 +90,7 @@ export function SignUpPage() {
                 size="md"
                 className="w-full justify-center"
                 rightIcon={<ArrowRight className="w-4 h-4" />}
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate(redirectUrl)}
               >
                 Continue to Dashboard
               </Button>

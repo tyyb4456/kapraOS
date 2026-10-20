@@ -22,7 +22,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, status
 from sqlalchemy import select
 
-from app.api.dependencies import DbSession, ShopId
+from app.api.dependencies import DbSession, Owner, ShopId
 from app.cache import service as cache_service
 from app.models.payment import Payment
 from app.models.purchase import Purchase
@@ -37,6 +37,7 @@ PaymentId = Annotated[uuid.UUID, Path(description="Payment to void.")]
 @router.get("/{payment_id}")
 async def read_payment(
     payment_id: PaymentId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> dict:
@@ -62,6 +63,7 @@ async def read_payment(
 @router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def void_payment(
     payment_id: PaymentId,
+    owner: Owner,
     shop_id: ShopId,
     db: DbSession,
 ) -> None:
