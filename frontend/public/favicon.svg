@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="KapraOS">
+  <rect width="64" height="64" rx="14" fill="#d99a2b"/>
+  <path d="M16 24h32v6H16zm2 6h28v22H18z" fill="#2a1b07"/>
+  <path d="M24 30v-5a8 8 0 0 1 16 0v5h-4v-5a4 4 0 0 0-8 0v5z" fill="#2a1b07"/>
+  <path d="M26 38h6v10h-6zm10 0h6v10h-6z" fill="#d99a2b"/>
+</svg>
