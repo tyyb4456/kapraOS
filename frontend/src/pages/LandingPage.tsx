@@ -725,75 +725,127 @@ export function LandingPage() {
 
       {/* ================= KHATA (product ledger mock) ================= */}
       <section id="khata" className="border-y border-[var(--clay-border-soft)]">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-          <div className="grid items-center gap-10 lg:grid-cols-2">
-            <div>
-              <SectionEyebrow>Udhaar — ab diary mein nahi</SectionEyebrow>
-              <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Customer khata + Supplier khata, auto-updated</h2>
-              <p className="mt-4 leading-relaxed text-zinc-600 dark:text-zinc-400">
-                Udhaar sale hote hi <strong className="text-zinc-900 dark:text-zinc-100">receivable</strong> ban jata hai, payment ate hi clear.
-                Supplier se maal udhaar liya to <strong className="text-zinc-900 dark:text-zinc-100">payable</strong> ready.
-                Kaun kitna dega, kab se pending hai — sab khate mein, tareekh ke saath.
+        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+          <div className="feature-reveal grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent-ink)]">
+                Udhaar, ab diary mein nahi
               </p>
-              <div className="mt-6 space-y-3">
-                {[
-                  ['Ayesha Bibi — Lawn 3pc (udhaar)', 'Rs 6,200', '12 din se pending', false],
-                  ['Imran Fabrics — Supplier payable', 'Rs 48,000', 'Is hafte dena hai', false],
-                  ['Recovery — Ahmed Sahab', '+ Rs 15,000', 'Aaj received ✓', true],
-                ].map(([name, amt, sub, positive]) => (
-                  <div key={name as string} className="clay-panel-soft flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-xs font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">
-                        {(name as string).charAt(0)}
-                      </span>
-                      <div>
-                        <p className="text-sm font-bold leading-tight">{name}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{sub}</p>
-                      </div>
-                    </div>
-                    <p className={`font-tabular text-sm font-extrabold ${positive ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{amt}</p>
+              <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
+                Har khata, apne aap update.
+              </h2>
+              <p className="mt-3 max-w-[46ch] text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-[15px]">
+                Udhaar sale hote hi customer ke khate mein chadh jata hai. Supplier se maal liya to payable bhi saath bante hain.
+              </p>
+
+              <div className="clay-panel-soft mt-6 grid grid-cols-2 divide-x divide-[var(--clay-border-soft)]">
+                <div className="min-w-0 px-3 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">Lena hai</span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">customers</span>
                   </div>
-                ))}
-              </div>
-              <blockquote className="mt-6 rounded-r-2xl border-l-4 border-indigo-500 bg-[#f8f9fa] px-4 py-3 dark:bg-zinc-900">
-                <div className="flex items-center gap-2">
-                  <BookOpenText className="h-4 w-4 shrink-0 text-indigo-700 dark:text-indigo-300" />
-                  <p className="text-sm font-bold">“Baji, aapka pichla Rs 6,200 rehta hai — ye suit us mein jor dun?”</p>
+                  <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span className="font-tabular text-lg font-semibold text-[var(--accent-ink)] dark:text-[var(--accent)] sm:text-xl">
+                      Rs 21,300
+                    </span>
+                    <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">6 udhaar</span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    Ahmed Sahab ne aaj Rs 15,000 diye
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Khata khol ke baat karo — customer ka bharosa, dukaan ki ronak.</p>
+                <div className="min-w-0 px-3 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">Dena hai</span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">suppliers</span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-baseline">
+                    <span className="font-tabular text-lg font-semibold text-zinc-900 dark:text-zinc-100 sm:text-xl">
+                      Rs 48,000
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    Imran Fabrics, is hafte
+                  </p>
+                </div>
+              </div>
+
+              <blockquote className="mt-7 flex items-start gap-2.5">
+                <BookOpenText
+                  aria-hidden="true"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-ink)] dark:text-[var(--accent)]"
+                  strokeWidth={1.75}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-normal leading-relaxed text-zinc-800 dark:text-zinc-200">
+                    “Baji, aapka pichla Rs 6,200 rehta hai. Ye suit us mein jor dun?”
+                  </p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    Khata khol ke baat karo. Customer ka bharosa, dukaan ki ronak.
+                  </p>
+                </div>
               </blockquote>
             </div>
-            <div>
-              {/* Product mock — customer khata ledger (replaces laundry photo) */}
+
+            <div className="min-w-0">
               <div className="overflow-hidden clay-card">
-                <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-indigo-600 to-blue-500 text-xs font-bold text-white">A</span>
-                    <div>
-                      <p className="text-sm font-bold leading-tight">Ayesha Bibi — Khata</p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Balance • History • Recovery</p>
+                <div className="flex items-center justify-between gap-4 border-b border-[var(--clay-border-soft)] px-4 py-3.5 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] text-sm font-semibold text-[var(--accent-ink)] shadow-[var(--clay-highlight),var(--clay-shadow-sm)] dark:text-[var(--accent)]">
+                      A
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold leading-tight">Ayesha Bibi, khata</p>
+                      <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Balance, history, recovery
+                      </p>
                     </div>
                   </div>
-                  <p className="font-tabular text-sm font-extrabold">Rs 6,200</p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[9px] font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                      baqaya
+                    </p>
+                    <p className="mt-0.5 font-tabular text-lg font-semibold leading-none">Rs 9,050</p>
+                  </div>
                 </div>
-                <div className="space-y-3 p-5">
+
+                <div className="divide-y divide-[var(--clay-border-soft)] px-4 sm:px-5">
                   {[
-                    ['Lawn 3pc — Udhaar sale', '12 Feb', 'Rs 6,200'],
-                    ['Payment received', '18 Feb', '− Rs 2,000'],
-                    ['Embroidered kurta — Udhaar', '24 Feb', 'Rs 4,850'],
-                  ].map(([label, date, val]) => (
-                    <div key={label as string} className="clay-panel-soft flex items-center justify-between px-4 py-3">
-                      <div>
-                        <p className="text-sm font-semibold leading-tight">{label}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{date}</p>
+                    { date: '12 Feb', label: 'Lawn 3pc, udhaar', amount: 'Rs 6,200', balance: '6,200', positive: false },
+                    { date: '18 Feb', label: 'Payment received', amount: '- Rs 2,000', balance: '4,200', positive: true },
+                    { date: '24 Feb', label: 'Embroidered kurta, udhaar', amount: 'Rs 4,850', balance: '9,050', positive: false },
+                  ].map((row) => (
+                    <div
+                      key={row.date}
+                      className="grid grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-3 py-3"
+                    >
+                      <span className="font-tabular text-[11px] text-zinc-500 dark:text-zinc-400">{row.date}</span>
+                      <p className="min-w-0 text-[13px] leading-snug text-zinc-700 dark:text-zinc-300">{row.label}</p>
+                      <div className="text-right">
+                        <p
+                          className={`font-tabular text-sm font-semibold ${
+                            row.positive
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : 'text-zinc-900 dark:text-zinc-100'
+                          }`}
+                        >
+                          {row.amount}
+                        </p>
+                        <p className="mt-0.5 font-tabular text-[10px] text-zinc-500 dark:text-zinc-400">
+                          baqaya {row.balance}
+                        </p>
                       </div>
-                      <p className="font-tabular text-sm font-bold">{val}</p>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between gap-3 pt-1">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Auto-posted from POS • No diary needed</p>
-                    <span className="clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-4 py-2 text-xs font-bold text-white">Recover Rs 2,000</span>
-                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 border-t border-[var(--clay-border-soft)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    Auto-posted from POS. No diary needed.
+                  </p>
+                  <span className="clay-btn clay-btn-accent inline-flex shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-on)]">
+                    Recover Rs 2,000
+                  </span>
                 </div>
               </div>
             </div>
