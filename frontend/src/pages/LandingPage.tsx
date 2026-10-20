@@ -671,53 +671,89 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ================= CATALOG SHOWCASE (embroidered pic) ================= */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="relative">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-lg dark:border-zinc-800">
-                <img
-                  src="/pexels-arina-dmitrieva-66352626-14440420.jpg"
-                  alt="Embroidered waistcoat with woven shawl and folded colorful thaans in a fabric store"
-                  className="h-80 w-full object-cover sm:h-125"
-                  loading="lazy"
-                />
-              </div>
-              <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-lg dark:border-zinc-800">
-                <img
-                  src="/pexels-irrabagon-37507373.jpg"
-                  alt="Printed lawn fabric hanging — color and print variants"
-                  className="h-80 w-full object-cover sm:h-125"
-                  loading="lazy"
-                />
-              </div>
-            </div>
-            <div className="clay-panel-soft mt-3 p-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Print • Color • Meter</p>
-              <p className="mt-1 text-sm font-medium leading-relaxed">Har print apna variant — sale par ghat-ta, purchase par barhta.</p>
+      {/* ================= CATALOG SHOWCASE (folded fabric + variant) ================= */}
+      <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+        <div className="feature-reveal grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+          <div className="lg:order-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent-ink)]">
+              Thaan ho ya boutique piece
+            </p>
+            <h2 className="mt-3 text-balance text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
+              Har design, har color, har meter, gin ke rakho.
+            </h2>
+            <p className="mt-3 max-w-[52ch] text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-[15px]">
+              Wo sky-blue wala lawn khatam hua ya nahi? KapraOS mein har color ka apna variant hai, stock khud ghat-ta
+              barhta hai.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {['Open fabric', 'Ready suit', 'Boutique piece'].map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center rounded-full border border-[var(--clay-border-soft)] bg-[var(--clay-surface-soft)] px-3 py-1 text-xs font-normal text-zinc-700 shadow-[var(--clay-highlight),var(--clay-shadow-sm)] dark:text-zinc-300"
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
           </div>
-          <div>
-            <SectionEyebrow>Thaan ho ya boutique piece</SectionEyebrow>
-            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Har design, har color, har meter — gin ke rakho</h2>
-            <p className="mt-4 leading-relaxed text-zinc-600 dark:text-zinc-400">
-              Kapra ki dukaan ka sab se bara dard: <em>“wo sky-blue wala lawn khatam hua ya nahi?”</em> KapraOS mein har fabric,
-              color aur dupatta-combo apna <strong className="text-zinc-900 dark:text-zinc-100">variant</strong> hai — purchase par stock barhta hai,
-              sale par ghat-ta hai, kam ho to alert bajta hai.
-            </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {[
-                ['OPEN_FABRIC', 'Gazz / meter ke thaans — katayi stock'],
-                ['READY_SUIT', '3-piece / 2-piece stitched stock'],
-                ['BOUTIQUE', 'Single designer piece tracking'],
-                ['Low-stock bell', 'Khatam hone se pehle khabar'],
-              ].map(([t, d]) => (
-                <div key={t} className="clay-panel-soft p-4">
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">{t}</p>
-                  <p className="mt-1 text-[13px] text-zinc-600 dark:text-zinc-400">{d}</p>
+
+          <div className="lg:order-1">
+            <div className="relative mx-auto flex w-full max-w-[26rem] flex-col lg:block lg:max-w-none">
+              <div className="mx-auto w-full max-w-[26rem] overflow-hidden rounded-[28px_28px_28px_8px] border border-[var(--clay-border)] shadow-[var(--clay-highlight),var(--clay-shadow-md)] lg:mx-0 lg:w-[60%] lg:max-w-none lg:-rotate-[0.5deg]">
+                <img
+                  src="/pexels-arina-dmitrieva-66352626-14440420.jpg"
+                  alt="Embroidered waistcoat and folded fabric stacks in a kapra shop"
+                  className="aspect-[3/4] w-full object-cover object-[50%_50%] saturate-[0.88]"
+                  loading="lazy"
+                />
+              </div>
+
+              <div className="relative z-10 mx-auto -mt-6 w-full max-w-[24rem] rounded-[20px_20px_20px_7px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface)] p-4 shadow-[var(--clay-highlight),var(--clay-shadow-md)] sm:p-5 lg:absolute lg:right-0 lg:bottom-0 lg:mt-0 lg:w-[56%] lg:max-w-none lg:rotate-[0.4deg]">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold leading-tight">Lawn, printed</p>
+                  <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Meter stock</p>
                 </div>
-              ))}
+
+                <ul className="mt-3 divide-y divide-[var(--clay-border-soft)] border-t border-[var(--clay-border-soft)]">
+                  {[
+                    { name: 'Sky Blue', stock: '4m', swatch: '#8fc7e4', low: true },
+                    { name: 'Mehndi Green', stock: '22m', swatch: '#6d7c3d', low: false },
+                    { name: 'Off-white', stock: '31m', swatch: '#ece3cf', low: false },
+                    { name: 'Maroon', stock: '12m', swatch: '#75293a', low: false },
+                  ].map((variant) => (
+                    <li key={variant.name} className="flex items-center justify-between gap-3 py-2.5">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          aria-hidden="true"
+                          className="h-3 w-3 shrink-0 rounded-full border border-black/10 dark:border-white/20"
+                          style={{ backgroundColor: variant.swatch }}
+                        />
+                        <span className="truncate text-[13px] text-zinc-700 dark:text-zinc-300">{variant.name}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        {variant.low && (
+                          <span className="rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent-ink)] dark:text-[var(--accent)]">
+                            Kam stock
+                          </span>
+                        )}
+                        <span
+                          className={`font-tabular text-[13px] font-semibold ${
+                            variant.low
+                              ? 'text-[var(--accent-ink)] dark:text-[var(--accent)]'
+                              : 'text-zinc-800 dark:text-zinc-100'
+                          }`}
+                        >
+                          {variant.stock}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="border-t border-[var(--clay-border-soft)] pt-2.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Kam hone par khud alert.
+                </p>
+              </div>
             </div>
           </div>
         </div>
