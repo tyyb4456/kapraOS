@@ -347,83 +347,127 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ================= PAIN → RELIEF (overwhelmed pic) ================= */}
+      {/* ================= PAIN → RELIEF ================= */}
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid items-center gap-10 lg:grid-cols-2">
-          <div className="order-2 lg:order-1">
-            {/* Product mock — evening closing dashboard (replaces distressed-people photo) */}
-            <div className="overflow-hidden clay-card">
-              <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Aaj ka hisaab — Evening closing</p>
-                  <p className="text-sm font-bold">Dashboard • Live ledger</p>
-                </div>
-                <span className="clay-badge bg-linear-to-r from-indigo-600 to-blue-500 px-3 py-1 text-[11px] font-bold text-white">Live</span>
-              </div>
-              <div className="space-y-3 p-5">
-                {[
-                  ['Aaj ki sale — 23 bills', 'Rs 86,400', false],
-                  ['Udhaar recovery', '+ Rs 15,000', true],
-                  ['Kharcha', 'Rs 4,200', false],
-                  ['Low-stock variants', '3 alerts', false],
-                ].map(([label, val, positive]) => (
-                  <div key={label as string} className="clay-panel-soft flex items-center justify-between px-4 py-3">
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className={`font-tabular text-sm font-extrabold ${positive ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{val}</p>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-4 py-3.5 text-white dark:bg-zinc-100 dark:text-zinc-900">
-                  <p className="text-sm font-semibold">Net profit — aaj</p>
-                  <p className="font-tabular text-base font-extrabold text-emerald-400 dark:text-emerald-600">Rs 19,750</p>
-                </div>
-              </div>
-            </div>
-            <div className="relative mt-4 overflow-hidden rounded-2xl border border-zinc-200 shadow-lg dark:border-zinc-800">
-              <img
-                src="/pexels-teona-swift-6850486.jpg"
-                alt="Kapron ke dher mein dukandaar — pehle ka haal"
-                className="h-56 w-full object-cover sm:h-64"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-linear-to-t from-zinc-950/75 via-zinc-950/15 to-transparent" />
-              <div className="absolute bottom-3 left-3 right-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-200">Pehle — har dukaan ki kahani</p>
-                <p className="mt-1 text-sm font-medium leading-relaxed text-white">“Maal kahan rakha tha? Kis ne udhaar liya tha? Register ka panna kahan gaya?”</p>
-              </div>
-            </div>
-          </div>
-          <div className="order-1 lg:order-2">
-            <SectionEyebrow>Dher se — System tak</SectionEyebrow>
-            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <div className="feature-reveal grid items-center gap-10 xl:grid-cols-[0.95fr_1.05fr] xl:gap-12">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent-ink)]">
+              Dher se system tak
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
               Kapron ke dher mein{' '}
-              <span className="bg-linear-to-r from-indigo-600 to-blue-500 bg-clip-text text-transparent dark:from-indigo-400 dark:to-blue-300">hisaab</span>{' '}
+              <span className="text-[var(--accent-ink)] dark:text-[var(--accent)]">hisaab</span>{' '}
               nahi dhoondna parta.
             </h2>
-            <p className="mt-4 leading-relaxed text-zinc-600 dark:text-zinc-400">
-              Roz shaam ko copy mein sale jorna, udhaar yaad rakhna, aur godown mein thaans ginna — yehi dukandaar ki thakaan hai.
-              KapraOS ye teenon kaam khud karta hai: <strong className="text-zinc-900 dark:text-zinc-100">bill bante hi stock ghat-ta hai, udhaar khud khate mein likha jata hai, profit khud nikal ata hai.</strong>
+            <p className="mt-3 max-w-[46ch] text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-[15px]">
+              Roz shaam copy mein sale jorna aur udhaar yaad rakhna, ye thakaan khatam. KapraOS ye
+              teenon kaam khud karta hai.
             </p>
-            <ul className="mt-6 space-y-3">
+            <ul className="mt-5 space-y-2.5">
               {[
-                'Har variant ka live stock — color, fabric aur size ke saath',
-                'Har udhaar customer ke khate mein — recovery ke saath',
-                'Har din ka P&L — sale, COGS, kharcha, net profit',
+                'Har variant ka live stock, color aur size ke saath',
+                'Har udhaar customer ke khate mein',
+                'Har din ka P&L, ek nazar mein',
               ].map((li) => (
-                <li key={li} className="flex items-start gap-2.5 text-sm">
-                  <span className="clay-chip-accent mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
-                    <Check className="h-3 w-3" strokeWidth={3} />
-                  </span>
-                  <span className="font-medium">{li}</span>
+                <li key={li} className="flex items-start gap-2.5 text-sm text-zinc-700 dark:text-zinc-300">
+                  <Check
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--accent-ink)] dark:text-[var(--accent)]"
+                    strokeWidth={2}
+                  />
+                  <span>{li}</span>
                 </li>
               ))}
             </ul>
             <button
               onClick={primaryCta}
-              className="mt-7 inline-flex h-11 cursor-pointer items-center gap-2 clay-btn rounded-xl bg-linear-to-r from-indigo-600 to-blue-500 px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/20 transition-all hover:-translate-y-0.5 hover:from-indigo-700 hover:to-blue-600"
+              disabled={isLoading}
+              className="clay-btn clay-btn-accent mt-7 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-6 text-[15px] font-semibold text-[var(--accent-on)] disabled:opacity-60 sm:w-auto"
             >
-              {isAuthenticated ? 'Go to Dashboard' : 'Dher khatam karo — Start free'}
+              {isAuthenticated ? 'Go to Dashboard' : 'Dher khatam karo, Start free'}
               <ArrowRight className="h-4 w-4" />
             </button>
+          </div>
+
+          <div className="relative">
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-stretch sm:gap-5">
+              <div className="order-1 overflow-hidden clay-card">
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--clay-border-soft)] px-4 py-4 sm:px-5">
+                  <div>
+                    <p className="text-sm font-semibold leading-tight">Aaj ka hisaab</p>
+                    <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+                      Evening closing
+                    </p>
+                  </div>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Live
+                  </span>
+                </div>
+
+                <div className="px-4 pt-1 pb-4 sm:px-5">
+                  <div className="divide-y divide-dashed divide-[var(--clay-border-soft)]">
+                    {[
+                      { time: 'Aaj', item: 'Sale, 23 bills', amount: 'Rs 86,400', positive: false, badge: '' },
+                      { time: '11:42', item: 'Bill #1042, Lawn 3pc', amount: 'Rs 4,850', positive: false, badge: '' },
+                      { time: '02:10', item: 'Ahmed Sahab, udhaar recovery', amount: '+ Rs 15,000', positive: true, badge: '' },
+                      { time: '04:30', item: 'Kharcha, chai aur bijli', amount: 'Rs 4,200', positive: false, badge: '' },
+                      { time: 'Stock', item: 'Low stock, Lawn Sky Blue', amount: '', positive: false, badge: '4m bacha' },
+                    ].map((row) => (
+                      <div
+                        key={`${row.time}-${row.item}`}
+                        className="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-baseline gap-3 py-2.5"
+                      >
+                        <span className="font-tabular text-[11px] text-zinc-500 dark:text-zinc-400">{row.time}</span>
+                        <p className="min-w-0 text-[13px] leading-snug text-zinc-700 dark:text-zinc-300">{row.item}</p>
+                        <div className="text-right">
+                          {row.badge ? (
+                            <span className="inline-flex rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent-ink)] dark:text-[var(--accent)]">
+                              {row.badge}
+                            </span>
+                          ) : (
+                            <span
+                              className={`font-tabular text-[13px] font-semibold ${
+                                row.positive
+                                  ? 'text-emerald-700 dark:text-emerald-400'
+                                  : 'text-zinc-800 dark:text-zinc-100'
+                              }`}
+                            >
+                              {row.amount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--clay-surface-soft)] px-4 py-3 shadow-[var(--clay-highlight),var(--clay-shadow-sm)]">
+                    <p className="text-[13px] font-medium">Net profit, aaj</p>
+                    <p className="font-tabular text-[15px] font-semibold text-[var(--accent-ink)] dark:text-[var(--accent)]">
+                      Rs 19,750
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="order-2 flex flex-col sm:min-h-0">
+                <figure className="overflow-hidden border border-[var(--clay-border)] bg-[var(--clay-surface)] shadow-[var(--clay-highlight),var(--clay-shadow-md)] rounded-[18px_10px_16px_7px] sm:min-h-0 sm:flex-1">
+                  <img
+                    src="/pexels-teona-swift-6850486.jpg"
+                    alt="Kapron ke dher mein dukandaar, pehle ka haal"
+                    className="aspect-[16/10] w-full object-cover object-[72%_60%] sm:aspect-auto sm:h-full"
+                    loading="lazy"
+                  />
+                </figure>
+                <div className="mt-3 shrink-0 rounded-[14px_10px_15px_6px] border border-[var(--clay-border-soft)] bg-[var(--clay-surface)] px-3.5 py-3 shadow-[var(--clay-highlight),var(--clay-shadow-sm)]">
+                  <p className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--accent-ink)] dark:text-[var(--accent)]">
+                    Pehle, har dukaan ki kahani
+                  </p>
+                  <p className="mt-1.5 text-[13px] font-normal leading-relaxed text-zinc-600 dark:text-zinc-400">
+                    “Maal kahan rakha tha? Kis ne udhaar liya tha? Register ka panna kahan gaya?”
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
